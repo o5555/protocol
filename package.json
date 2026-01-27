@@ -20,5 +20,8 @@
   "homepage": "https://github.com/o5555/protocol#readme",
   "devDependencies": {
     "@playwright/test": "^1.58.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
   }
 }

@@ -203,13 +203,14 @@ const Onboarding = {
   },
 
   // Step 2 — Add a Friend
-  renderFriendStep(container) {
+  async renderFriendStep(container) {
     container.innerHTML += `
       <div class="text-center mb-8">
         <div class="text-5xl mb-4">&#x1F91D;</div>
         <h2 class="text-2xl font-bold mb-2">Add a Friend</h2>
         <p class="text-oura-muted text-sm">Invite a friend to join your challenge and compare sleep data.</p>
       </div>
+      <div id="onboarding-existing-friends"></div>
       <div class="bg-oura-card rounded-2xl p-6 mb-6">
         <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-2">Friend's Email</label>
         <input type="email" id="onboarding-friend-email" placeholder="friend@email.com"
@@ -220,11 +221,33 @@ const Onboarding = {
         class="w-full py-3.5 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all mb-3">
         Send Invite
       </button>
-      <button onclick="Onboarding.advanceStep(3)"
+      <button onclick="Onboarding.advanceStep(3)" id="onboarding-friend-continue"
         class="w-full py-3 text-oura-muted text-sm hover:text-white transition-colors">
         Skip for now
       </button>
     `;
+
+    // Check for existing friends (e.g. auto-connected via invite)
+    try {
+      const friends = await Friends.getFriends();
+      const friendsContainer = document.getElementById('onboarding-existing-friends');
+      const continueBtn = document.getElementById('onboarding-friend-continue');
+      if (friends.length > 0 && friendsContainer) {
+        const names = friends.map(f => f.displayName || f.email).join(', ');
+        friendsContainer.innerHTML = `
+          <div class="bg-oura-card rounded-2xl p-5 mb-6 border border-green-500/30">
+            <p class="text-green-400 text-sm font-medium mb-1">You're already connected with ${friends.length === 1 ? 'a friend' : friends.length + ' friends'}!</p>
+            <p class="text-oura-muted text-xs">${names}</p>
+          </div>
+        `;
+        if (continueBtn) {
+          continueBtn.textContent = 'Continue';
+          continueBtn.className = 'w-full py-3.5 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all mb-3';
+        }
+      }
+    } catch (e) {
+      console.error('Error checking existing friends:', e);
+    }
   },
 
   async handleSendInvite() {
@@ -252,10 +275,15 @@ const Onboarding = {
         }
       } else {
         // Send invite link for non-existing user
-        await Friends.sendInviteLink(email);
+        const result = await Friends.sendInviteLink(email);
         if (statusEl) {
-          statusEl.textContent = 'Invite saved! They\'ll be connected when they sign up.';
-          statusEl.className = 'text-xs mt-2 text-green-400';
+          if (result.emailSent) {
+            statusEl.textContent = `Invite email sent to ${email}! They'll be connected when they sign up.`;
+            statusEl.className = 'text-xs mt-2 text-green-400';
+          } else {
+            statusEl.textContent = `Invite saved but email failed: ${result.emailError}. Share the link manually.`;
+            statusEl.className = 'text-xs mt-2 text-yellow-400';
+          }
         }
       }
 

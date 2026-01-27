@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
@@ -176,16 +177,20 @@ const server = http.createServer(async (req, res) => {
             const { email } = body;
 
             if (!email) {
+                console.error('[invite] Missing email in request body');
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Missing email' }));
                 return;
             }
 
             if (!SUPABASE_SERVICE_ROLE_KEY) {
+                console.error('[invite] SUPABASE_SERVICE_ROLE_KEY is not configured');
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }));
                 return;
             }
+
+            console.log(`[invite] Sending invite to ${email}`);
 
             const inviteData = JSON.stringify({ email });
             const url = new URL('/auth/v1/invite', SUPABASE_URL);
@@ -215,14 +220,16 @@ const server = http.createServer(async (req, res) => {
             });
 
             if (inviteRes.status >= 200 && inviteRes.status < 300) {
+                console.log(`[invite] Success for ${email}: ${inviteRes.data}`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, message: 'Invite email sent' }));
             } else {
+                console.error(`[invite] Failed for ${email}: status=${inviteRes.status} body=${inviteRes.data}`);
                 res.writeHead(inviteRes.status, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Failed to send invite', details: inviteRes.data }));
             }
         } catch (error) {
-            console.error('Invite error:', error);
+            console.error(`[invite] Exception:`, error);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message }));
         }

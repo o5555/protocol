@@ -52,17 +52,27 @@ const Friends = {
     }
 
     // Send invite email via server endpoint
+    let emailSent = false;
+    let emailError = null;
     try {
-      await fetch('/api/invite', {
+      const res = await fetch('/api/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.toLowerCase() })
       });
+      if (res.ok) {
+        emailSent = true;
+      } else {
+        const result = await res.json().catch(() => ({}));
+        emailError = result.details || result.error || `Server responded with ${res.status}`;
+        console.error('Invite email failed:', emailError);
+      }
     } catch (e) {
-      console.warn('Could not send invite email:', e.message);
+      emailError = e.message;
+      console.error('Invite email request failed:', e.message);
     }
 
-    return data;
+    return { ...data, emailSent, emailError };
   },
 
   // Get pending invites sent by the current user
@@ -470,13 +480,18 @@ const Friends = {
     const emailInput = document.getElementById('friend-email');
 
     try {
-      await this.sendInviteLink(email);
+      const result = await this.sendInviteLink(email);
 
       const inviteUrl = window.location.origin;
       await navigator.clipboard.writeText(inviteUrl);
 
-      messageEl.className = 'text-sm mt-2 text-green-400';
-      messageEl.textContent = `Invite saved! Link copied to clipboard. When ${email} signs up, you'll be connected automatically.`;
+      if (result.emailSent) {
+        messageEl.className = 'text-sm mt-2 text-green-400';
+        messageEl.textContent = `Invite email sent to ${email}! Link also copied to clipboard.`;
+      } else {
+        messageEl.className = 'text-sm mt-2 text-yellow-400';
+        messageEl.textContent = `Invite saved but email could not be sent (${result.emailError}). Link copied to clipboard — share it manually.`;
+      }
       emailInput.value = '';
 
       await this.render();
