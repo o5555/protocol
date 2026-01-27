@@ -347,6 +347,7 @@ const SleepSync = {
         light_sleep_minutes: Math.round((sleep.light_sleep_duration || 0) / 60),
         sleep_score: sleep.score,
         avg_hr: sleep.average_heart_rate || null,
+        pre_sleep_hr: sleep.lowest_heart_rate || null,
       }));
 
       // Upsert to Supabase
