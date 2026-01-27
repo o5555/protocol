@@ -26,7 +26,7 @@ const Friends = {
     return data;
   },
 
-  // Store a pending invite for a user who hasn't signed up yet
+  // Store a pending invite and send an invite email via the server
   async sendInviteLink(email) {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
@@ -34,6 +34,7 @@ const Friends = {
     const currentUser = await SupabaseClient.getCurrentUser();
     if (!currentUser) throw new Error('Not authenticated');
 
+    // Store pending invite in database
     const { data, error } = await client
       .from('pending_invites')
       .insert({
@@ -48,6 +49,17 @@ const Friends = {
         throw new Error('Invite already sent to this email');
       }
       throw error;
+    }
+
+    // Send invite email via server endpoint
+    try {
+      await fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase() })
+      });
+    } catch (e) {
+      console.warn('Could not send invite email:', e.message);
     }
 
     return data;

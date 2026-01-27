@@ -6,6 +6,7 @@ module.exports = defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
     headless: true,
+    launchOptions: { slowMo: 500 },
   },
   webServer: {
     command: 'node server.js',

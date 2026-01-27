@@ -5,6 +5,8 @@ const path = require('path');
 
 const PORT = 3000;
 const OURA_API_BASE = 'https://api.ouraring.com';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fhsbkcvepvlqbygpmdpc.supabase.co';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 const MIME_TYPES = {
     '.html': 'text/html',
@@ -161,6 +163,66 @@ const server = http.createServer(async (req, res) => {
             }
         } catch (error) {
             console.error('Webhook error:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+    }
+
+    // Send invite email to a new user via Supabase Auth
+    if (req.url === '/api/invite' && req.method === 'POST') {
+        try {
+            const body = await parseBody(req);
+            const { email } = body;
+
+            if (!email) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Missing email' }));
+                return;
+            }
+
+            if (!SUPABASE_SERVICE_ROLE_KEY) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }));
+                return;
+            }
+
+            const inviteData = JSON.stringify({ email });
+            const url = new URL('/auth/v1/invite', SUPABASE_URL);
+
+            const inviteRes = await new Promise((resolve, reject) => {
+                const options = {
+                    hostname: url.hostname,
+                    path: url.pathname,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                        'Content-Length': Buffer.byteLength(inviteData)
+                    }
+                };
+
+                const r = https.request(options, (response) => {
+                    let data = '';
+                    response.on('data', chunk => data += chunk);
+                    response.on('end', () => resolve({ status: response.statusCode, data }));
+                });
+
+                r.on('error', reject);
+                r.write(inviteData);
+                r.end();
+            });
+
+            if (inviteRes.status >= 200 && inviteRes.status < 300) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, message: 'Invite email sent' }));
+            } else {
+                res.writeHead(inviteRes.status, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to send invite', details: inviteRes.data }));
+            }
+        } catch (error) {
+            console.error('Invite error:', error);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message }));
         }
