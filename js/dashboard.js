@@ -76,22 +76,22 @@ const Dashboard = {
         </div>
       `;
 
-      // Metric sparkline cards row
+      // Metric sparkline cards row (tappable)
       html += `
         <div class="grid grid-cols-3 gap-3 mb-4">
-          <div class="bg-oura-card rounded-2xl p-4">
+          <div class="bg-oura-card rounded-2xl p-4 cursor-pointer hover:bg-oura-subtle transition-colors" onclick="Dashboard.showMetricDetail('pre_sleep_hr')">
             <div class="text-[0.65rem] font-semibold text-teal-400 uppercase tracking-wider mb-2">Pre-Sleep HR</div>
             <div class="text-2xl font-bold text-teal-400 leading-none">${avgPreSleepHR !== null ? avgPreSleepHR : '--'}</div>
             <div class="text-[0.6rem] text-oura-muted mt-0.5">bpm avg</div>
             <div class="mt-2 h-10"><canvas id="sparkline-presleep-hr"></canvas></div>
           </div>
-          <div class="bg-oura-card rounded-2xl p-4">
+          <div class="bg-oura-card rounded-2xl p-4 cursor-pointer hover:bg-oura-subtle transition-colors" onclick="Dashboard.showMetricDetail('deep_sleep')">
             <div class="text-[0.65rem] font-semibold text-blue-400 uppercase tracking-wider mb-2">Deep Sleep</div>
             <div class="text-2xl font-bold text-blue-400 leading-none">${avgDeepSleep !== null ? avgDeepSleep : '--'}</div>
             <div class="text-[0.6rem] text-oura-muted mt-0.5">min avg</div>
             <div class="mt-2 h-10"><canvas id="sparkline-deep-sleep"></canvas></div>
           </div>
-          <div class="bg-oura-card rounded-2xl p-4">
+          <div class="bg-oura-card rounded-2xl p-4 cursor-pointer hover:bg-oura-subtle transition-colors" onclick="Dashboard.showMetricDetail('sleep_score')">
             <div class="text-[0.65rem] font-semibold text-purple-400 uppercase tracking-wider mb-2">Sleep Score</div>
             <div class="text-2xl font-bold text-purple-400 leading-none">${avgSleepScore !== null ? avgSleepScore : '--'}</div>
             <div class="text-[0.6rem] text-oura-muted mt-0.5">pts avg</div>
@@ -304,6 +304,183 @@ const Dashboard = {
       console.error('Error loading friend comparison:', error);
       return '';
     }
+  },
+
+  // Fetch last 30 days of sleep data for detail views
+  async get30DaySleepData() {
+    const client = SupabaseClient.client;
+    if (!client) return [];
+
+    const user = await SupabaseClient.getCurrentUser();
+    if (!user) return [];
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+    const { data, error } = await client
+      .from('sleep_data')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes')
+      .eq('user_id', user.id)
+      .gte('date', startStr)
+      .order('date', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching 30-day sleep data:', error);
+      return [];
+    }
+
+    return data || [];
+  },
+
+  // Show detail modal for a metric
+  async showMetricDetail(metric) {
+    const config = {
+      pre_sleep_hr: { label: 'Pre-Sleep Heart Rate', unit: 'bpm', color: '#2dd4bf', field: 'pre_sleep_hr' },
+      deep_sleep: { label: 'Deep Sleep', unit: 'min', color: '#60a5fa', field: 'deep_sleep_minutes' },
+      sleep_score: { label: 'Sleep Score', unit: 'pts', color: '#c084fc', field: 'sleep_score' }
+    }[metric];
+
+    if (!config) return;
+
+    // Show loading modal immediately
+    const modal = document.createElement('div');
+    modal.id = 'metric-detail-modal';
+    modal.className = 'fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-oura-bg rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg sm:mx-4 p-6 max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
+          <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div class="text-center py-8 text-oura-muted text-sm">Loading 30-day data...</div>
+      </div>
+    `;
+    modal.addEventListener('click', (e) => { if (e.target === modal) this.closeMetricDetail(); });
+    document.body.appendChild(modal);
+
+    // Fetch data
+    const sleepData = await this.get30DaySleepData();
+    const values = sleepData.map(d => ({ date: d.date, value: d[config.field] })).filter(d => d.value != null);
+
+    if (values.length === 0) {
+      modal.querySelector('.bg-oura-bg').innerHTML = `
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
+          <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <p class="text-oura-muted text-sm text-center py-8">No data available. Sync your Oura ring to see trends.</p>
+      `;
+      return;
+    }
+
+    const avg = Math.round(values.reduce((s, d) => s + d.value, 0) / values.length);
+    const min = Math.round(Math.min(...values.map(d => d.value)));
+    const max = Math.round(Math.max(...values.map(d => d.value)));
+
+    modal.querySelector('.bg-oura-bg').innerHTML = `
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
+        <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <!-- Summary stats -->
+      <div class="flex justify-around mb-6">
+        <div class="text-center">
+          <div class="text-2xl font-bold" style="color: ${config.color}">${avg}</div>
+          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">30d Avg</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-white">${min}</div>
+          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Lowest</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-white">${max}</div>
+          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Highest</div>
+        </div>
+      </div>
+
+      <!-- 30-day chart -->
+      <div class="bg-oura-card rounded-2xl p-4 mb-6">
+        <div class="h-48"><canvas id="detail-chart-30d"></canvas></div>
+      </div>
+
+      <!-- Daily breakdown -->
+      <div class="bg-oura-card rounded-2xl p-4">
+        <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Values</div>
+        <div class="space-y-1.5 max-h-60 overflow-y-auto">
+          ${[...values].reverse().map(d => {
+            const dateObj = new Date(d.date + 'T00:00:00');
+            const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            return `
+              <div class="flex items-center justify-between py-1.5 border-b border-oura-border/50 last:border-0">
+                <span class="text-sm text-oura-muted">${dateStr}</span>
+                <span class="text-sm font-medium" style="color: ${config.color}">${Math.round(d.value)} ${config.unit}</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    // Render 30-day chart
+    const canvas = document.getElementById('detail-chart-30d');
+    if (canvas) {
+      new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: values.map(d => {
+            const dt = new Date(d.date + 'T00:00:00');
+            return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          }),
+          datasets: [{
+            data: values.map(d => d.value),
+            borderColor: config.color,
+            backgroundColor: config.color + '20',
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: config.color,
+            tension: 0.3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#1a1a2e',
+              titleColor: '#fff',
+              bodyColor: config.color,
+              callbacks: {
+                label: (ctx) => `${Math.round(ctx.parsed.y)} ${config.unit}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#6b7280', font: { size: 10 }, maxTicksLimit: 7 },
+              grid: { display: false }
+            },
+            y: {
+              ticks: { color: '#6b7280', font: { size: 10 } },
+              grid: { color: '#ffffff10' }
+            }
+          }
+        }
+      });
+    }
+  },
+
+  closeMetricDetail() {
+    document.getElementById('metric-detail-modal')?.remove();
   },
 
   // Contextual motivational message

@@ -311,22 +311,34 @@ const SleepSync = {
       const startStr = startDate.toISOString().split('T')[0];
       const endStr = endDate.toISOString().split('T')[0];
 
-      // Fetch from Oura API
+      // Fetch from Oura API (sleep sessions + daily sleep scores)
       const baseUrl = window.location.hostname === 'localhost'
         ? 'http://localhost:3000/api'
         : 'https://api.ouraring.com/v2/usercollection';
 
-      const response = await fetch(`${baseUrl}/sleep?start_date=${startStr}&end_date=${endStr}`, {
-        headers: {
-          'Authorization': `Bearer ${profile.oura_token}`
-        }
-      });
+      const [sleepResponse, dailySleepResponse] = await Promise.all([
+        fetch(`${baseUrl}/sleep?start_date=${startStr}&end_date=${endStr}`, {
+          headers: { 'Authorization': `Bearer ${profile.oura_token}` }
+        }),
+        fetch(`${baseUrl}/daily_sleep?start_date=${startStr}&end_date=${endStr}`, {
+          headers: { 'Authorization': `Bearer ${profile.oura_token}` }
+        }).catch(() => null)
+      ]);
 
-      if (!response.ok) {
+      if (!sleepResponse.ok) {
         throw new Error('Failed to fetch Oura data');
       }
 
-      const ouraData = await response.json();
+      const ouraData = await sleepResponse.json();
+
+      // Build daily sleep score lookup from daily_sleep endpoint
+      const scoresByDay = {};
+      if (dailySleepResponse?.ok) {
+        const dailyData = await dailySleepResponse.json();
+        for (const d of (dailyData.data || [])) {
+          scoresByDay[d.day] = d.score;
+        }
+      }
 
       // Transform and upsert sleep data
       // Oura can return multiple sessions per day (naps + main sleep),
@@ -345,7 +357,7 @@ const SleepSync = {
         deep_sleep_minutes: Math.round((sleep.deep_sleep_duration || 0) / 60),
         rem_sleep_minutes: Math.round((sleep.rem_sleep_duration || 0) / 60),
         light_sleep_minutes: Math.round((sleep.light_sleep_duration || 0) / 60),
-        sleep_score: sleep.score,
+        sleep_score: scoresByDay[sleep.day] || null,
         avg_hr: sleep.average_heart_rate || null,
         pre_sleep_hr: sleep.lowest_heart_rate || null,
       }));

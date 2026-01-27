@@ -65,11 +65,13 @@ const server = http.createServer(async (req, res) => {
             const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
             const ouraPath = `/v2/usercollection/sleep?start_date=${startDate}&end_date=${endDate}`;
+            const ouraDailyPath = `/v2/usercollection/daily_sleep?start_date=${startDate}&end_date=${endDate}`;
 
-            const ouraData = await new Promise((resolve, reject) => {
+            // Helper to fetch from Oura API
+            const fetchOura = (apiPath) => new Promise((resolve, reject) => {
                 const options = {
                     hostname: 'api.ouraring.com',
-                    path: ouraPath,
+                    path: apiPath,
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${ouraToken}`,
@@ -93,10 +95,22 @@ const server = http.createServer(async (req, res) => {
                 req.end();
             });
 
+            // Fetch sleep sessions and daily sleep scores in parallel
+            const [ouraData, dailySleepData] = await Promise.all([
+                fetchOura(ouraPath),
+                fetchOura(ouraDailyPath).catch(() => ({ data: [] }))
+            ]);
+
             if (!ouraData.data || ouraData.data.length === 0) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ synced: 0, message: 'No sleep data found' }));
                 return;
+            }
+
+            // Build daily sleep score lookup
+            const scoresByDay = {};
+            for (const d of (dailySleepData.data || [])) {
+                scoresByDay[d.day] = d.score;
             }
 
             // Transform sleep data for Supabase
@@ -116,7 +130,7 @@ const server = http.createServer(async (req, res) => {
                 deep_sleep_minutes: Math.round((sleep.deep_sleep_duration || 0) / 60),
                 rem_sleep_minutes: Math.round((sleep.rem_sleep_duration || 0) / 60),
                 light_sleep_minutes: Math.round((sleep.light_sleep_duration || 0) / 60),
-                sleep_score: sleep.score || null,
+                sleep_score: scoresByDay[sleep.day] || null,
                 avg_hr: sleep.average_heart_rate || null,
                 pre_sleep_hr: sleep.lowest_heart_rate || null
             }));
