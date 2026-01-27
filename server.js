@@ -97,7 +97,16 @@ const server = http.createServer(async (req, res) => {
             }
 
             // Transform sleep data for Supabase
-            const sleepRecords = ouraData.data.map(sleep => ({
+            // Oura can return multiple sessions per day (naps + main sleep),
+            // so deduplicate by date, keeping the longest session
+            const byDate = {};
+            for (const sleep of ouraData.data) {
+                const dur = sleep.total_sleep_duration || 0;
+                if (!byDate[sleep.day] || dur > byDate[sleep.day].total_sleep_duration) {
+                    byDate[sleep.day] = sleep;
+                }
+            }
+            const sleepRecords = Object.values(byDate).map(sleep => ({
                 user_id: userId,
                 date: sleep.day,
                 total_sleep_minutes: Math.round((sleep.total_sleep_duration || 0) / 60),

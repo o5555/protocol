@@ -329,16 +329,24 @@ const SleepSync = {
       const ouraData = await response.json();
 
       // Transform and upsert sleep data
-      const sleepRecords = ouraData.data.map(sleep => ({
+      // Oura can return multiple sessions per day (naps + main sleep),
+      // so deduplicate by date, keeping the longest session
+      const byDate = {};
+      for (const sleep of ouraData.data) {
+        const dur = sleep.total_sleep_duration || 0;
+        if (!byDate[sleep.day] || dur > byDate[sleep.day].total_sleep_duration) {
+          byDate[sleep.day] = sleep;
+        }
+      }
+      const sleepRecords = Object.values(byDate).map(sleep => ({
         user_id: currentUser.id,
         date: sleep.day,
-        total_sleep_minutes: Math.round(sleep.total_sleep_duration / 60),
-        deep_sleep_minutes: Math.round(sleep.deep_sleep_duration / 60),
-        rem_sleep_minutes: Math.round(sleep.rem_sleep_duration / 60),
-        light_sleep_minutes: Math.round(sleep.light_sleep_duration / 60),
+        total_sleep_minutes: Math.round((sleep.total_sleep_duration || 0) / 60),
+        deep_sleep_minutes: Math.round((sleep.deep_sleep_duration || 0) / 60),
+        rem_sleep_minutes: Math.round((sleep.rem_sleep_duration || 0) / 60),
+        light_sleep_minutes: Math.round((sleep.light_sleep_duration || 0) / 60),
         sleep_score: sleep.score,
         avg_hr: sleep.average_heart_rate || null,
-        // pre_sleep_hr needs special calculation (done elsewhere)
       }));
 
       // Upsert to Supabase
