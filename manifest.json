@@ -1,6 +1,6 @@
 {
-  "name": "Sleep Challenge",
-  "short_name": "SleepChallenge",
+  "name": "Protocol",
+  "short_name": "Protocol",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

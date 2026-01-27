@@ -19,8 +19,14 @@ const Dashboard = {
       ]);
 
       const avgHR = this.calcAvgHR(recentSleep);
+      const avgPreSleepHR = this.calcAvgPreSleepHR(recentSleep);
+      const avgDeepSleep = this.calcAvgDeepSleep(recentSleep);
+      const avgSleepScore = this.calcAvgSleepScore(recentSleep);
       const challenge = activeChallenges[0] || null;
       const message = this.getMotivationalMessage(avgHR, challenge);
+
+      // Chronological order for sparklines
+      const chronologicalSleep = [...recentSleep].sort((a, b) => a.date.localeCompare(b.date));
 
       let html = '';
 
@@ -67,6 +73,30 @@ const Dashboard = {
               </div>
             </div>
           ` : ''}
+        </div>
+      `;
+
+      // Metric sparkline cards row
+      html += `
+        <div class="grid grid-cols-3 gap-3 mb-4">
+          <div class="bg-oura-card rounded-2xl p-4">
+            <div class="text-[0.65rem] font-semibold text-teal-400 uppercase tracking-wider mb-2">Pre-Sleep HR</div>
+            <div class="text-2xl font-bold text-teal-400 leading-none">${avgPreSleepHR !== null ? avgPreSleepHR : '--'}</div>
+            <div class="text-[0.6rem] text-oura-muted mt-0.5">bpm avg</div>
+            <div class="mt-2 h-10"><canvas id="sparkline-presleep-hr"></canvas></div>
+          </div>
+          <div class="bg-oura-card rounded-2xl p-4">
+            <div class="text-[0.65rem] font-semibold text-blue-400 uppercase tracking-wider mb-2">Deep Sleep</div>
+            <div class="text-2xl font-bold text-blue-400 leading-none">${avgDeepSleep !== null ? avgDeepSleep : '--'}</div>
+            <div class="text-[0.6rem] text-oura-muted mt-0.5">min avg</div>
+            <div class="mt-2 h-10"><canvas id="sparkline-deep-sleep"></canvas></div>
+          </div>
+          <div class="bg-oura-card rounded-2xl p-4">
+            <div class="text-[0.65rem] font-semibold text-purple-400 uppercase tracking-wider mb-2">Sleep Score</div>
+            <div class="text-2xl font-bold text-purple-400 leading-none">${avgSleepScore !== null ? avgSleepScore : '--'}</div>
+            <div class="text-[0.6rem] text-oura-muted mt-0.5">pts avg</div>
+            <div class="mt-2 h-10"><canvas id="sparkline-sleep-score"></canvas></div>
+          </div>
         </div>
       `;
 
@@ -123,6 +153,11 @@ const Dashboard = {
       `;
 
       container.innerHTML = html;
+
+      // Initialize sparklines after DOM is ready
+      this.renderSparkline('sparkline-presleep-hr', chronologicalSleep.map(d => d.pre_sleep_hr), '#2dd4bf');
+      this.renderSparkline('sparkline-deep-sleep', chronologicalSleep.map(d => d.deep_sleep_minutes), '#60a5fa');
+      this.renderSparkline('sparkline-sleep-score', chronologicalSleep.map(d => d.sleep_score), '#c084fc');
     } catch (error) {
       console.error('Error rendering dashboard:', error);
       container.innerHTML = `
@@ -147,7 +182,7 @@ const Dashboard = {
 
     const { data, error } = await client
       .from('sleep_data')
-      .select('date, avg_hr, sleep_score, total_sleep_minutes')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes')
       .eq('user_id', user.id)
       .gte('date', startStr)
       .order('date', { ascending: false });
@@ -167,6 +202,24 @@ const Dashboard = {
     return Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length);
   },
 
+  calcAvgPreSleepHR(sleepData) {
+    const vals = sleepData.filter(d => d.pre_sleep_hr).map(d => d.pre_sleep_hr);
+    if (vals.length === 0) return null;
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+  },
+
+  calcAvgDeepSleep(sleepData) {
+    const vals = sleepData.filter(d => d.deep_sleep_minutes).map(d => d.deep_sleep_minutes);
+    if (vals.length === 0) return null;
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+  },
+
+  calcAvgSleepScore(sleepData) {
+    const vals = sleepData.filter(d => d.sleep_score).map(d => d.sleep_score);
+    if (vals.length === 0) return null;
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+  },
+
   getMinHR(sleepData) {
     const hrs = sleepData.filter(d => d.avg_hr).map(d => d.avg_hr);
     return hrs.length > 0 ? Math.min(...hrs) : '--';
@@ -175,6 +228,40 @@ const Dashboard = {
   getMaxHR(sleepData) {
     const hrs = sleepData.filter(d => d.avg_hr).map(d => d.avg_hr);
     return hrs.length > 0 ? Math.max(...hrs) : '--';
+  },
+
+  // Render a sparkline mini chart into a canvas element
+  renderSparkline(canvasId, data, color) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    const values = data.filter(v => v != null);
+    if (values.length < 2) return;
+
+    new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: values.map((_, i) => i),
+        datasets: [{
+          data: values,
+          borderColor: color,
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.4,
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          x: { display: false },
+          y: { display: false }
+        },
+        animation: { duration: 600 }
+      }
+    });
   },
 
   // Render friend comparison for a challenge

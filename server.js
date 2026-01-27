@@ -307,7 +307,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
     console.log(`
 ╔════════════════════════════════════════════════════════════╗
-║  Sleep Challenge - Oura Tracker                            ║
+║  Protocol - Oura Tracker                                   ║
 ╠════════════════════════════════════════════════════════════╣
 ║  Server running at: http://localhost:${PORT}                  ║
 ║  Open this URL in your browser to use the app              ║

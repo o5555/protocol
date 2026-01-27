@@ -2,7 +2,7 @@
 
 const Challenges = {
   // Create a new challenge
-  async create({ protocolId, name, friendIds }) {
+  async create({ protocolId, name, friendIds, mode }) {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
 
@@ -21,7 +21,8 @@ const Challenges = {
         name,
         creator_id: currentUser.id,
         start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0]
+        end_date: endDate.toISOString().split('T')[0],
+        mode: mode || 'pro'
       })
       .select()
       .single();
@@ -69,6 +70,7 @@ const Challenges = {
         challenge:challenges(
           id,
           name,
+          mode,
           start_date,
           end_date,
           created_at,
@@ -113,6 +115,7 @@ const Challenges = {
       .select(`
         id,
         name,
+        mode,
         start_date,
         end_date,
         created_at,
@@ -245,7 +248,8 @@ const Challenges = {
     if (!client) throw new Error('Supabase not initialized');
 
     const challenge = await this.getChallenge(challengeId);
-    const totalHabits = challenge.protocol.habits.length;
+    const habits = Protocols.getHabitsForMode(challenge.protocol, challenge.mode || 'pro');
+    const totalHabits = habits.length;
     const dayNumber = challenge.dayNumber;
 
     const participants = challenge.participants.filter(p => p.status === 'accepted');
@@ -341,7 +345,7 @@ const Challenges = {
                 <div class="bg-oura-card rounded-2xl p-4">
                   <div class="flex items-start justify-between">
                     <div>
-                      <p class="font-semibold">${inv.name}</p>
+                      <p class="font-semibold">${inv.name} ${Protocols.renderModeBadge(inv.mode || 'pro')}</p>
                       <p class="text-sm text-oura-muted">${inv.protocol.icon} ${inv.protocol.name}</p>
                       <p class="text-sm text-oura-muted">From: ${inv.creator.display_name || inv.creator.email}</p>
                     </div>
@@ -372,7 +376,7 @@ const Challenges = {
                   class="bg-oura-subtle rounded-lg p-4 cursor-pointer hover:bg-oura-border transition-colors">
                   <div class="flex items-start justify-between">
                     <div>
-                      <p class="font-semibold">${challenge.name}</p>
+                      <p class="font-semibold">${challenge.name} ${Protocols.renderModeBadge(challenge.mode || 'pro')}</p>
                       <p class="text-sm text-oura-muted">${challenge.protocol.icon} ${challenge.protocol.name}</p>
                     </div>
                     <div class="text-right">
@@ -410,13 +414,19 @@ const Challenges = {
       const completedHabits = await this.getHabitCompletions(challengeId, currentUser.id, today);
       const participantProgress = await this.getParticipantProgress(challengeId);
 
+      // Filter habits based on challenge mode
+      const habits = Protocols.getHabitsForMode(challenge.protocol, challenge.mode || 'pro');
+
       container.innerHTML = `
         <!-- Header -->
         <div class="bg-oura-card rounded-2xl p-6 mb-6">
           <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-muted hover:text-white mb-4">
             &larr; Back to Challenges
           </button>
-          <h2 class="text-2xl font-bold mb-2">${challenge.name}</h2>
+          <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-2xl font-bold">${challenge.name}</h2>
+            ${Protocols.renderModeBadge(challenge.mode || 'pro')}
+          </div>
           <p class="text-oura-muted">${challenge.protocol.icon} ${challenge.protocol.name}</p>
           <div class="flex gap-6 mt-4">
             <div>
@@ -434,7 +444,7 @@ const Challenges = {
         <div class="bg-oura-card rounded-2xl p-6 mb-6">
           <h3 class="text-lg font-semibold mb-4">Today's Habits</h3>
           <div class="space-y-3">
-            ${challenge.protocol.habits.map(habit => `
+            ${habits.map(habit => `
               <label class="flex items-start gap-3 p-3 bg-oura-subtle rounded-lg cursor-pointer hover:bg-oura-border">
                 <input type="checkbox" ${completedHabits.includes(habit.id) ? 'checked' : ''}
                   onchange="Challenges.handleToggleHabit('${challengeId}', '${habit.id}', '${today}')"
@@ -528,6 +538,9 @@ const Challenges = {
     const protocols = await Protocols.getAll();
     const friends = await Friends.getFriends();
 
+    // Reset mode state
+    Protocols._selectedMode = 'pro';
+
     const modal = document.createElement('div');
     modal.id = 'create-challenge-modal';
     modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
@@ -547,6 +560,11 @@ const Challenges = {
               class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white">
               ${protocols.map(p => `<option value="${p.id}">${p.icon} ${p.name}</option>`).join('')}
             </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-2">Mode</label>
+            ${Protocols.renderModeSelector(protocols[0]?.id, 'pro')}
           </div>
 
           <div>
@@ -582,6 +600,15 @@ const Challenges = {
 
     document.body.appendChild(modal);
 
+    // Update mode selector when protocol changes
+    const protocolSelect = document.getElementById('challenge-protocol');
+    protocolSelect.addEventListener('change', () => {
+      const modeContainer = document.getElementById('mode-selector')?.parentElement;
+      if (modeContainer) {
+        modeContainer.innerHTML = Protocols.renderModeSelector(protocolSelect.value, Protocols._selectedMode);
+      }
+    });
+
     // Handle form submission
     document.getElementById('create-challenge-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -590,9 +617,10 @@ const Challenges = {
       const protocolId = document.getElementById('challenge-protocol').value;
       const friendCheckboxes = document.querySelectorAll('input[name="friends"]:checked');
       const friendIds = Array.from(friendCheckboxes).map(cb => cb.value);
+      const mode = Protocols._selectedMode;
 
       try {
-        await this.create({ protocolId, name, friendIds });
+        await this.create({ protocolId, name, friendIds, mode });
         this.closeCreateModal();
         await this.renderList();
       } catch (error) {

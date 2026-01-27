@@ -99,7 +99,7 @@ const Onboarding = {
     `;
   },
 
-  // Step 1 — Pick a Challenge
+  // Step 1 — Pick a Challenge (protocol → mode → name)
   async renderChallengeStep(container) {
     container.innerHTML += `
       <div class="text-center mb-8">
@@ -109,6 +109,10 @@ const Onboarding = {
       </div>
       <div id="onboarding-protocols" class="space-y-3 mb-6">
         <div class="text-center py-6 text-oura-muted text-sm">Loading protocols...</div>
+      </div>
+      <div id="onboarding-mode-selector" class="hidden mb-6">
+        <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-3">Choose Mode</label>
+        <div id="onboarding-mode-cards"></div>
       </div>
       <div id="onboarding-challenge-form" class="hidden">
         <div class="bg-oura-card rounded-2xl p-6 mb-6">
@@ -126,6 +130,9 @@ const Onboarding = {
         Skip for now
       </button>
     `;
+
+    // Reset mode state
+    Protocols._selectedMode = 'pro';
 
     // Load protocols
     try {
@@ -169,6 +176,14 @@ const Onboarding = {
     el.classList.remove('border-transparent');
     el.classList.add('border-oura-accent');
 
+    // Show mode selector
+    const modeSection = document.getElementById('onboarding-mode-selector');
+    const modeCards = document.getElementById('onboarding-mode-cards');
+    if (modeSection && modeCards) {
+      modeCards.innerHTML = Protocols.renderModeSelector(protocolId, Protocols._selectedMode);
+      modeSection.classList.remove('hidden');
+    }
+
     // Show challenge name form
     document.getElementById('onboarding-challenge-form')?.classList.remove('hidden');
   },
@@ -179,6 +194,7 @@ const Onboarding = {
     const nameInput = document.getElementById('onboarding-challenge-name');
     const name = nameInput?.value.trim() || 'My Sleep Challenge';
     const btn = document.getElementById('onboarding-create-btn');
+    const mode = Protocols._selectedMode;
 
     try {
       if (btn) {
@@ -189,7 +205,8 @@ const Onboarding = {
       await Challenges.create({
         protocolId: this.selectedProtocolId,
         name,
-        friendIds: []
+        friendIds: [],
+        mode
       });
 
       await this.advanceStep(2);

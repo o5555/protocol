@@ -1,6 +1,14 @@
 // Protocols Module
 
 const Protocols = {
+  // Light mode habit mapping: protocol ID → sort_order values for "core 5" habits
+  LIGHT_MODE_HABITS: {
+    // Huberman: Morning sunlight, No caffeine after 2pm, Cool bedroom, No screens, Consistent wake time
+    '11111111-1111-1111-1111-111111111111': [1, 2, 5, 6, 7],
+    // Bryan Johnson: Wake at 5am, Morning light therapy, No caffeine, Wind down at 7pm, Sleep by 8:30pm
+    '22222222-2222-2222-2222-222222222222': [1, 2, 6, 8, 11]
+  },
+
   // Get all protocols
   async getAll() {
     const client = SupabaseClient.client;
@@ -37,6 +45,69 @@ const Protocols = {
     }
 
     return data;
+  },
+
+  // Filter habits based on mode (light returns only core 5, pro returns all)
+  getHabitsForMode(protocol, mode) {
+    if (!protocol?.habits) return [];
+    if (mode === 'pro') return protocol.habits;
+
+    const lightOrders = this.LIGHT_MODE_HABITS[protocol.id];
+    if (!lightOrders) return protocol.habits; // fallback to all if no mapping
+    return protocol.habits.filter(h => lightOrders.includes(h.sort_order));
+  },
+
+  // Render mode selector UI (two selectable cards)
+  renderModeSelector(protocolId, selectedMode) {
+    const hasLightMapping = !!this.LIGHT_MODE_HABITS[protocolId];
+    const lightCount = hasLightMapping ? this.LIGHT_MODE_HABITS[protocolId].length : 0;
+
+    return `
+      <div class="grid grid-cols-2 gap-3" id="mode-selector">
+        <div onclick="Protocols._selectMode('light')"
+          class="mode-card cursor-pointer rounded-2xl p-4 border-2 transition-all ${selectedMode === 'light' ? 'border-oura-accent bg-oura-accent/5' : 'border-oura-border bg-oura-card hover:border-oura-accent/30'}">
+          <div class="text-2xl mb-2">&#x2728;</div>
+          <h4 class="font-semibold text-sm">Light</h4>
+          <p class="text-xs text-oura-muted mt-1">Core ${lightCount} habits. Perfect for getting started.</p>
+        </div>
+        <div onclick="Protocols._selectMode('pro')"
+          class="mode-card cursor-pointer rounded-2xl p-4 border-2 transition-all ${selectedMode === 'pro' ? 'border-oura-accent bg-oura-accent/5' : 'border-oura-border bg-oura-card hover:border-oura-accent/30'}">
+          <div class="text-2xl mb-2">&#x1F525;</div>
+          <h4 class="font-semibold text-sm">Pro</h4>
+          <p class="text-xs text-oura-muted mt-1">All habits. The full protocol experience.</p>
+        </div>
+      </div>
+    `;
+  },
+
+  // Internal: handle mode card click (used by onboarding and create modal)
+  _selectedMode: 'pro',
+  _onModeChange: null,
+
+  _selectMode(mode) {
+    this._selectedMode = mode;
+
+    // Update visual state
+    document.querySelectorAll('.mode-card').forEach(card => {
+      card.classList.remove('border-oura-accent', 'bg-oura-accent/5');
+      card.classList.add('border-oura-border', 'bg-oura-card');
+    });
+    const cards = document.querySelectorAll('.mode-card');
+    const idx = mode === 'light' ? 0 : 1;
+    if (cards[idx]) {
+      cards[idx].classList.remove('border-oura-border', 'bg-oura-card');
+      cards[idx].classList.add('border-oura-accent', 'bg-oura-accent/5');
+    }
+
+    if (this._onModeChange) this._onModeChange(mode);
+  },
+
+  // Render mode badge (small pill)
+  renderModeBadge(mode) {
+    if (mode === 'light') {
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-medium bg-amber-500/15 text-amber-400">&#x2728; Light</span>`;
+    }
+    return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-medium bg-oura-accent/15 text-oura-accent">&#x1F525; Pro</span>`;
   },
 
   // Render protocols list page
