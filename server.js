@@ -117,7 +117,8 @@ const server = http.createServer(async (req, res) => {
                 rem_sleep_minutes: Math.round((sleep.rem_sleep_duration || 0) / 60),
                 light_sleep_minutes: Math.round((sleep.light_sleep_duration || 0) / 60),
                 sleep_score: sleep.score || null,
-                avg_hr: sleep.average_heart_rate || null
+                avg_hr: sleep.average_heart_rate || null,
+                pre_sleep_hr: sleep.lowest_heart_rate || null
             }));
 
             // Upsert to Supabase
