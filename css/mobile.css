@@ -1,0 +1,40 @@
+/* Mobile-first: safe areas, overscroll, tap behavior */
+
+:root {
+  --sat: env(safe-area-inset-top);
+  --sar: env(safe-area-inset-right);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+}
+
+/* Prevent iOS rubber-banding on the app shell */
+html {
+  overscroll-behavior-y: contain;
+}
+
+/* Remove tap highlight on all interactive elements */
+button, a, input, select, textarea, label {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Bottom navigation: pad for notched phones */
+.bottom-nav {
+  padding-bottom: var(--sab);
+}
+
+/* Main content: clear fixed bottom nav (64px nav + safe area) */
+.app-main {
+  padding-bottom: calc(64px + var(--sab));
+}
+
+/* Header: pad for standalone mode status bar */
+.app-header {
+  padding-top: var(--sat);
+}
+
+/* Standalone PWA: extra top padding when browser chrome is hidden */
+@media all and (display-mode: standalone) {
+  .app-header {
+    padding-top: var(--sat);
+  }
+}
