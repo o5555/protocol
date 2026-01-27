@@ -185,11 +185,13 @@ const Auth = {
     const userEmail = document.getElementById('user-email');
 
     if (user) {
-      // User is logged in
+      // User is logged in — hide auth, check onboarding before showing app
       if (authSection) authSection.classList.add('hidden');
-      if (appContent) appContent.classList.remove('hidden');
       if (userInfo) userInfo.classList.remove('hidden');
       if (userEmail) userEmail.textContent = user.email;
+
+      // Check onboarding state before showing app
+      this.checkOnboarding(user);
 
       // Dispatch custom event for other modules
       window.dispatchEvent(new CustomEvent('userLoggedIn', { detail: { user } }));
@@ -198,9 +200,34 @@ const Auth = {
       if (authSection) authSection.classList.remove('hidden');
       if (appContent) appContent.classList.add('hidden');
       if (userInfo) userInfo.classList.add('hidden');
+      // Also hide onboarding section
+      const onboardingSection = document.getElementById('onboarding-section');
+      if (onboardingSection) onboardingSection.classList.add('hidden');
 
       // Dispatch custom event for other modules
       window.dispatchEvent(new CustomEvent('userLoggedOut'));
+    }
+  },
+
+  // Check onboarding state and route accordingly
+  async checkOnboarding(user) {
+    try {
+      const profile = await this.getProfile();
+      if (profile && profile.onboarding_step < 4) {
+        // Show onboarding flow
+        Onboarding.start(profile);
+      } else {
+        // Onboarding complete — show main app
+        const appContent = document.getElementById('app-content');
+        if (appContent) appContent.classList.remove('hidden');
+        const bottomNav = document.querySelector('.bottom-nav');
+        if (bottomNav) bottomNav.classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('Error checking onboarding:', error);
+      // Fallback: show app content
+      const appContent = document.getElementById('app-content');
+      if (appContent) appContent.classList.remove('hidden');
     }
   }
 };

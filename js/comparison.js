@@ -280,18 +280,26 @@ const Comparison = {
 // Sleep data sync module
 const SleepSync = {
   // Sync sleep data from Oura to Supabase
-  async syncNow() {
+  // options.silent: suppress alerts and return result object instead
+  async syncNow(options = {}) {
+    const { silent = false } = options;
     const client = SupabaseClient.client;
-    if (!client) throw new Error('Supabase not initialized');
+    if (!client) {
+      if (silent) return { success: false, count: 0, error: 'Supabase not initialized' };
+      throw new Error('Supabase not initialized');
+    }
 
     const currentUser = await SupabaseClient.getCurrentUser();
-    if (!currentUser) throw new Error('Not authenticated');
+    if (!currentUser) {
+      if (silent) return { success: false, count: 0, error: 'Not authenticated' };
+      throw new Error('Not authenticated');
+    }
 
     // Get Oura token
     const profile = await Auth.getProfile();
     if (!profile?.oura_token) {
-      alert('Please connect your Oura ring first in the Dashboard settings.');
-      return;
+      if (!silent) alert('Please connect your Oura ring first in the Dashboard settings.');
+      return { success: false, count: 0, error: 'No Oura token' };
     }
 
     try {
@@ -343,7 +351,9 @@ const SleepSync = {
 
       if (error) throw error;
 
-      alert(`Synced ${sleepRecords.length} nights of sleep data!`);
+      if (!silent) {
+        alert(`Synced ${sleepRecords.length} nights of sleep data!`);
+      }
 
       // Refresh current view if on challenge detail
       const challengeContainer = document.getElementById('challenge-detail-container');
@@ -353,9 +363,14 @@ const SleepSync = {
           Comparison.renderForChallenge(challengeId);
         }
       }
+
+      return { success: true, count: sleepRecords.length, error: null };
     } catch (error) {
       console.error('Error syncing sleep data:', error);
-      alert('Failed to sync sleep data: ' + error.message);
+      if (!silent) {
+        alert('Failed to sync sleep data: ' + error.message);
+      }
+      return { success: false, count: 0, error: error.message };
     }
   }
 };

@@ -118,6 +118,13 @@
         </div>
     </div>
 
+    <!-- Onboarding Section (shown for new users) -->
+    <div id="onboarding-section" class="hidden">
+        <div class="onboarding-wrapper min-h-screen flex items-center justify-center p-5">
+            <div class="w-full max-w-md" id="onboarding-container"></div>
+        </div>
+    </div>
+
     <!-- App Content (shown when logged in) -->
     <div id="app-content" class="hidden">
         <!-- Slim top bar -->
@@ -126,6 +133,12 @@
                 <h1 class="text-lg font-semibold">Sleep Challenge</h1>
                 <div id="user-info" class="hidden flex items-center gap-3">
                     <span id="user-email" class="text-sm text-oura-muted truncate max-w-[140px] sm:max-w-none"></span>
+                    <button onclick="App.showSettings()" class="text-oura-muted hover:text-white transition-colors p-1" aria-label="Settings">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
+                    </button>
                     <button id="sign-out-btn" class="text-sm text-oura-muted hover:text-white whitespace-nowrap">Sign Out</button>
                 </div>
             </div>
@@ -135,82 +148,12 @@
             <!-- Dashboard Page -->
             <div id="page-dashboard" class="page">
                 <div class="mb-6">
-                    <h2 class="text-2xl font-semibold mb-1">Pre-Sleep Heart Rate</h2>
-                    <p class="text-oura-muted text-sm">Average of 2 readings before sleep onset</p>
+                    <h2 class="text-2xl font-semibold mb-1">Dashboard</h2>
+                    <p class="text-oura-muted text-sm">Your sleep performance at a glance</p>
                 </div>
-                <p id="serverNote" class="hidden mb-4 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-xs inline-block"></p>
-
-                <div class="bg-oura-card rounded-2xl p-6 mb-4">
-                    <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-5">Settings</div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                        <div class="flex flex-col gap-2 sm:col-span-2">
-                            <label class="text-xs text-oura-muted font-medium uppercase tracking-wide">Oura Personal Access Token</label>
-                            <input type="password" id="token" placeholder="Enter your token"
-                                class="px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm transition-colors focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
-                        </div>
-                        <div class="flex flex-col gap-2">
-                            <label class="text-xs text-oura-muted font-medium uppercase tracking-wide">Start Date</label>
-                            <input type="date" id="startDate"
-                                class="px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm transition-colors focus:outline-none focus:border-oura-accent">
-                        </div>
-                        <div class="flex flex-col gap-2">
-                            <label class="text-xs text-oura-muted font-medium uppercase tracking-wide">End Date</label>
-                            <input type="date" id="endDate"
-                                class="px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm transition-colors focus:outline-none focus:border-oura-accent">
-                        </div>
-                    </div>
-                    <div class="flex gap-2.5 mt-2">
-                        <button id="fetchBtn"
-                            class="flex-1 py-3.5 px-6 rounded-xl font-semibold text-sm bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-oura-accent/30 disabled:bg-oura-border disabled:from-oura-border disabled:to-oura-border disabled:text-oura-muted disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none">
-                            Fetch Data
-                        </button>
-                        <button id="clearTokenBtn"
-                            class="flex-1 py-3.5 px-6 rounded-xl font-semibold text-sm bg-oura-border text-neutral-400 transition-all hover:bg-neutral-700 hover:text-white">
-                            Clear
-                        </button>
-                    </div>
-                    <div id="tokenStatus" class="text-xs text-oura-muted mt-3"></div>
+                <div id="dashboard-container">
+                    <div class="text-center py-10 text-oura-muted text-sm">Loading dashboard...</div>
                 </div>
-
-                <div id="errorContainer" class="hidden bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-4 whitespace-pre-line text-sm"></div>
-
-                <div id="resultsCard" class="hidden bg-oura-card rounded-2xl p-6 mb-4">
-                    <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-5">7-Day Average</div>
-                    <div class="text-center py-5">
-                        <span class="text-5xl sm:text-6xl font-bold text-oura-accent leading-none tracking-tight" id="avgBpm">--</span>
-                        <span class="text-2xl font-normal text-oura-accent ml-1">bpm</span>
-                        <div class="text-sm text-oura-muted mt-2 font-medium">Pre-Sleep Heart Rate</div>
-                    </div>
-                    <div class="flex justify-center gap-6 sm:gap-10 py-5 border-t border-oura-border mt-5">
-                        <div class="text-center">
-                            <div class="text-2xl font-semibold text-white" id="minBpm">--</div>
-                            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Lowest</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-2xl font-semibold text-white" id="maxBpm">--</div>
-                            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Highest</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-2xl font-semibold text-white" id="nightsCount">--</div>
-                            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Nights</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="chartCard" class="hidden bg-oura-card rounded-2xl p-6 mb-4">
-                    <div class="flex justify-between items-center mb-5">
-                        <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider">Trend</div>
-                        <button id="debugToggle" class="text-xs text-oura-muted hover:text-oura-accent transition-colors px-3 py-1 rounded-lg border border-oura-border hover:border-oura-accent">
-                            Show Debug
-                        </button>
-                    </div>
-                    <div class="relative h-52 w-full my-5">
-                        <canvas id="hrChart"></canvas>
-                    </div>
-                    <div id="dataList" class="mt-5"></div>
-                </div>
-
-                <div id="loadingContainer" class="hidden loading-spinner flex items-center justify-center py-16 text-oura-muted text-sm">Loading</div>
             </div>
 
             <!-- Protocols Page -->
@@ -303,6 +246,8 @@
     <script src="js/protocols.js"></script>
     <script src="js/challenges.js"></script>
     <script src="js/comparison.js"></script>
+    <script src="js/onboarding.js"></script>
+    <script src="js/dashboard.js"></script>
 
     <!-- App Navigation -->
     <script>
@@ -367,7 +312,7 @@
                         Friends.render();
                         break;
                     case 'dashboard':
-                        // Dashboard is static, handled separately
+                        Dashboard.render();
                         break;
                 }
             },
@@ -376,27 +321,133 @@
                 // Navigate to dashboard by default
                 this.navigateTo('dashboard');
 
-                // Listen for auth events
-                window.addEventListener('userLoggedIn', () => {
-                    this.loadOuraToken();
-                });
-
                 // Register service worker for PWA
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('/sw.js').catch(() => {});
                 }
             },
 
-            async loadOuraToken() {
-                try {
-                    const token = await Auth.getOuraToken();
-                    if (token) {
-                        document.getElementById('token').value = token;
-                        document.getElementById('tokenStatus').textContent = 'Token loaded from profile';
-                        document.getElementById('tokenStatus').classList.add('text-oura-accent');
+            // Settings modal
+            showSettings() {
+                const modal = document.createElement('div');
+                modal.id = 'settings-modal';
+                modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+                modal.innerHTML = `
+                    <div class="bg-oura-card rounded-2xl p-6 w-full max-w-md mx-4">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-xl font-bold">Settings</h3>
+                            <button onclick="App.hideSettings()" class="text-oura-muted hover:text-white p-1">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-2">Oura Personal Access Token</label>
+                                <input type="password" id="settings-token" placeholder="Enter your token"
+                                    class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
+                                <p id="settings-token-status" class="text-xs text-oura-muted mt-2"></p>
+                            </div>
+                            <div class="flex gap-2.5">
+                                <button onclick="App.saveSettingsToken()"
+                                    class="flex-1 py-3 rounded-xl font-semibold text-sm bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black transition-all hover:shadow-lg hover:shadow-oura-accent/30">
+                                    Save Token
+                                </button>
+                                <button onclick="App.syncFromSettings()"
+                                    class="flex-1 py-3 rounded-xl font-semibold text-sm bg-oura-border text-neutral-300 transition-all hover:bg-neutral-700 hover:text-white">
+                                    Sync Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+
+                // Close on backdrop click
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) App.hideSettings();
+                });
+
+                // Load existing token
+                Auth.getOuraToken().then(token => {
+                    const input = document.getElementById('settings-token');
+                    const status = document.getElementById('settings-token-status');
+                    if (token && input) {
+                        input.value = token;
+                        if (status) {
+                            status.textContent = 'Token loaded from profile';
+                            status.classList.add('text-oura-accent');
+                        }
                     }
+                });
+            },
+
+            hideSettings() {
+                const modal = document.getElementById('settings-modal');
+                if (modal) modal.remove();
+            },
+
+            async saveSettingsToken() {
+                const input = document.getElementById('settings-token');
+                const status = document.getElementById('settings-token-status');
+                const token = input?.value.trim();
+
+                if (!token) {
+                    if (status) {
+                        status.textContent = 'Please enter a token';
+                        status.className = 'text-xs mt-2 text-red-400';
+                    }
+                    return;
+                }
+
+                try {
+                    await Auth.saveOuraToken(token);
+                    if (status) {
+                        status.textContent = 'Token saved!';
+                        status.className = 'text-xs mt-2 text-oura-accent';
+                    }
+
+                    // Kick off background sync
+                    SleepSync.syncNow({ silent: true }).then(result => {
+                        if (result.success && status) {
+                            status.textContent = `Token saved! Synced ${result.count} nights.`;
+                        }
+                        // Refresh dashboard if visible
+                        if (App.currentPage === 'dashboard') {
+                            Dashboard.render();
+                        }
+                    });
                 } catch (error) {
-                    console.error('Error loading Oura token:', error);
+                    if (status) {
+                        status.textContent = 'Failed to save: ' + error.message;
+                        status.className = 'text-xs mt-2 text-red-400';
+                    }
+                }
+            },
+
+            async syncFromSettings() {
+                const status = document.getElementById('settings-token-status');
+                if (status) {
+                    status.textContent = 'Syncing...';
+                    status.className = 'text-xs mt-2 text-oura-muted';
+                }
+
+                const result = await SleepSync.syncNow({ silent: true });
+
+                if (status) {
+                    if (result.success) {
+                        status.textContent = `Synced ${result.count} nights of sleep data!`;
+                        status.className = 'text-xs mt-2 text-oura-accent';
+                    } else {
+                        status.textContent = 'Sync failed: ' + (result.error || 'Unknown error');
+                        status.className = 'text-xs mt-2 text-red-400';
+                    }
+                }
+
+                // Refresh dashboard if visible
+                if (App.currentPage === 'dashboard') {
+                    Dashboard.render();
                 }
             }
         };
@@ -407,400 +458,5 @@
         });
     </script>
 
-    <!-- Dashboard Script (original functionality) -->
-    <script>
-        const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const OURA_API_BASE = isLocalServer
-            ? `${window.location.origin}/api`
-            : 'https://api.ouraring.com/v2/usercollection';
-
-        let chart = null;
-        let nightsData = [];
-        let debugMode = false;
-
-        const tokenInput = document.getElementById('token');
-        const startDateInput = document.getElementById('startDate');
-        const endDateInput = document.getElementById('endDate');
-        const fetchBtn = document.getElementById('fetchBtn');
-        const clearTokenBtn = document.getElementById('clearTokenBtn');
-        const tokenStatus = document.getElementById('tokenStatus');
-        const errorContainer = document.getElementById('errorContainer');
-        const resultsCard = document.getElementById('resultsCard');
-        const chartCard = document.getElementById('chartCard');
-        const loadingContainer = document.getElementById('loadingContainer');
-        const dataList = document.getElementById('dataList');
-
-        document.addEventListener('DOMContentLoaded', () => {
-            setDefaultDates();
-            setupEventListeners();
-            checkServerStatus();
-        });
-
-        function checkServerStatus() {
-            const serverNote = document.getElementById('serverNote');
-            if (!isLocalServer) {
-                serverNote.textContent = 'Run "node server.js" and open http://localhost:3000';
-                serverNote.classList.remove('hidden');
-            }
-        }
-
-        function setDefaultDates() {
-            const end = new Date();
-            const start = new Date();
-            start.setDate(start.getDate() - 7);
-            endDateInput.value = end.toISOString().split('T')[0];
-            startDateInput.value = start.toISOString().split('T')[0];
-        }
-
-        function setupEventListeners() {
-            fetchBtn.addEventListener('click', fetchData);
-            clearTokenBtn.addEventListener('click', clearToken);
-            document.getElementById('debugToggle').addEventListener('click', toggleDebug);
-            tokenInput.addEventListener('change', async () => {
-                if (tokenInput.value) {
-                    // Save to Supabase if authenticated
-                    const user = await SupabaseClient.getCurrentUser();
-                    if (user) {
-                        try {
-                            await Auth.saveOuraToken(tokenInput.value);
-                            tokenStatus.textContent = 'Token saved to profile';
-                            tokenStatus.classList.add('text-oura-accent');
-                        } catch (error) {
-                            console.error('Error saving token:', error);
-                            tokenStatus.textContent = 'Failed to save token';
-                            tokenStatus.classList.remove('text-oura-accent');
-                        }
-                    }
-                }
-            });
-        }
-
-        function toggleDebug() {
-            debugMode = !debugMode;
-            const btn = document.getElementById('debugToggle');
-            btn.textContent = debugMode ? 'Hide Debug' : 'Show Debug';
-            btn.classList.toggle('text-oura-accent', debugMode);
-            btn.classList.toggle('border-oura-accent', debugMode);
-            if (nightsData.length > 0) {
-                renderDataList();
-            }
-        }
-
-        function clearToken() {
-            tokenInput.value = '';
-            tokenStatus.textContent = 'Token cleared';
-            tokenStatus.classList.remove('text-oura-accent');
-        }
-
-        function showError(message) {
-            errorContainer.textContent = message;
-            errorContainer.classList.remove('hidden');
-        }
-
-        function hideError() {
-            errorContainer.classList.add('hidden');
-        }
-
-        function showLoading(show) {
-            loadingContainer.classList.toggle('hidden', !show);
-            fetchBtn.disabled = show;
-        }
-
-        async function fetchData() {
-            const token = tokenInput.value.trim();
-            if (!token) {
-                showError('Please enter your Oura Personal Access Token');
-                return;
-            }
-
-            hideError();
-            showLoading(true);
-
-            try {
-                const startDate = startDateInput.value;
-                const endDate = endDateInput.value;
-
-                const sleepData = await fetchSleepData(token, startDate, endDate);
-                if (!sleepData.data || sleepData.data.length === 0) {
-                    throw new Error('No sleep data found for the selected date range');
-                }
-
-                nightsData = [];
-                for (const sleep of sleepData.data) {
-                    const bedtimeStart = new Date(sleep.bedtime_start);
-                    const sleepOnset = sleep.sleep_phase_5_min
-                        ? new Date(bedtimeStart.getTime() + (sleep.sleep_phase_5_min.indexOf(1) * 5 * 60 * 1000))
-                        : bedtimeStart;
-
-                    const actualOnset = sleep.latency
-                        ? new Date(bedtimeStart.getTime() + (sleep.latency * 1000))
-                        : sleepOnset;
-
-                    const hrStart = new Date(actualOnset.getTime() - 30 * 60 * 1000);
-
-                    const hrData = await fetchHeartRateData(
-                        token,
-                        hrStart.toISOString(),
-                        actualOnset.toISOString()
-                    );
-
-                    if (hrData.data && hrData.data.length >= 2) {
-                        const beforeOnset = hrData.data.filter(r =>
-                            new Date(r.timestamp) < actualOnset
-                        );
-
-                        const sorted = beforeOnset.sort((a, b) =>
-                            new Date(b.timestamp) - new Date(a.timestamp)
-                        );
-
-                        if (sorted.length < 2) {
-                            console.log(`[${sleep.day}] Not enough readings before onset`);
-                            continue;
-                        }
-
-                        const closest2 = sorted.slice(0, 2);
-                        const avgBpm = Math.round((closest2[0].bpm + closest2[1].bpm) / 2);
-
-                        console.log(`\n[${sleep.day}] ========================================`);
-                        console.log(`  Bedtime: ${bedtimeStart.toISOString()}`);
-                        console.log(`  Sleep onset: ${actualOnset.toISOString()} (latency: ${sleep.latency}s)`);
-                        console.log(`  Total readings from API: ${hrData.data.length}, before onset: ${beforeOnset.length}`);
-                        console.log(`  --- All readings (sorted by time desc) ---`);
-                        sorted.forEach((r, i) => {
-                            const t = new Date(r.timestamp);
-                            const secBefore = Math.round((actualOnset - t) / 1000);
-                            const marker = i < 2 ? ' <-- SELECTED' : '';
-                            console.log(`    ${i+1}. ${r.bpm} bpm @ ${t.toLocaleTimeString()} (${secBefore}s before onset)${marker}`);
-                        });
-                        console.log(`  --- Selected ---`);
-                        console.log(`  Reading 1: ${closest2[0].bpm} bpm @ ${closest2[0].timestamp}`);
-                        console.log(`  Reading 2: ${closest2[1].bpm} bpm @ ${closest2[1].timestamp}`);
-                        const gapSec = Math.round((new Date(closest2[0].timestamp) - new Date(closest2[1].timestamp)) / 1000);
-                        console.log(`  Gap between selected: ${gapSec}s`);
-                        console.log(`  Average: ${avgBpm} bpm`);
-
-                        nightsData.push({
-                            date: sleep.day,
-                            bedtimeStart: bedtimeStart,
-                            sleepOnset: actualOnset,
-                            latency: sleep.latency,
-                            preSleepBpm: avgBpm,
-                            rawReadings: closest2.map(r => ({
-                                bpm: r.bpm,
-                                timestamp: new Date(r.timestamp)
-                            }))
-                        });
-                    }
-                }
-
-                if (nightsData.length === 0) {
-                    throw new Error('No heart rate data found before sleep periods');
-                }
-
-                nightsData.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-                updateStats();
-                renderChart();
-                renderDataList();
-
-                resultsCard.classList.remove('hidden');
-                chartCard.classList.remove('hidden');
-
-            } catch (error) {
-                let message = error.message;
-                if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
-                    if (!isLocalServer) {
-                        message = 'CORS error: Cannot access Oura API directly.\n\n1. Run: node server.js\n2. Open http://localhost:3000';
-                    } else {
-                        message = 'Network error: Could not connect to server.';
-                    }
-                }
-                showError(message);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        async function fetchSleepData(token, startDate, endDate) {
-            const url = `${OURA_API_BASE}/sleep?start_date=${startDate}&end_date=${endDate}`;
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) {
-                if (response.status === 401) {
-                    throw new Error('Invalid token');
-                }
-                throw new Error(`Failed to fetch sleep data: ${response.statusText}`);
-            }
-            return response.json();
-        }
-
-        async function fetchHeartRateData(token, startDatetime, endDatetime) {
-            const url = `${OURA_API_BASE}/heartrate?start_datetime=${startDatetime}&end_datetime=${endDatetime}`;
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch heart rate data: ${response.statusText}`);
-            }
-            return response.json();
-        }
-
-        function updateStats() {
-            const bpms = nightsData.map(n => n.preSleepBpm);
-            const avg = Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length);
-
-            document.getElementById('avgBpm').textContent = avg;
-            document.getElementById('minBpm').textContent = Math.min(...bpms);
-            document.getElementById('maxBpm').textContent = Math.max(...bpms);
-            document.getElementById('nightsCount').textContent = nightsData.length;
-        }
-
-        function renderChart() {
-            const ctx = document.getElementById('hrChart').getContext('2d');
-
-            if (chart) {
-                chart.destroy();
-            }
-
-            const labels = nightsData.map(n => {
-                const d = new Date(n.date);
-                return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-            });
-            const data = nightsData.map(n => n.preSleepBpm);
-
-            const gradient = ctx.createLinearGradient(0, 0, 0, 200);
-            gradient.addColorStop(0, 'rgba(0, 200, 160, 0.3)');
-            gradient.addColorStop(1, 'rgba(0, 200, 160, 0)');
-
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Pre-Sleep HR',
-                        data: data,
-                        borderColor: '#00c8a0',
-                        backgroundColor: gradient,
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointBackgroundColor: '#00c8a0',
-                        pointBorderColor: '#0d0d0d',
-                        pointBorderWidth: 2,
-                        pointRadius: 5,
-                        pointHoverRadius: 7
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.05)',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#6b6b6b',
-                                font: { size: 11 },
-                                padding: 8
-                            },
-                            border: { display: false }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: {
-                                color: '#6b6b6b',
-                                font: { size: 11 },
-                                maxRotation: 0
-                            },
-                            border: { display: false }
-                        }
-                    },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: '#1a1a1a',
-                            titleColor: '#fff',
-                            bodyColor: '#00c8a0',
-                            borderColor: '#2a2a2a',
-                            borderWidth: 1,
-                            padding: 12,
-                            displayColors: false,
-                            callbacks: {
-                                label: (context) => `${context.parsed.y} bpm`
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function renderDataList() {
-            dataList.innerHTML = nightsData.slice().reverse().map(n => {
-                const date = new Date(n.date);
-                const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                const onsetTimeStr = n.sleepOnset.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-                let debugHtml = '';
-                if (debugMode && n.rawReadings) {
-                    const readings = n.rawReadings.map(r => {
-                        const time = r.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                        const msBefore = n.sleepOnset - r.timestamp;
-                        const secBefore = Math.round(msBefore / 1000);
-                        const minBefore = Math.floor(secBefore / 60);
-                        const secRemainder = secBefore % 60;
-                        return `<div class="flex justify-between text-xs py-1">
-                            <span class="text-oura-muted">└─ ${r.bpm} bpm @ ${time}</span>
-                            <span class="text-amber-500/70">${minBefore}m ${secRemainder}s before onset</span>
-                        </div>`;
-                    }).join('');
-
-                    const latencyMin = n.latency ? Math.floor(n.latency / 60) : 0;
-                    const latencySec = n.latency ? n.latency % 60 : 0;
-
-                    const gapMs = n.rawReadings[0].timestamp - n.rawReadings[1].timestamp;
-                    const gapSec = Math.round(gapMs / 1000);
-                    const gapMin = Math.floor(gapSec / 60);
-                    const gapSecRemainder = gapSec % 60;
-                    const gapWarning = gapSec > 120 ? 'text-red-400' : 'text-oura-muted';
-
-                    debugHtml = `
-                        <div class="mt-2 ml-5 pl-3 border-l border-oura-border">
-                            <div class="text-[10px] text-oura-muted uppercase tracking-wider mb-1">Raw readings (avg: ${n.rawReadings[0].bpm} + ${n.rawReadings[1].bpm} = ${n.rawReadings[0].bpm + n.rawReadings[1].bpm} ÷ 2 = ${n.preSleepBpm})</div>
-                            ${readings}
-                            <div class="text-[10px] ${gapWarning} mt-1">Gap between readings: ${gapMin}m ${gapSecRemainder}s</div>
-                            <div class="text-[10px] text-oura-muted mt-2 space-y-0.5">
-                                <div>Bedtime: ${n.bedtimeStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                <div class="text-oura-accent">Sleep onset: ${n.sleepOnset.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (latency: ${latencyMin}m ${latencySec}s)</div>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                return `
-                    <div class="py-4 border-b border-oura-subtle last:border-0">
-                        <div class="flex justify-between items-center">
-                            <div class="flex items-center">
-                                <div class="w-2 h-2 bg-oura-accent rounded-full mr-3 flex-shrink-0"></div>
-                                <div>
-                                    <div class="text-sm text-white font-medium">${dateStr}</div>
-                                    <div class="text-xs text-oura-muted mt-0.5">Sleep onset ${onsetTimeStr}</div>
-                                </div>
-                            </div>
-                            <div class="text-xl font-semibold text-oura-accent">${n.preSleepBpm} <span class="text-xs font-normal text-oura-muted">bpm</span></div>
-                        </div>
-                        ${debugHtml}
-                    </div>
-                `;
-            }).join('');
-        }
-    </script>
 </body>
 </html>

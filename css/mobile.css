@@ -38,3 +38,21 @@ button, a, input, select, textarea, label {
     padding-top: var(--sat);
   }
 }
+
+/* Onboarding section: safe-area padding */
+#onboarding-section {
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+}
+
+/* Onboarding step transition animation */
+.onboarding-step-enter {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.onboarding-step-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
