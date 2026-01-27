@@ -1,0 +1,24 @@
+{
+  "name": "my-new-claude-project",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "npx playwright test",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/o5555/protocol.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/o5555/protocol/issues"
+  },
+  "homepage": "https://github.com/o5555/protocol#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.0"
+  }
+}
