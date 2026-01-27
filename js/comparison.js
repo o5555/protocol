@@ -337,7 +337,7 @@ const SleepSync = {
         rem_sleep_minutes: Math.round(sleep.rem_sleep_duration / 60),
         light_sleep_minutes: Math.round(sleep.light_sleep_duration / 60),
         sleep_score: sleep.score,
-        avg_hr: sleep.average_heart_rate,
+        avg_hr: sleep.average_heart_rate || null,
         // pre_sleep_hr needs special calculation (done elsewhere)
       }));
 
