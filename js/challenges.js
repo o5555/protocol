@@ -20,8 +20,8 @@ const Challenges = {
         protocol_id: protocolId,
         name,
         creator_id: currentUser.id,
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
+        start_date: this.toLocalDateStr(startDate),
+        end_date: this.toLocalDateStr(endDate),
         mode: mode || 'pro'
       })
       .select()
@@ -288,9 +288,20 @@ const Challenges = {
     return Promise.all(progressPromises);
   },
 
+  // Helper: Format a Date as YYYY-MM-DD local date string
+  toLocalDateStr(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  },
+
+  // Helper: Parse YYYY-MM-DD as local midnight (not UTC)
+  parseLocalDate(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  },
+
   // Helper: Calculate days remaining
   getDaysRemaining(endDate) {
-    const end = new Date(endDate);
+    const end = this.parseLocalDate(endDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const diff = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
@@ -299,9 +310,8 @@ const Challenges = {
 
   // Helper: Calculate current day number
   getDayNumber(startDate) {
-    const start = new Date(startDate);
+    const start = this.parseLocalDate(startDate);
     const today = new Date();
-    start.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
     const diff = Math.floor((today - start) / (1000 * 60 * 60 * 24));
     return Math.max(1, diff + 1);
@@ -311,8 +321,8 @@ const Challenges = {
   isActive(startDate, endDate) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const start = this.parseLocalDate(startDate);
+    const end = this.parseLocalDate(endDate);
     return today >= start && today <= end;
   },
 
@@ -410,38 +420,47 @@ const Challenges = {
     try {
       const currentUser = await SupabaseClient.getCurrentUser();
       const challenge = await this.getChallenge(challengeId);
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = this.toLocalDateStr(now);
       const completedHabits = await this.getHabitCompletions(challengeId, currentUser.id, today);
       const participantProgress = await this.getParticipantProgress(challengeId);
 
       // Filter habits based on challenge mode
       const habits = Protocols.getHabitsForMode(challenge.protocol, challenge.mode || 'pro');
 
+      // Store challengeId for sync refresh
+      container.dataset.challengeId = challengeId;
+
       container.innerHTML = `
         <!-- Header -->
-        <div class="bg-oura-card rounded-2xl p-6 mb-6">
-          <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-muted hover:text-white mb-4">
-            &larr; Back to Challenges
+        <div class="flex items-center justify-between mb-4">
+          <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-muted hover:text-white">
+            &larr; Back
           </button>
-          <div class="flex items-center gap-3 mb-2">
-            <h2 class="text-2xl font-bold">${challenge.name}</h2>
+          <div class="text-right">
+            <p class="text-oura-teal font-semibold">Day ${challenge.dayNumber} of 30</p>
+            <p class="text-xs text-oura-muted">${challenge.daysRemaining} days left</p>
+          </div>
+        </div>
+
+        <div class="mb-5">
+          <div class="flex items-center gap-3 mb-1">
+            <h2 class="text-xl font-bold">${challenge.name}</h2>
             ${Protocols.renderModeBadge(challenge.mode || 'pro')}
           </div>
-          <p class="text-oura-muted">${challenge.protocol.icon} ${challenge.protocol.name}</p>
-          <div class="flex gap-6 mt-4">
-            <div>
-              <p class="text-3xl font-bold text-oura-teal">${challenge.daysRemaining}</p>
-              <p class="text-sm text-oura-muted">Days Left</p>
-            </div>
-            <div>
-              <p class="text-3xl font-bold">${challenge.dayNumber}</p>
-              <p class="text-sm text-oura-muted">Current Day</p>
-            </div>
+          <p class="text-oura-muted text-sm">${challenge.protocol.icon} ${challenge.protocol.name}</p>
+        </div>
+
+        <!-- Sleep Performance (TOP — most important) -->
+        <div class="bg-oura-card rounded-2xl p-5 mb-5">
+          <h3 class="text-lg font-semibold mb-4">Sleep Performance</h3>
+          <div id="comparison-charts">
+            <p class="text-oura-muted text-sm">Loading sleep data...</p>
           </div>
         </div>
 
         <!-- Today's Checklist -->
-        <div class="bg-oura-card rounded-2xl p-6 mb-6">
+        <div class="bg-oura-card rounded-2xl p-5 mb-5">
           <h3 class="text-lg font-semibold mb-4">Today's Habits</h3>
           <div class="space-y-3">
             ${habits.map(habit => `
@@ -458,9 +477,9 @@ const Challenges = {
           </div>
         </div>
 
-        <!-- Participant Progress -->
-        <div class="bg-oura-card rounded-2xl p-6 mb-6">
-          <h3 class="text-lg font-semibold mb-4">Participant Progress</h3>
+        <!-- Participant Habit Progress -->
+        <div class="bg-oura-card rounded-2xl p-5 mb-5">
+          <h3 class="text-lg font-semibold mb-4">Habit Progress</h3>
           <div class="space-y-4">
             ${participantProgress.sort((a, b) => b.percentage - a.percentage).map(p => `
               <div>
@@ -473,14 +492,6 @@ const Challenges = {
                 </div>
               </div>
             `).join('')}
-          </div>
-        </div>
-
-        <!-- Comparison Charts (placeholder) -->
-        <div class="bg-oura-card rounded-2xl p-6">
-          <h3 class="text-lg font-semibold mb-4">Sleep Comparison</h3>
-          <div id="comparison-charts">
-            <p class="text-oura-muted">Loading comparison data...</p>
           </div>
         </div>
       `;

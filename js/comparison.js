@@ -16,7 +16,7 @@ const Comparison = {
     '#6366f1', // Indigo
   ],
 
-  // Get sleep data for challenge participants
+  // Get sleep data for challenge participants (includes 7-day baseline before start)
   async getChallengeSleepData(challengeId) {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
@@ -24,12 +24,17 @@ const Comparison = {
     const challenge = await Challenges.getChallenge(challengeId);
     const participants = challenge.participants.filter(p => p.status === 'accepted');
 
+    // Include 7 days before challenge start for baseline context
+    const preStart = Challenges.parseLocalDate(challenge.start_date);
+    preStart.setDate(preStart.getDate() - 7);
+    const preStartStr = Challenges.toLocalDateStr(preStart);
+
     const sleepDataPromises = participants.map(async (participant) => {
       const { data, error } = await client
         .from('sleep_data')
         .select('*')
         .eq('user_id', participant.user.id)
-        .gte('date', challenge.start_date)
+        .gte('date', preStartStr)
         .lte('date', challenge.end_date)
         .order('date');
 
@@ -41,7 +46,8 @@ const Comparison = {
       return { user: participant.user, data };
     });
 
-    return Promise.all(sleepDataPromises);
+    const sleepData = await Promise.all(sleepDataPromises);
+    return { challenge, sleepData };
   },
 
   // Render comparison charts for a challenge
@@ -50,16 +56,16 @@ const Comparison = {
     if (!container) return;
 
     try {
-      const sleepData = await this.getChallengeSleepData(challengeId);
+      const { challenge, sleepData } = await this.getChallengeSleepData(challengeId);
 
       // Check if we have data
       const hasData = sleepData.some(p => p.data.length > 0);
 
       if (!hasData) {
         container.innerHTML = `
-          <p class="text-oura-muted">No sleep data available yet. Make sure participants have synced their Oura data.</p>
+          <p class="text-oura-muted text-sm">No sleep data available yet. Data appears after your first night with Oura synced.</p>
           <button onclick="SleepSync.syncNow()"
-            class="mt-4 px-4 py-3 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-medium hover:bg-oura-teal/90">
+            class="mt-4 w-full px-4 py-3 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-medium hover:bg-oura-teal/90">
             Sync My Sleep Data
           </button>
         `;
@@ -70,7 +76,58 @@ const Comparison = {
       Object.values(this.charts).forEach(chart => chart.destroy());
       this.charts = {};
 
+      // Build participant summary cards
+      const summaryCards = sleepData.map((p, i) => {
+        const color = this.colors[i % this.colors.length];
+        const name = p.user.display_name || p.user.email.split('@')[0];
+        const initial = name.charAt(0).toUpperCase();
+
+        if (p.data.length === 0) {
+          return `
+            <div class="bg-oura-subtle rounded-xl p-4">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style="background: ${color}30; color: ${color}">${initial}</div>
+                <span class="font-semibold text-sm">${name}</span>
+              </div>
+              <p class="text-oura-muted text-xs">No data yet</p>
+            </div>
+          `;
+        }
+
+        const hrData = p.data.filter(d => d.pre_sleep_hr);
+        const scoreData = p.data.filter(d => d.sleep_score);
+        const avgHR = hrData.length > 0 ? Math.round(hrData.reduce((s, d) => s + d.pre_sleep_hr, 0) / hrData.length) : null;
+        const avgScore = scoreData.length > 0 ? Math.round(scoreData.reduce((s, d) => s + d.sleep_score, 0) / scoreData.length) : null;
+        const avgSleep = p.data.length > 0 ? (p.data.reduce((s, d) => s + (d.total_sleep_minutes || 0), 0) / p.data.length / 60).toFixed(1) : null;
+
+        return `
+          <div class="bg-oura-subtle rounded-xl p-4">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style="background: ${color}30; color: ${color}">${initial}</div>
+              <span class="font-semibold text-sm">${name}</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p class="text-lg font-bold" style="color: ${color}">${avgHR || '--'}</p>
+                <p class="text-[10px] text-oura-muted">Avg HR</p>
+              </div>
+              <div>
+                <p class="text-lg font-bold" style="color: ${color}">${avgScore || '--'}</p>
+                <p class="text-[10px] text-oura-muted">Score</p>
+              </div>
+              <div>
+                <p class="text-lg font-bold" style="color: ${color}">${avgSleep || '--'}</p>
+                <p class="text-[10px] text-oura-muted">Hours</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
       container.innerHTML = `
+        <div class="grid grid-cols-2 gap-3 mb-6">
+          ${summaryCards}
+        </div>
         <div class="space-y-6">
           <div>
             <h4 class="text-sm font-medium text-oura-muted mb-2">Pre-Sleep Heart Rate</h4>
@@ -81,26 +138,31 @@ const Comparison = {
             <canvas id="sleep-score-chart" height="200"></canvas>
           </div>
           <div>
-            <h4 class="text-sm font-medium text-oura-muted mb-2">Average Sleep Duration</h4>
+            <h4 class="text-sm font-medium text-oura-muted mb-2">Avg Sleep Duration</h4>
             <canvas id="sleep-duration-chart" height="150"></canvas>
           </div>
         </div>
+        <button onclick="SleepSync.syncNow()"
+          class="mt-6 w-full px-4 py-3 min-h-[44px] bg-oura-subtle text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-border transition-colors">
+          Sync Sleep Data
+        </button>
       `;
 
-      // Create charts
-      this.createPreSleepHRChart(sleepData);
-      this.createSleepScoreChart(sleepData);
+      // Create charts with challenge start date marker
+      const startDate = challenge.start_date;
+      this.createPreSleepHRChart(sleepData, startDate);
+      this.createSleepScoreChart(sleepData, startDate);
       this.createSleepDurationChart(sleepData);
     } catch (error) {
       console.error('Error rendering comparison charts:', error);
       container.innerHTML = `
-        <p class="text-red-400">Failed to load comparison data: ${error.message}</p>
+        <p class="text-red-400 text-sm">Failed to load comparison data: ${error.message}</p>
       `;
     }
   },
 
   // Create pre-sleep HR line chart
-  createPreSleepHRChart(participantData) {
+  createPreSleepHRChart(participantData, challengeStartDate) {
     const ctx = document.getElementById('pre-sleep-hr-chart');
     if (!ctx) return;
 
@@ -127,7 +189,7 @@ const Comparison = {
     this.charts.preSleepHR = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: dates.map(d => this.formatDate(d)),
+        labels: dates.map(d => this.formatDate(d, challengeStartDate)),
         datasets
       },
       options: {
@@ -140,7 +202,7 @@ const Comparison = {
         },
         scales: {
           x: {
-            ticks: { color: '#9ca3af' },
+            ticks: { color: '#9ca3af', maxRotation: 45 },
             grid: { color: '#374151' }
           },
           y: {
@@ -158,7 +220,7 @@ const Comparison = {
   },
 
   // Create sleep score line chart
-  createSleepScoreChart(participantData) {
+  createSleepScoreChart(participantData, challengeStartDate) {
     const ctx = document.getElementById('sleep-score-chart');
     if (!ctx) return;
 
@@ -183,7 +245,7 @@ const Comparison = {
     this.charts.sleepScore = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: dates.map(d => this.formatDate(d)),
+        labels: dates.map(d => this.formatDate(d, challengeStartDate)),
         datasets
       },
       options: {
@@ -196,7 +258,7 @@ const Comparison = {
         },
         scales: {
           x: {
-            ticks: { color: '#9ca3af' },
+            ticks: { color: '#9ca3af', maxRotation: 45 },
             grid: { color: '#374151' }
           },
           y: {
@@ -270,10 +332,12 @@ const Comparison = {
     });
   },
 
-  // Format date for display
-  formatDate(dateStr) {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Format date for display, marking challenge start with arrow
+  formatDate(dateStr, challengeStartDate) {
+    const date = new Date(dateStr + 'T00:00:00');
+    const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (dateStr === challengeStartDate) return '\u25B8 ' + label;
+    return label;
   }
 };
 
@@ -335,10 +399,14 @@ const SleepSync = {
       const scoresByDay = {};
       if (dailySleepResponse?.ok) {
         const dailyData = await dailySleepResponse.json();
+        console.log('[SleepSync] daily_sleep response:', dailyData.data?.length, 'days, sample:', dailyData.data?.[0]);
         for (const d of (dailyData.data || [])) {
           scoresByDay[d.day] = d.score;
         }
+      } else {
+        console.warn('[SleepSync] daily_sleep fetch failed:', dailySleepResponse?.status, dailySleepResponse?.statusText);
       }
+      console.log('[SleepSync] scoresByDay:', scoresByDay);
 
       // Transform and upsert sleep data
       // Oura can return multiple sessions per day (naps + main sleep),
