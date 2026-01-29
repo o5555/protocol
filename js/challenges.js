@@ -493,6 +493,10 @@ const Challenges = {
               </div>
             `).join('')}
           </div>
+          <button onclick="Challenges.showInviteFriendsModal('${challengeId}')"
+            class="mt-4 w-full py-3 min-h-[44px] bg-oura-subtle text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-border transition-colors">
+            + Invite Friends
+          </button>
         </div>
       `;
 
@@ -542,6 +546,111 @@ const Challenges = {
       console.error('Error declining invitation:', error);
       alert('Failed to decline invitation: ' + error.message);
     }
+  },
+
+  // Invite friends to an existing challenge
+  async inviteFriends(challengeId, friendIds) {
+    const client = SupabaseClient.client;
+    if (!client) throw new Error('Supabase not initialized');
+
+    if (friendIds.length === 0) return;
+
+    const participants = friendIds.map(friendId => ({
+      challenge_id: challengeId,
+      user_id: friendId,
+      status: 'invited'
+    }));
+
+    const { error } = await client
+      .from('challenge_participants')
+      .insert(participants);
+
+    if (error) throw error;
+  },
+
+  // Show invite friends modal for an existing challenge
+  async showInviteFriendsModal(challengeId) {
+    const challenge = await this.getChallenge(challengeId);
+    const friends = await Friends.getFriends();
+
+    // Filter out friends already in the challenge
+    const existingUserIds = new Set(challenge.participants.map(p => p.user.id));
+    const availableFriends = friends.filter(f => !existingUserIds.has(f.id));
+
+    const modal = document.createElement('div');
+    modal.id = 'invite-friends-modal';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-oura-card rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+        <h3 class="text-xl font-bold mb-4">Invite Friends</h3>
+        ${availableFriends.length > 0 ? `
+          <form id="invite-friends-form" class="space-y-4">
+            <div class="space-y-2 max-h-60 overflow-y-auto">
+              ${availableFriends.map(f => `
+                <label class="flex items-center gap-3 p-3 bg-oura-subtle rounded-lg cursor-pointer hover:bg-oura-border">
+                  <input type="checkbox" name="friends" value="${f.id}"
+                    class="w-5 h-5 rounded border-oura-border text-oura-teal focus:ring-oura-teal bg-oura-border">
+                  <span class="font-medium">${f.displayName || f.email}</span>
+                </label>
+              `).join('')}
+            </div>
+            <div class="flex gap-3 pt-4">
+              <button type="button" onclick="Challenges.closeInviteFriendsModal()"
+                class="flex-1 py-3 min-h-[44px] bg-oura-border rounded-lg hover:bg-oura-subtle">
+                Cancel
+              </button>
+              <button type="submit"
+                class="flex-1 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+                Send Invites
+              </button>
+            </div>
+          </form>
+        ` : `
+          <p class="text-oura-muted text-sm mb-4">All your friends are already in this challenge, or you haven't added any friends yet.</p>
+          <button onclick="Challenges.closeInviteFriendsModal()"
+            class="w-full py-3 min-h-[44px] bg-oura-border rounded-lg hover:bg-oura-subtle">
+            Close
+          </button>
+        `}
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Handle form submission
+    const form = document.getElementById('invite-friends-form');
+    if (form) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const checkboxes = document.querySelectorAll('#invite-friends-form input[name="friends"]:checked');
+        const friendIds = Array.from(checkboxes).map(cb => cb.value);
+
+        if (friendIds.length === 0) {
+          alert('Please select at least one friend to invite.');
+          return;
+        }
+
+        try {
+          await this.inviteFriends(challengeId, friendIds);
+          this.closeInviteFriendsModal();
+          await this.renderDetail(challengeId);
+        } catch (error) {
+          console.error('Error inviting friends:', error);
+          alert('Failed to invite friends: ' + error.message);
+        }
+      });
+    }
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) this.closeInviteFriendsModal();
+    });
+  },
+
+  // Close invite friends modal
+  closeInviteFriendsModal() {
+    const modal = document.getElementById('invite-friends-modal');
+    if (modal) modal.remove();
   },
 
   // Show create challenge modal
