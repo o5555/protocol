@@ -16,7 +16,7 @@ const Comparison = {
     '#6366f1', // Indigo
   ],
 
-  // Get sleep data for challenge participants (includes 7-day baseline before start)
+  // Get sleep data for challenge participants (includes 30-day baseline before start)
   async getChallengeSleepData(challengeId) {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
@@ -24,9 +24,9 @@ const Comparison = {
     const challenge = await Challenges.getChallenge(challengeId);
     const participants = challenge.participants.filter(p => p.status === 'accepted');
 
-    // Include 7 days before challenge start for baseline context
+    // Include 30 days before challenge start for baseline context
     const preStart = Challenges.parseLocalDate(challenge.start_date);
-    preStart.setDate(preStart.getDate() - 7);
+    preStart.setDate(preStart.getDate() - 30);
     const preStartStr = Challenges.toLocalDateStr(preStart);
 
     const sleepDataPromises = participants.map(async (participant) => {
@@ -40,14 +40,48 @@ const Comparison = {
 
       if (error) {
         console.error('Error fetching sleep data:', error);
-        return { user: participant.user, data: [] };
+        return { user: participant.user, data: [], baselineData: [], challengeData: [] };
       }
 
-      return { user: participant.user, data };
+      // Split data into baseline (before challenge) and challenge period
+      const baselineData = data.filter(d => d.date < challenge.start_date);
+      const challengeData = data.filter(d => d.date >= challenge.start_date);
+
+      return { user: participant.user, data, baselineData, challengeData };
     });
 
     const sleepData = await Promise.all(sleepDataPromises);
     return { challenge, sleepData };
+  },
+
+  // Calculate averages for a dataset
+  calcAverages(data) {
+    if (!data || data.length === 0) return { hr: null, score: null, hours: null };
+
+    const hrData = data.filter(d => d.pre_sleep_hr);
+    const scoreData = data.filter(d => d.sleep_score);
+    const sleepData = data.filter(d => d.total_sleep_minutes);
+
+    return {
+      hr: hrData.length > 0 ? Math.round(hrData.reduce((s, d) => s + d.pre_sleep_hr, 0) / hrData.length) : null,
+      score: scoreData.length > 0 ? Math.round(scoreData.reduce((s, d) => s + d.sleep_score, 0) / scoreData.length) : null,
+      hours: sleepData.length > 0 ? (sleepData.reduce((s, d) => s + d.total_sleep_minutes, 0) / sleepData.length / 60).toFixed(1) : null
+    };
+  },
+
+  // Format change indicator (arrow + delta)
+  formatChange(baseline, current, lowerIsBetter = false) {
+    if (baseline === null || current === null) return '';
+
+    const delta = current - baseline;
+    if (delta === 0) return '<span class="text-oura-muted text-[10px]">—</span>';
+
+    const isImprovement = lowerIsBetter ? delta < 0 : delta > 0;
+    const arrow = isImprovement ? '↓' : '↑';
+    const color = isImprovement ? 'text-green-400' : 'text-red-400';
+    const sign = delta > 0 ? '+' : '';
+
+    return `<span class="${color} text-[10px]">${arrow}${sign}${delta.toFixed(delta % 1 === 0 ? 0 : 1)}</span>`;
   },
 
   // Render comparison charts for a challenge
@@ -76,7 +110,7 @@ const Comparison = {
       Object.values(this.charts).forEach(chart => chart.destroy());
       this.charts = {};
 
-      // Build participant summary cards
+      // Build participant summary cards with baseline vs current comparison
       const summaryCards = sleepData.map((p, i) => {
         const color = this.colors[i % this.colors.length];
         const name = p.user.display_name || p.user.email.split('@')[0];
@@ -94,37 +128,112 @@ const Comparison = {
           `;
         }
 
-        const hrData = p.data.filter(d => d.pre_sleep_hr);
-        const scoreData = p.data.filter(d => d.sleep_score);
-        const avgHR = hrData.length > 0 ? Math.round(hrData.reduce((s, d) => s + d.pre_sleep_hr, 0) / hrData.length) : null;
-        const avgScore = scoreData.length > 0 ? Math.round(scoreData.reduce((s, d) => s + d.sleep_score, 0) / scoreData.length) : null;
-        const avgSleep = p.data.length > 0 ? (p.data.reduce((s, d) => s + (d.total_sleep_minutes || 0), 0) / p.data.length / 60).toFixed(1) : null;
+        const baseline = this.calcAverages(p.baselineData);
+        const current = this.calcAverages(p.challengeData);
+        const hasBaseline = p.baselineData && p.baselineData.length > 0;
+        const hasCurrent = p.challengeData && p.challengeData.length > 0;
+
+        // Use current if available, otherwise show baseline
+        const displayHR = hasCurrent ? current.hr : baseline.hr;
+        const displayScore = hasCurrent ? current.score : baseline.score;
+        const displayHours = hasCurrent ? current.hours : baseline.hours;
 
         return `
           <div class="bg-oura-subtle rounded-xl p-4">
             <div class="flex items-center gap-3 mb-3">
               <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style="background: ${color}30; color: ${color}">${initial}</div>
-              <span class="font-semibold text-sm">${name}</span>
+              <div class="flex-1 min-w-0">
+                <span class="font-semibold text-sm block truncate">${name}</span>
+                ${hasBaseline && hasCurrent ? '<span class="text-[9px] text-oura-muted">vs 30-day baseline</span>' :
+                  hasBaseline ? '<span class="text-[9px] text-oura-muted">baseline only</span>' : ''}
+              </div>
             </div>
             <div class="grid grid-cols-3 gap-2 text-center">
               <div>
-                <p class="text-lg font-bold" style="color: ${color}">${avgHR || '--'}</p>
-                <p class="text-[10px] text-oura-muted">Avg HR</p>
+                <p class="text-lg font-bold" style="color: ${color}">${displayHR || '--'}</p>
+                <p class="text-[10px] text-oura-muted">HR</p>
+                ${hasBaseline && hasCurrent ? this.formatChange(baseline.hr, current.hr, true) : ''}
               </div>
               <div>
-                <p class="text-lg font-bold" style="color: ${color}">${avgScore || '--'}</p>
+                <p class="text-lg font-bold" style="color: ${color}">${displayScore || '--'}</p>
                 <p class="text-[10px] text-oura-muted">Score</p>
+                ${hasBaseline && hasCurrent ? this.formatChange(baseline.score, current.score, false) : ''}
               </div>
               <div>
-                <p class="text-lg font-bold" style="color: ${color}">${avgSleep || '--'}</p>
+                <p class="text-lg font-bold" style="color: ${color}">${displayHours || '--'}</p>
                 <p class="text-[10px] text-oura-muted">Hours</p>
+                ${hasBaseline && hasCurrent ? this.formatChange(parseFloat(baseline.hours), parseFloat(current.hours), false) : ''}
               </div>
             </div>
           </div>
         `;
       }).join('');
 
+      // Build baseline vs progress overview (aggregate across all participants with data)
+      const allBaseline = sleepData.flatMap(p => p.baselineData || []);
+      const allChallenge = sleepData.flatMap(p => p.challengeData || []);
+      const groupBaseline = this.calcAverages(allBaseline);
+      const groupCurrent = this.calcAverages(allChallenge);
+      const hasGroupBaseline = allBaseline.length > 0;
+      const hasGroupCurrent = allChallenge.length > 0;
+
+      const progressOverview = (hasGroupBaseline || hasGroupCurrent) ? `
+        <div class="bg-oura-card rounded-2xl p-5 mb-6">
+          <h4 class="text-sm font-semibold mb-4">Progress Overview</h4>
+          <div class="grid grid-cols-3 gap-4">
+            <div class="text-center">
+              <p class="text-[10px] text-oura-muted uppercase tracking-wide mb-1">Resting HR</p>
+              ${hasGroupBaseline && hasGroupCurrent ? `
+                <div class="flex items-center justify-center gap-2">
+                  <span class="text-oura-muted text-sm">${groupBaseline.hr || '--'}</span>
+                  <span class="text-oura-muted">→</span>
+                  <span class="text-white text-lg font-bold">${groupCurrent.hr || '--'}</span>
+                </div>
+                <div class="mt-1">${this.formatChange(groupBaseline.hr, groupCurrent.hr, true)}</div>
+              ` : `
+                <p class="text-white text-lg font-bold">${hasGroupCurrent ? groupCurrent.hr : groupBaseline.hr || '--'}</p>
+                <p class="text-[10px] text-oura-muted">${hasGroupCurrent ? 'current' : 'baseline'}</p>
+              `}
+            </div>
+            <div class="text-center">
+              <p class="text-[10px] text-oura-muted uppercase tracking-wide mb-1">Sleep Score</p>
+              ${hasGroupBaseline && hasGroupCurrent ? `
+                <div class="flex items-center justify-center gap-2">
+                  <span class="text-oura-muted text-sm">${groupBaseline.score || '--'}</span>
+                  <span class="text-oura-muted">→</span>
+                  <span class="text-white text-lg font-bold">${groupCurrent.score || '--'}</span>
+                </div>
+                <div class="mt-1">${this.formatChange(groupBaseline.score, groupCurrent.score, false)}</div>
+              ` : `
+                <p class="text-white text-lg font-bold">${hasGroupCurrent ? groupCurrent.score : groupBaseline.score || '--'}</p>
+                <p class="text-[10px] text-oura-muted">${hasGroupCurrent ? 'current' : 'baseline'}</p>
+              `}
+            </div>
+            <div class="text-center">
+              <p class="text-[10px] text-oura-muted uppercase tracking-wide mb-1">Sleep Hours</p>
+              ${hasGroupBaseline && hasGroupCurrent ? `
+                <div class="flex items-center justify-center gap-2">
+                  <span class="text-oura-muted text-sm">${groupBaseline.hours || '--'}</span>
+                  <span class="text-oura-muted">→</span>
+                  <span class="text-white text-lg font-bold">${groupCurrent.hours || '--'}</span>
+                </div>
+                <div class="mt-1">${this.formatChange(parseFloat(groupBaseline.hours), parseFloat(groupCurrent.hours), false)}</div>
+              ` : `
+                <p class="text-white text-lg font-bold">${hasGroupCurrent ? groupCurrent.hours : groupBaseline.hours || '--'}</p>
+                <p class="text-[10px] text-oura-muted">${hasGroupCurrent ? 'current' : 'baseline'}</p>
+              `}
+            </div>
+          </div>
+          ${hasGroupBaseline ? `
+            <p class="text-[10px] text-oura-muted text-center mt-4">
+              Baseline: ${allBaseline.length} nights before challenge · Current: ${allChallenge.length} nights during challenge
+            </p>
+          ` : ''}
+        </div>
+      ` : '';
+
       container.innerHTML = `
+        ${progressOverview}
         <div class="grid grid-cols-2 gap-3 mb-6">
           ${summaryCards}
         </div>
