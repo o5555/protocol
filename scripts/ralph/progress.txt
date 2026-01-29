@@ -1,0 +1,59 @@
+# Ralph Progress Log
+Started: Thu Jan 29 14:56:52 CST 2026
+---
+
+## Codebase Patterns
+- Use CommonJS `require()` for Playwright test imports (not ES modules)
+- Supabase stores auth session in localStorage with key pattern `sb-<project>-auth-token`
+- Test fixtures should be in `tests/e2e/helpers/fixtures.js` for reuse
+- Auth helpers should use `page.addInitScript()` to inject state before page loads
+- Global modules (Auth, SupabaseClient, Dashboard, etc.) are exposed on `window` object
+
+---
+
+## 2026-01-29 - US-001
+- What was implemented:
+  - Created `tests/e2e/helpers/auth.js` with auth helper functions:
+    - `mockAuthenticatedState()` - Injects mock session into localStorage
+    - `clearAuthState()` - Removes auth tokens from localStorage
+    - `setupAuthenticatedPage()` - Sets up page with mocked auth before test
+    - `setupUnauthenticatedPage()` - Sets up page in logged-out state
+    - `injectMockModules()` - Injects test mode flags and mock data
+  - Created `tests/e2e/helpers/fixtures.js` with test data:
+    - MOCK_USER, MOCK_USER_2 - Mock user objects
+    - MOCK_SESSION - Mock Supabase session with tokens
+    - MOCK_PROFILE - Mock user profile with onboarding completed
+    - MOCK_SLEEP_DATA - Mock sleep records for dashboard tests
+    - generateBaselineSleepData() - Helper to generate 30-day baseline
+    - MOCK_FRIENDS, MOCK_FRIEND_REQUESTS - Mock friend data
+    - MOCK_CHALLENGE, MOCK_CHALLENGE_PARTICIPANTS, MOCK_CHALLENGE_INVITATIONS
+  - Created `tests/e2e/helpers/helpers.spec.js` with 17 passing tests
+- Files changed:
+  - tests/e2e/helpers/auth.js (new)
+  - tests/e2e/helpers/fixtures.js (new)
+  - tests/e2e/helpers/helpers.spec.js (new)
+- **Learnings for future iterations:**
+  - The actual email input ID is `auth-email` not `magic-link-email` (existing test in auth.spec.js has wrong ID)
+  - App module is defined inline in index.html inside a script tag, not exported to window.App consistently
+  - Some existing E2E tests (auth.spec.js, friends.spec.js) have failures unrelated to this story
+  - Use `page.addInitScript()` to inject data BEFORE page navigation for auth mocking
+---
+
+## 2026-01-29 - US-002
+- What was implemented:
+  - Created `tests/e2e/auth-flow.spec.js` with 21 comprehensive auth UI tests:
+    - Auth section visibility tests (unauthenticated state)
+    - Tab switching tests (Magic Link ↔ Password)
+    - Magic link form validation tests (email required, email format)
+    - Password form tests (both email and password fields visible and validated)
+    - Error message element and styling tests
+    - Authenticated user state tests (session data verification)
+- Files changed:
+  - tests/e2e/auth-flow.spec.js (new)
+- **Learnings for future iterations:**
+  - Tab buttons use `Auth.switchAuthTab()` to toggle visibility between forms
+  - Magic link form uses `#auth-email` and password form uses `#auth-email-pw` and `#auth-password`
+  - Error messages use `#auth-message` (magic link) and `#auth-message-pw` (password)
+  - HTML5 validation can be tested via `element.checkValidity()` method
+  - Tab active state is indicated by `bg-oura-border` CSS class
+---

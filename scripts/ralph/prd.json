@@ -1,0 +1,88 @@
+{
+  "project": "SleepSync",
+  "branchName": "ralph/e2e-playwright-tests",
+  "description": "Comprehensive Playwright E2E tests for SleepSync app covering auth, dashboard, challenges, and friends features",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create test utilities and auth helpers",
+      "description": "As a developer, I need reusable test utilities for authentication so tests can run with mocked or real auth state.",
+      "acceptanceCriteria": [
+        "Create tests/e2e/helpers/auth.js with functions to mock authenticated state via localStorage/Supabase session injection",
+        "Create tests/e2e/helpers/fixtures.js with test data (mock user, mock sleep data, mock friends)",
+        "Add a test user setup that bypasses real Supabase auth for testing",
+        "Playwright tests pass: npx playwright test tests/e2e/helpers"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Auth flow e2e tests",
+      "description": "As a developer, I need e2e tests that verify the authentication UI flows work correctly.",
+      "acceptanceCriteria": [
+        "Test: Auth section is visible on unauthenticated visit",
+        "Test: Can switch between Magic Link and Password tabs",
+        "Test: Magic link form validates email input",
+        "Test: Password form shows both email and password fields",
+        "Test: Error messages display for invalid inputs",
+        "Test: Authenticated users see dashboard instead of auth section",
+        "All tests in tests/e2e/auth-flow.spec.js pass"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Dashboard e2e tests",
+      "description": "As a developer, I need e2e tests that verify the dashboard displays sleep data and comparisons correctly.",
+      "acceptanceCriteria": [
+        "Test: Dashboard shows sleep score, heart rate, and sleep duration metrics",
+        "Test: Comparison section shows baseline vs current period",
+        "Test: Change indicators show correct direction (up/down arrows) and colors",
+        "Test: Dashboard handles empty data state gracefully",
+        "Test: Navigation between dashboard tabs works",
+        "All tests in tests/e2e/dashboard-flow.spec.js pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Challenges e2e tests",
+      "description": "As a developer, I need e2e tests that verify challenge creation and management flows.",
+      "acceptanceCriteria": [
+        "Test: Create challenge modal opens and has required fields (name, duration, metric)",
+        "Test: Challenge form validation works (required fields, valid dates)",
+        "Test: Challenges list displays active and completed challenges",
+        "Test: Challenge detail view shows participants and progress",
+        "Test: Invite friends modal opens from challenge detail",
+        "Test: Pending invitations badge shows correct count",
+        "All tests in tests/e2e/challenges-flow.spec.js pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Friends e2e tests",
+      "description": "As a developer, I need e2e tests that verify friend management flows.",
+      "acceptanceCriteria": [
+        "Test: Friends tab shows friends list or empty state",
+        "Test: Search by email input works and shows results",
+        "Test: Send friend request button is clickable",
+        "Test: Pending requests section shows incoming requests",
+        "Test: Accept/decline buttons work on pending requests",
+        "Test: Friends badge shows pending request count",
+        "All tests in tests/e2e/friends-flow.spec.js pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
