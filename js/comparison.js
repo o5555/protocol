@@ -77,7 +77,7 @@ const Comparison = {
     if (delta === 0) return '<span class="text-oura-muted text-[10px]">—</span>';
 
     const isImprovement = lowerIsBetter ? delta < 0 : delta > 0;
-    const arrow = isImprovement ? '↓' : '↑';
+    const arrow = delta < 0 ? '↓' : '↑';
     const color = isImprovement ? 'text-green-400' : 'text-red-400';
     const sign = delta > 0 ? '+' : '';
 
