@@ -40,7 +40,8 @@ const Challenges = {
       ...friendIds.map(friendId => ({
         challenge_id: challenge.id,
         user_id: friendId,
-        status: 'invited'
+        status: 'invited',
+        invited_by: currentUser.id
       }))
     ];
 
@@ -157,6 +158,19 @@ const Challenges = {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
 
+    const currentUser = await SupabaseClient.getCurrentUser();
+    if (!currentUser) throw new Error('Not authenticated');
+
+    // Get the participant record to check who invited us
+    const { data: participant, error: fetchError } = await client
+      .from('challenge_participants')
+      .select('id, invited_by')
+      .eq('id', participantId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Accept the invitation
     const { data, error } = await client
       .from('challenge_participants')
       .update({
@@ -168,6 +182,33 @@ const Challenges = {
       .single();
 
     if (error) throw error;
+
+    // Auto-friend the inviter if not already friends
+    if (participant.invited_by && participant.invited_by !== currentUser.id) {
+      try {
+        // Check if already friends
+        const { data: existing } = await client
+          .from('friendships')
+          .select('id')
+          .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${participant.invited_by}),and(user_id.eq.${participant.invited_by},friend_id.eq.${currentUser.id})`)
+          .single();
+
+        if (!existing) {
+          // Create auto-accepted friendship
+          await client
+            .from('friendships')
+            .insert({
+              user_id: participant.invited_by,
+              friend_id: currentUser.id,
+              status: 'accepted'
+            });
+        }
+      } catch (friendError) {
+        // Log but don't fail the invitation acceptance
+        console.error('Auto-friend error:', friendError);
+      }
+    }
+
     return data;
   },
 
@@ -555,10 +596,14 @@ const Challenges = {
 
     if (friendIds.length === 0) return;
 
+    const currentUser = await SupabaseClient.getCurrentUser();
+    if (!currentUser) throw new Error('Not authenticated');
+
     const participants = friendIds.map(friendId => ({
       challenge_id: challengeId,
       user_id: friendId,
-      status: 'invited'
+      status: 'invited',
+      invited_by: currentUser.id
     }));
 
     const { error } = await client
@@ -566,6 +611,72 @@ const Challenges = {
       .insert(participants);
 
     if (error) throw error;
+  },
+
+  // Invite someone by email to a challenge (even if not a friend yet)
+  async inviteByEmail(challengeId, email) {
+    const client = SupabaseClient.client;
+    if (!client) throw new Error('Supabase not initialized');
+
+    const currentUser = await SupabaseClient.getCurrentUser();
+    if (!currentUser) throw new Error('Not authenticated');
+
+    // Search for user by email
+    const user = await Friends.searchByEmail(email);
+
+    if (user) {
+      // User exists - add them as challenge participant
+      const { error } = await client
+        .from('challenge_participants')
+        .insert({
+          challenge_id: challengeId,
+          user_id: user.id,
+          status: 'invited',
+          invited_by: currentUser.id
+        });
+
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('This person is already in the challenge');
+        }
+        throw error;
+      }
+
+      return { type: 'existing_user', user };
+    } else {
+      // User doesn't exist - create pending invite with challenge reference
+      const { data, error } = await client
+        .from('pending_invites')
+        .insert({
+          inviter_id: currentUser.id,
+          invited_email: email.toLowerCase(),
+          challenge_id: challengeId
+        })
+        .select()
+        .single();
+
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('Invite already sent to this email');
+        }
+        throw error;
+      }
+
+      // Try to send invite email
+      let emailSent = false;
+      try {
+        const res = await fetch('/api/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.toLowerCase() })
+        });
+        emailSent = res.ok;
+      } catch (e) {
+        console.error('Invite email failed:', e);
+      }
+
+      return { type: 'new_user', invite: data, emailSent };
+    }
   },
 
   // Show invite friends modal for an existing challenge
@@ -582,42 +693,108 @@ const Challenges = {
     modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
     modal.innerHTML = `
       <div class="bg-oura-card rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        <h3 class="text-xl font-bold mb-4">Invite Friends</h3>
+        <h3 class="text-xl font-bold mb-4">Invite to Challenge</h3>
+
+        <!-- Email invite section -->
+        <div class="mb-6">
+          <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-2">Invite by Email</label>
+          <p class="text-oura-muted text-xs mb-3">Invite anyone - they'll automatically become your friend when they accept.</p>
+          <div class="flex gap-2">
+            <input type="email" id="invite-email-input" placeholder="friend@email.com"
+              class="flex-1 px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white placeholder-neutral-600 focus:outline-none focus:border-oura-teal">
+            <button type="button" id="invite-email-btn"
+              class="px-4 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+              Invite
+            </button>
+          </div>
+          <p id="invite-email-status" class="text-xs mt-2 hidden"></p>
+        </div>
+
         ${availableFriends.length > 0 ? `
-          <form id="invite-friends-form" class="space-y-4">
-            <div class="space-y-2 max-h-60 overflow-y-auto">
-              ${availableFriends.map(f => `
-                <label class="flex items-center gap-3 p-3 bg-oura-subtle rounded-lg cursor-pointer hover:bg-oura-border">
-                  <input type="checkbox" name="friends" value="${f.id}"
-                    class="w-5 h-5 rounded border-oura-border text-oura-teal focus:ring-oura-teal bg-oura-border">
-                  <span class="font-medium">${f.displayName || f.email}</span>
-                </label>
-              `).join('')}
-            </div>
-            <div class="flex gap-3 pt-4">
-              <button type="button" onclick="Challenges.closeInviteFriendsModal()"
-                class="flex-1 py-3 min-h-[44px] bg-oura-border rounded-lg hover:bg-oura-subtle">
-                Cancel
-              </button>
+          <div class="border-t border-oura-border pt-4">
+            <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-3">Or Select Friends</label>
+            <form id="invite-friends-form" class="space-y-4">
+              <div class="space-y-2 max-h-48 overflow-y-auto">
+                ${availableFriends.map(f => `
+                  <label class="flex items-center gap-3 p-3 bg-oura-subtle rounded-lg cursor-pointer hover:bg-oura-border">
+                    <input type="checkbox" name="friends" value="${f.id}"
+                      class="w-5 h-5 rounded border-oura-border text-oura-teal focus:ring-oura-teal bg-oura-border">
+                    <span class="font-medium">${f.displayName || f.email}</span>
+                  </label>
+                `).join('')}
+              </div>
               <button type="submit"
-                class="flex-1 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
-                Send Invites
+                class="w-full py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+                Invite Selected
               </button>
-            </div>
-          </form>
-        ` : `
-          <p class="text-oura-muted text-sm mb-4">All your friends are already in this challenge, or you haven't added any friends yet.</p>
-          <button onclick="Challenges.closeInviteFriendsModal()"
-            class="w-full py-3 min-h-[44px] bg-oura-border rounded-lg hover:bg-oura-subtle">
-            Close
-          </button>
-        `}
+            </form>
+          </div>
+        ` : ''}
+
+        <button type="button" onclick="Challenges.closeInviteFriendsModal()"
+          class="w-full py-3 min-h-[44px] mt-4 bg-oura-border rounded-lg hover:bg-oura-subtle">
+          Close
+        </button>
       </div>
     `;
 
     document.body.appendChild(modal);
 
-    // Handle form submission
+    // Handle email invite
+    const emailBtn = document.getElementById('invite-email-btn');
+    const emailInput = document.getElementById('invite-email-input');
+    const emailStatus = document.getElementById('invite-email-status');
+
+    if (emailBtn && emailInput) {
+      emailBtn.addEventListener('click', async () => {
+        const email = emailInput.value.trim();
+        if (!email) return;
+
+        emailBtn.disabled = true;
+        emailBtn.textContent = '...';
+        emailStatus.classList.remove('hidden');
+        emailStatus.className = 'text-xs mt-2 text-oura-muted';
+        emailStatus.textContent = 'Sending invite...';
+
+        try {
+          const result = await this.inviteByEmail(challengeId, email);
+
+          if (result.type === 'existing_user') {
+            emailStatus.className = 'text-xs mt-2 text-green-400';
+            emailStatus.textContent = `Invite sent to ${result.user.display_name || result.user.email}!`;
+          } else {
+            emailStatus.className = 'text-xs mt-2 text-green-400';
+            emailStatus.textContent = result.emailSent
+              ? `Invite email sent to ${email}! They'll join when they sign up.`
+              : `Invite saved! Share the app link with ${email}.`;
+          }
+
+          emailInput.value = '';
+
+          // Refresh challenge detail after short delay
+          setTimeout(async () => {
+            await this.renderDetail(challengeId);
+          }, 1500);
+        } catch (error) {
+          console.error('Error inviting by email:', error);
+          emailStatus.className = 'text-xs mt-2 text-red-400';
+          emailStatus.textContent = error.message;
+        }
+
+        emailBtn.disabled = false;
+        emailBtn.textContent = 'Invite';
+      });
+
+      // Allow Enter key to submit
+      emailInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          emailBtn.click();
+        }
+      });
+    }
+
+    // Handle friends form submission
     const form = document.getElementById('invite-friends-form');
     if (form) {
       form.addEventListener('submit', async (e) => {
