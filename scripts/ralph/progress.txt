@@ -7,7 +7,9 @@ Started: Thu Jan 29 14:56:52 CST 2026
 - Supabase stores auth session in localStorage with key pattern `sb-<project>-auth-token`
 - Test fixtures should be in `tests/e2e/helpers/fixtures.js` for reuse
 - Auth helpers should use `page.addInitScript()` to inject state before page loads
-- Global modules (Auth, SupabaseClient, Dashboard, etc.) are exposed on `window` object
+- Global modules (Auth, SupabaseClient, Dashboard, Comparison, SleepSync) are exposed on `window` object
+- App module is inline in index.html - don't test window.App directly, test UI behavior instead
+- For tests that don't need network, use `waitForLoadState('domcontentloaded')` instead of `networkidle`
 
 ---
 
@@ -56,4 +58,28 @@ Started: Thu Jan 29 14:56:52 CST 2026
   - Error messages use `#auth-message` (magic link) and `#auth-message-pw` (password)
   - HTML5 validation can be tested via `element.checkValidity()` method
   - Tab active state is indicated by `bg-oura-border` CSS class
+---
+
+## 2026-01-29 - US-003
+- What was implemented:
+  - Created `tests/e2e/dashboard-flow.spec.js` with 67 comprehensive dashboard tests:
+    - Module loading verification (Dashboard, Comparison, SleepSync modules)
+    - Sleep metric calculations (calcAvgHR, calcAvgPreSleepHR, calcAvgDeepSleep, calcAvgSleepScore)
+    - Min/max HR functions with empty data handling (getMinHR, getMaxHR)
+    - Motivational message generation based on HR levels and challenge state
+    - Comparison module tests (calcMedian for odd/even arrays, calcAverages with baseline logic)
+    - Change indicators (formatChange with correct arrows and colors)
+    - UI elements verification in unauthenticated state
+    - Navigation structure tests (buttons, data-page attributes, onclick handlers)
+    - Chart module tests (Chart.js, renderSparkline, Comparison colors)
+    - Baseline vs current period logic with median fill for missing days
+- Files changed:
+  - tests/e2e/dashboard-flow.spec.js (new - 585 lines, 67 tests)
+- **Learnings for future iterations:**
+  - App module is defined inline in index.html and not consistently exposed as `window.App` - avoid tests that depend on this
+  - Dashboard, Comparison, SleepSync modules are properly exported to window object and can be tested
+  - Authenticated state requires real Supabase auth - mock auth helpers only inject localStorage but Supabase validates server-side
+  - Use `page.waitForLoadState('domcontentloaded')` for faster tests that don't need full network idle
+  - formatChange returns HTML with `text-green-400` or `text-red-400` classes and `↑`/`↓` arrows
+  - Empty data states return `null` from calc functions and `'--'` placeholders from display functions
 ---

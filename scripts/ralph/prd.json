@@ -47,7 +47,7 @@
         "All tests in tests/e2e/dashboard-flow.spec.js pass"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
