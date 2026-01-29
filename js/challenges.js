@@ -560,12 +560,6 @@ const Challenges = {
         <h3 class="text-xl font-bold mb-4">Create Challenge</h3>
         <form id="create-challenge-form" class="space-y-4">
           <div>
-            <label class="block text-sm font-medium mb-1">Challenge Name</label>
-            <input type="text" id="challenge-name" required
-              class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white">
-          </div>
-
-          <div>
             <label class="block text-sm font-medium mb-1">Protocol</label>
             <select id="challenge-protocol" required
               class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white">
@@ -624,8 +618,10 @@ const Challenges = {
     document.getElementById('create-challenge-form').addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const name = document.getElementById('challenge-name').value;
-      const protocolId = document.getElementById('challenge-protocol').value;
+      const protocolSelect = document.getElementById('challenge-protocol');
+      const protocolId = protocolSelect.value;
+      const protocolName = protocolSelect.options[protocolSelect.selectedIndex].text.replace(/^[^\s]+\s/, ''); // Remove emoji
+      const name = `${protocolName} Challenge`;
       const friendCheckboxes = document.querySelectorAll('input[name="friends"]:checked');
       const friendIds = Array.from(friendCheckboxes).map(cb => cb.value);
       const mode = Protocols._selectedMode;

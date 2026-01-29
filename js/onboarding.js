@@ -115,14 +115,9 @@ const Onboarding = {
         <div id="onboarding-mode-cards"></div>
       </div>
       <div id="onboarding-challenge-form" class="hidden">
-        <div class="bg-oura-card rounded-2xl p-6 mb-6">
-          <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-2">Challenge Name</label>
-          <input type="text" id="onboarding-challenge-name" placeholder="e.g. My Sleep Challenge"
-            class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
-        </div>
         <button onclick="Onboarding.handleCreateChallenge()" id="onboarding-create-btn"
           class="w-full py-3.5 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all mb-3">
-          Create Challenge
+          Start Challenge
         </button>
       </div>
       <button onclick="Onboarding.advanceStep(2)"
@@ -162,9 +157,12 @@ const Onboarding = {
   },
 
   selectedProtocolId: null,
+  selectedProtocolName: null,
 
   selectProtocol(protocolId, el) {
     this.selectedProtocolId = protocolId;
+    // Get protocol name from the clicked element
+    this.selectedProtocolName = el.querySelector('h3')?.textContent || 'Sleep';
 
     // Deselect all
     document.querySelectorAll('.onboarding-protocol-card').forEach(card => {
@@ -191,8 +189,7 @@ const Onboarding = {
   async handleCreateChallenge() {
     if (!this.selectedProtocolId) return;
 
-    const nameInput = document.getElementById('onboarding-challenge-name');
-    const name = nameInput?.value.trim() || 'My Sleep Challenge';
+    const name = `${this.selectedProtocolName} Challenge`;
     const btn = document.getElementById('onboarding-create-btn');
     const mode = Protocols._selectedMode;
 
