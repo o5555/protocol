@@ -24,48 +24,109 @@ const Comparison = {
     const challenge = await Challenges.getChallenge(challengeId);
     const participants = challenge.participants.filter(p => p.status === 'accepted');
 
-    // Include 30 days before challenge start for baseline context
-    const preStart = Challenges.parseLocalDate(challenge.start_date);
-    preStart.setDate(preStart.getDate() - 30);
-    const preStartStr = Challenges.toLocalDateStr(preStart);
+    // Calculate exact 30-day baseline period (day -30 to day -1 before challenge start)
+    const challengeStart = Challenges.parseLocalDate(challenge.start_date);
+    const baselineStart = new Date(challengeStart);
+    baselineStart.setDate(baselineStart.getDate() - 30);
+    const baselineStartStr = Challenges.toLocalDateStr(baselineStart);
+    const baselineEndStr = Challenges.toLocalDateStr(new Date(challengeStart.getTime() - 86400000)); // day before start
 
     const sleepDataPromises = participants.map(async (participant) => {
       const { data, error } = await client
         .from('sleep_data')
         .select('*')
         .eq('user_id', participant.user.id)
-        .gte('date', preStartStr)
+        .gte('date', baselineStartStr)
         .lte('date', challenge.end_date)
         .order('date');
 
       if (error) {
         console.error('Error fetching sleep data:', error);
-        return { user: participant.user, data: [], baselineData: [], challengeData: [] };
+        return { user: participant.user, data: [], baselineData: [], challengeData: [], baselineDays: 30, challengeDays: 0 };
       }
 
-      // Split data into baseline (before challenge) and challenge period
-      const baselineData = data.filter(d => d.date < challenge.start_date);
+      // Split data into baseline (exactly 30 days before) and challenge period
+      const baselineData = data.filter(d => d.date >= baselineStartStr && d.date < challenge.start_date);
       const challengeData = data.filter(d => d.date >= challenge.start_date);
 
-      return { user: participant.user, data, baselineData, challengeData };
+      // Calculate how many days are in the challenge so far
+      const today = new Date();
+      const endDate = Challenges.parseLocalDate(challenge.end_date);
+      const effectiveEnd = today < endDate ? today : endDate;
+      const challengeDays = Math.max(0, Math.floor((effectiveEnd - challengeStart) / 86400000) + 1);
+
+      return {
+        user: participant.user,
+        data,
+        baselineData,
+        challengeData,
+        baselineDays: 30,
+        challengeDays
+      };
     });
 
     const sleepData = await Promise.all(sleepDataPromises);
     return { challenge, sleepData };
   },
 
-  // Calculate averages for a dataset
-  calcAverages(data) {
-    if (!data || data.length === 0) return { hr: null, score: null, hours: null };
+  // Calculate median of an array
+  calcMedian(values) {
+    if (!values || values.length === 0) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  },
 
-    const hrData = data.filter(d => d.pre_sleep_hr);
-    const scoreData = data.filter(d => d.sleep_score);
-    const sleepData = data.filter(d => d.total_sleep_minutes);
+  // Calculate averages for a dataset over a fixed number of days
+  // Uses median to estimate missing days
+  calcAverages(data, expectedDays = null) {
+    if (!data || data.length === 0) return { hr: null, score: null, hours: null, dataPoints: 0 };
+
+    const hrValues = data.filter(d => d.pre_sleep_hr).map(d => d.pre_sleep_hr);
+    const scoreValues = data.filter(d => d.sleep_score).map(d => d.sleep_score);
+    const sleepValues = data.filter(d => d.total_sleep_minutes).map(d => d.total_sleep_minutes);
+
+    // If we have expected days and missing data, use median to fill gaps
+    const hrMedian = this.calcMedian(hrValues);
+    const scoreMedian = this.calcMedian(scoreValues);
+    const sleepMedian = this.calcMedian(sleepValues);
+
+    // Calculate averages - if expectedDays provided, use it for denominator with median fill
+    let hrAvg = null, scoreAvg = null, hoursAvg = null;
+
+    if (hrValues.length > 0) {
+      if (expectedDays && hrValues.length < expectedDays) {
+        // Fill missing days with median
+        const total = hrValues.reduce((s, v) => s + v, 0) + (expectedDays - hrValues.length) * hrMedian;
+        hrAvg = Math.round(total / expectedDays);
+      } else {
+        hrAvg = Math.round(hrValues.reduce((s, v) => s + v, 0) / hrValues.length);
+      }
+    }
+
+    if (scoreValues.length > 0) {
+      if (expectedDays && scoreValues.length < expectedDays) {
+        const total = scoreValues.reduce((s, v) => s + v, 0) + (expectedDays - scoreValues.length) * scoreMedian;
+        scoreAvg = Math.round(total / expectedDays);
+      } else {
+        scoreAvg = Math.round(scoreValues.reduce((s, v) => s + v, 0) / scoreValues.length);
+      }
+    }
+
+    if (sleepValues.length > 0) {
+      if (expectedDays && sleepValues.length < expectedDays) {
+        const total = sleepValues.reduce((s, v) => s + v, 0) + (expectedDays - sleepValues.length) * sleepMedian;
+        hoursAvg = (total / expectedDays / 60).toFixed(1);
+      } else {
+        hoursAvg = (sleepValues.reduce((s, v) => s + v, 0) / sleepValues.length / 60).toFixed(1);
+      }
+    }
 
     return {
-      hr: hrData.length > 0 ? Math.round(hrData.reduce((s, d) => s + d.pre_sleep_hr, 0) / hrData.length) : null,
-      score: scoreData.length > 0 ? Math.round(scoreData.reduce((s, d) => s + d.sleep_score, 0) / scoreData.length) : null,
-      hours: sleepData.length > 0 ? (sleepData.reduce((s, d) => s + d.total_sleep_minutes, 0) / sleepData.length / 60).toFixed(1) : null
+      hr: hrAvg,
+      score: scoreAvg,
+      hours: hoursAvg,
+      dataPoints: data.length
     };
   },
 
@@ -128,8 +189,8 @@ const Comparison = {
           `;
         }
 
-        const baseline = this.calcAverages(p.baselineData);
-        const current = this.calcAverages(p.challengeData);
+        const baseline = this.calcAverages(p.baselineData, 30); // Always 30-day baseline
+        const current = this.calcAverages(p.challengeData, p.challengeDays);
         const hasBaseline = p.baselineData && p.baselineData.length > 0;
         const hasCurrent = p.challengeData && p.challengeData.length > 0;
 
@@ -172,8 +233,10 @@ const Comparison = {
       // Build baseline vs progress overview (aggregate across all participants with data)
       const allBaseline = sleepData.flatMap(p => p.baselineData || []);
       const allChallenge = sleepData.flatMap(p => p.challengeData || []);
-      const groupBaseline = this.calcAverages(allBaseline);
-      const groupCurrent = this.calcAverages(allChallenge);
+      const totalBaselineDays = sleepData.reduce((sum, p) => sum + (p.baselineDays || 30), 0);
+      const totalChallengeDays = sleepData.reduce((sum, p) => sum + (p.challengeDays || 0), 0);
+      const groupBaseline = this.calcAverages(allBaseline, totalBaselineDays);
+      const groupCurrent = this.calcAverages(allChallenge, totalChallengeDays);
       const hasGroupBaseline = allBaseline.length > 0;
       const hasGroupCurrent = allChallenge.length > 0;
 
@@ -226,7 +289,7 @@ const Comparison = {
           </div>
           ${hasGroupBaseline ? `
             <p class="text-[10px] text-oura-muted text-center mt-4">
-              Baseline: ${allBaseline.length} nights before challenge · Current: ${allChallenge.length} nights during challenge
+              Baseline: ${allBaseline.length}/${totalBaselineDays} nights (30 days) · Challenge: ${allChallenge.length}/${totalChallengeDays} nights
             </p>
           ` : ''}
         </div>
