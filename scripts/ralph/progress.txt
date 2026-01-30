@@ -12,6 +12,8 @@ Started: Thu Jan 29 14:56:52 CST 2026
 - For tests that don't need network, use `waitForLoadState('domcontentloaded')` instead of `networkidle`
 - For tests that need App object, use `waitForLoadState('networkidle')` to ensure inline scripts have run
 - When testing rendered content in hidden containers (e.g., #challenges-container in hidden #page-challenges), use `toBeAttached()` not `toBeVisible()`
+- For form inputs in hidden containers, use `page.evaluate()` to set values instead of Playwright's `fill()` method
+- When mocking async module methods, mock all dependent methods to prevent network calls (e.g., both Friends.getPendingRequests AND Challenges.getInvitations)
 
 ---
 
@@ -107,4 +109,31 @@ Started: Thu Jan 29 14:56:52 CST 2026
   - Challenge invitations section uses yellow styling (yellow-900/20, yellow-600, yellow-400)
   - Mode selector uses Protocols.renderModeSelector() and Protocols._selectedMode for state
   - Invite friends modal filters out friends already in challenge via participant user IDs
+---
+
+## 2026-01-29 - US-005
+- What was implemented:
+  - Created `tests/e2e/friends-flow.spec.js` with 91 comprehensive friends tests:
+    - Module loading verification (Friends module and all 19 key methods)
+    - UI structure verification in unauthenticated state (containers, badges, page structure)
+    - Navigation tests (nav button existence, data-page attributes, App.navigateTo integration)
+    - Friends list rendering tests (Add Friend section, invite form, email input, Send Invite button)
+    - Empty state tests (no friends message, invitation call to action, count display)
+    - Friends data tests (friend count, display names, email rendering, Remove buttons)
+    - Pending requests tests (Friend Requests section, count, Accept/Decline buttons with handlers)
+    - Sent requests tests (Sent Requests section with count and Pending status)
+    - Pending invite links tests (Invite Links Sent section, Cancel button, auto-connect message)
+    - Badge notification tests (badge existence, hidden state, checkNotifications integration)
+    - Search/invite form tests (email input typing, HTML5 validation, form submission)
+    - Error state tests (error messages, red styling, border)
+    - App notifications integration tests (App.checkNotifications, App.init, navigation triggers)
+- Files changed:
+  - tests/e2e/friends-flow.spec.js (new - 1250+ lines, 91 tests)
+- **Learnings for future iterations:**
+  - Nav buttons inside #app-content are hidden when unauthenticated - use `toBeAttached()` not `toBeVisible()`
+  - For form inputs in hidden containers, use `page.evaluate()` to set values via JavaScript instead of Playwright `fill()`
+  - When mocking Friends.getPendingRequests for checkNotifications, also mock Challenges.getInvitations to prevent network calls
+  - Friends.render() is async and needs sufficient wait time (300ms+) before accessing rendered elements
+  - Remove buttons use `onclick="Friends.handleRemove('friendshipId')"` pattern - query with `[onclick*="handleRemove"]`
+  - HTML5 form validation can be tested via `input.checkValidity()` in page.evaluate()
 ---

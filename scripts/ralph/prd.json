@@ -81,7 +81,7 @@
         "All tests in tests/e2e/friends-flow.spec.js pass"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]
