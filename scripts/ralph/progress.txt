@@ -7,9 +7,11 @@ Started: Thu Jan 29 14:56:52 CST 2026
 - Supabase stores auth session in localStorage with key pattern `sb-<project>-auth-token`
 - Test fixtures should be in `tests/e2e/helpers/fixtures.js` for reuse
 - Auth helpers should use `page.addInitScript()` to inject state before page loads
-- Global modules (Auth, SupabaseClient, Dashboard, Comparison, SleepSync) are exposed on `window` object
-- App module is inline in index.html - don't test window.App directly, test UI behavior instead
+- Global modules (Auth, SupabaseClient, Dashboard, Comparison, SleepSync, Challenges, Friends) are exposed on `window` object
+- App module is inline in index.html as `const App` - use `App.navigateTo()` directly, NOT `window.App.navigateTo()`
 - For tests that don't need network, use `waitForLoadState('domcontentloaded')` instead of `networkidle`
+- For tests that need App object, use `waitForLoadState('networkidle')` to ensure inline scripts have run
+- When testing rendered content in hidden containers (e.g., #challenges-container in hidden #page-challenges), use `toBeAttached()` not `toBeVisible()`
 
 ---
 
@@ -82,4 +84,27 @@ Started: Thu Jan 29 14:56:52 CST 2026
   - Use `page.waitForLoadState('domcontentloaded')` for faster tests that don't need full network idle
   - formatChange returns HTML with `text-green-400` or `text-red-400` classes and `↑`/`↓` arrows
   - Empty data states return `null` from calc functions and `'--'` placeholders from display functions
+---
+
+## 2026-01-29 - US-004
+- What was implemented:
+  - Created `tests/e2e/challenges-flow.spec.js` with 87 comprehensive challenge tests:
+    - Module loading verification (Challenges module and all 16 key methods)
+    - Date helper functions (toLocalDateStr, parseLocalDate, getDayNumber, getDaysRemaining, isActive)
+    - UI structure verification in unauthenticated state (containers, badges, nav buttons)
+    - Create challenge modal tests (protocol select, mode selector, friends list, form, buttons)
+    - Invite friends modal tests (email input, status feedback, friend filtering, close behavior)
+    - Challenges list rendering tests (Create button, empty state, invitations section, Join/Decline buttons, active challenges)
+    - Challenge detail rendering tests (name, day number, Back button, habits section, checkboxes, participant progress, Invite Friends button, Sleep Performance)
+    - Navigation integration tests (App.navigateTo for challenges and challenge-detail pages)
+    - Badge notification tests (hidden initially, shows/hides based on invitations)
+- Files changed:
+  - tests/e2e/challenges-flow.spec.js (new - 1350+ lines, 87 tests)
+- **Learnings for future iterations:**
+  - `const App` in inline script is accessible as global `App`, NOT `window.App` - use direct access
+  - Challenges.renderList renders into hidden #challenges-container - use `toBeAttached()` for DOM structure verification
+  - Date helpers: toLocalDateStr pads month/day, parseLocalDate creates local midnight dates, getDayNumber minimum is 1, getDaysRemaining minimum is 0
+  - Challenge invitations section uses yellow styling (yellow-900/20, yellow-600, yellow-400)
+  - Mode selector uses Protocols.renderModeSelector() and Protocols._selectedMode for state
+  - Invite friends modal filters out friends already in challenge via participant user IDs
 ---

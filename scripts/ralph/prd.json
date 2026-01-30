@@ -64,7 +64,7 @@
         "All tests in tests/e2e/challenges-flow.spec.js pass"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
