@@ -12,6 +12,8 @@ const Protocols = {
   // State for custom protocol creation
   _customProtocolHabits: [],
   _availableHabits: [],
+  _createStep: 1,
+  _startDate: null, // null = start now, date string = specific date
 
   // Get all protocols
   async getAll() {
@@ -46,7 +48,7 @@ const Protocols = {
   },
 
   // Create a custom protocol with habits
-  async createCustomProtocol(name, description, icon, habits) {
+  async createCustomProtocol(name, habits) {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
 
@@ -54,10 +56,11 @@ const Protocols = {
     if (!user) throw new Error('Must be logged in to create protocols');
 
     // Create the protocol with user_id for RLS policy
+    // Icon will be auto-generated from initials, description is optional
     const insertData = {
       name,
-      description,
-      icon: icon || '✨',
+      description: '',
+      icon: '',
       user_id: user.id
     };
 
@@ -348,9 +351,11 @@ const Protocols = {
     }
   },
 
-  // Show create protocol modal
+  // Show create protocol modal (multi-step wizard)
   async showCreateModal() {
     this._customProtocolHabits = [];
+    this._createStep = 1;
+    this._startDate = null;
 
     try {
       this._availableHabits = await this.getAllHabits();
@@ -358,6 +363,78 @@ const Protocols = {
       console.error('Error loading habits:', error);
       this._availableHabits = [];
     }
+
+    const modalHtml = `
+      <div id="create-protocol-modal" class="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-oura-bg w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div class="p-6 border-b border-oura-border flex-shrink-0">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <button id="back-btn" onclick="Protocols._prevStep()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white hidden">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                  </svg>
+                </button>
+                <div>
+                  <h2 id="modal-title" class="text-xl font-bold">Select Your Habits</h2>
+                  <p id="step-indicator" class="text-sm text-oura-muted">Step 1 of 3</p>
+                </div>
+              </div>
+              <button onclick="Protocols.closeCreateModal()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div id="step-content" class="flex-1 overflow-y-auto p-6">
+            <!-- Content will be rendered by _renderStep -->
+          </div>
+
+          <div class="p-6 border-t border-oura-border flex-shrink-0">
+            <button onclick="Protocols._nextStep()" id="next-btn"
+              class="w-full py-3 min-h-[48px] bg-oura-accent text-gray-900 font-semibold rounded-lg hover:bg-oura-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled>
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    this._renderStep();
+  },
+
+  // Render current step content
+  _renderStep() {
+    const content = document.getElementById('step-content');
+    const title = document.getElementById('modal-title');
+    const stepIndicator = document.getElementById('step-indicator');
+    const nextBtn = document.getElementById('next-btn');
+    const backBtn = document.getElementById('back-btn');
+
+    // Show/hide back button
+    backBtn.classList.toggle('hidden', this._createStep === 1);
+
+    // Update step indicator
+    stepIndicator.textContent = `Step ${this._createStep} of 3`;
+
+    if (this._createStep === 1) {
+      this._renderHabitsStep(content, title, nextBtn);
+    } else if (this._createStep === 2) {
+      this._renderStartDateStep(content, title, nextBtn);
+    } else if (this._createStep === 3) {
+      this._renderNameStep(content, title, nextBtn);
+    }
+  },
+
+  // Step 1: Select habits
+  _renderHabitsStep(content, title, nextBtn) {
+    title.textContent = 'Select Your Habits';
+    nextBtn.textContent = 'Next';
+    nextBtn.disabled = this._customProtocolHabits.length === 0;
 
     // Group habits by protocol
     const habitsByProtocol = {};
@@ -369,106 +446,247 @@ const Protocols = {
       habitsByProtocol[protocolName].push(habit);
     });
 
-    const modalHtml = `
-      <div id="create-protocol-modal" class="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-        <div class="bg-oura-bg w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-hidden flex flex-col">
-          <div class="p-6 border-b border-oura-border flex-shrink-0">
-            <div class="flex items-center justify-between">
-              <h2 class="text-xl font-bold">Create Your Protocol</h2>
-              <button onclick="Protocols.closeCreateModal()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-              </button>
-            </div>
+    content.innerHTML = `
+      <div class="space-y-6">
+        <!-- Selected Habits -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <label class="text-sm font-medium text-oura-muted">Your Habits</label>
+            <span id="habit-count" class="text-xs text-oura-muted">${this._customProtocolHabits.length} habit${this._customProtocolHabits.length !== 1 ? 's' : ''}</span>
           </div>
-
-          <div class="flex-1 overflow-y-auto p-6 space-y-6">
-            <!-- Protocol Info -->
-            <div class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-oura-muted mb-2">Protocol Name</label>
-                <input type="text" id="protocol-name" placeholder="My Sleep Protocol"
-                  class="w-full bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white placeholder-oura-muted focus:border-oura-accent focus:outline-none">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-oura-muted mb-2">Description (optional)</label>
-                <input type="text" id="protocol-description" placeholder="A brief description of your protocol"
-                  class="w-full bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white placeholder-oura-muted focus:border-oura-accent focus:outline-none">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-oura-muted mb-2">Icon (emoji)</label>
-                <input type="text" id="protocol-icon" placeholder="✨" maxlength="2"
-                  class="w-20 bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white text-center text-2xl placeholder-oura-muted focus:border-oura-accent focus:outline-none">
-              </div>
-            </div>
-
-            <!-- Selected Habits -->
-            <div>
-              <div class="flex items-center justify-between mb-3">
-                <label class="text-sm font-medium text-oura-muted">Your Habits</label>
-                <span id="habit-count" class="text-xs text-oura-muted">0 habits</span>
-              </div>
-              <div id="selected-habits" class="space-y-2 min-h-[60px] bg-oura-card/50 rounded-lg p-3 border border-dashed border-oura-border">
-                <p class="text-sm text-oura-muted text-center py-2">Add habits from below or create your own</p>
-              </div>
-            </div>
-
-            <!-- Add Custom Habit -->
-            <div>
-              <label class="block text-sm font-medium text-oura-muted mb-2">Add Custom Habit</label>
-              <div class="flex gap-2">
-                <input type="text" id="custom-habit-title" placeholder="Enter a habit..."
-                  class="flex-1 bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white placeholder-oura-muted focus:border-oura-accent focus:outline-none"
-                  onkeypress="if(event.key === 'Enter') Protocols.addCustomHabit()">
-                <button onclick="Protocols.addCustomHabit()"
-                  class="min-h-[48px] min-w-[48px] bg-oura-accent text-gray-900 rounded-lg flex items-center justify-center hover:bg-oura-accent/90">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <!-- Available Habits from Existing Protocols -->
-            <div>
-              <label class="block text-sm font-medium text-oura-muted mb-3">Or pick from existing protocols</label>
-              <div class="space-y-4">
-                ${Object.entries(habitsByProtocol).map(([protocolName, habits]) => `
-                  <div class="bg-oura-card rounded-lg p-4">
-                    <h4 class="text-sm font-semibold text-white mb-3">${protocolName}</h4>
-                    <div class="space-y-2">
-                      ${habits.map(habit => `
-                        <button onclick="Protocols.addExistingHabit('${habit.id}', '${habit.title.replace(/'/g, "\\'")}', '${(habit.description || '').replace(/'/g, "\\'")}')"
-                          class="w-full text-left px-3 py-2 min-h-[44px] rounded-lg bg-oura-subtle hover:bg-oura-border transition-colors">
-                          <p class="text-sm font-medium">${habit.title}</p>
-                          ${habit.description ? `<p class="text-xs text-oura-muted mt-0.5">${habit.description}</p>` : ''}
-                        </button>
-                      `).join('')}
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
+          <div id="selected-habits" class="space-y-2 min-h-[60px] bg-oura-card/50 rounded-lg p-3 border border-dashed border-oura-border">
+            ${this._customProtocolHabits.length === 0
+              ? `<p class="text-sm text-oura-muted text-center py-2">Add habits from below or create your own</p>`
+              : this._customProtocolHabits.map((habit, index) => `
+                <div class="flex items-center gap-3 bg-oura-subtle rounded-lg px-3 py-2">
+                  <span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-oura-border rounded-full text-xs font-medium">${index + 1}</span>
+                  <span class="flex-1 text-sm">${habit.title}</span>
+                  <button onclick="Protocols.removeHabit(${index})" class="min-h-[32px] min-w-[32px] flex items-center justify-center text-oura-muted hover:text-red-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                  </button>
+                </div>
+              `).join('')
+            }
           </div>
+        </div>
 
-          <div class="p-6 border-t border-oura-border flex-shrink-0">
-            <button onclick="Protocols.saveCustomProtocol()" id="save-protocol-btn"
-              class="w-full py-3 min-h-[48px] bg-oura-accent text-gray-900 font-semibold rounded-lg hover:bg-oura-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled>
-              Create Protocol
+        <!-- Add Custom Habit -->
+        <div>
+          <label class="block text-sm font-medium text-oura-muted mb-2">Add Custom Habit</label>
+          <div class="flex gap-2">
+            <input type="text" id="custom-habit-title" placeholder="Enter a habit..."
+              class="flex-1 bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white placeholder-oura-muted focus:border-oura-accent focus:outline-none"
+              onkeypress="if(event.key === 'Enter') Protocols.addCustomHabit()">
+            <button onclick="Protocols.addCustomHabit()"
+              class="min-h-[48px] min-w-[48px] bg-oura-accent text-gray-900 rounded-lg flex items-center justify-center hover:bg-oura-accent/90">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
             </button>
+          </div>
+        </div>
+
+        <!-- Available Habits from Existing Protocols -->
+        <div>
+          <label class="block text-sm font-medium text-oura-muted mb-3">Or pick from existing protocols</label>
+          <div class="space-y-4">
+            ${Object.entries(habitsByProtocol).map(([protocolName, habits]) => `
+              <div class="bg-oura-card rounded-lg p-4">
+                <h4 class="text-sm font-semibold text-white mb-3">${protocolName}</h4>
+                <div class="space-y-2">
+                  ${habits.map(habit => {
+                    const isSelected = this._customProtocolHabits.some(h => h.title === habit.title);
+                    return `
+                      <button onclick="Protocols.addExistingHabit('${habit.id}', '${habit.title.replace(/'/g, "\\'")}', '${(habit.description || '').replace(/'/g, "\\'")}')"
+                        class="w-full text-left px-3 py-2 min-h-[44px] rounded-lg transition-colors ${isSelected ? 'bg-oura-accent/20 border border-oura-accent' : 'bg-oura-subtle hover:bg-oura-border'}">
+                        <p class="text-sm font-medium">${habit.title}</p>
+                        ${habit.description ? `<p class="text-xs text-oura-muted mt-0.5">${habit.description}</p>` : ''}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  // Step 2: Select start date
+  _renderStartDateStep(content, title, nextBtn) {
+    title.textContent = 'When do you want to start?';
+    nextBtn.textContent = 'Next';
+    nextBtn.disabled = false;
+
+    const today = new Date().toISOString().split('T')[0];
+    const isStartNow = this._startDate === null;
+
+    content.innerHTML = `
+      <div class="space-y-4">
+        <button onclick="Protocols._selectStartDate(null)"
+          class="w-full text-left p-4 rounded-xl border-2 transition-all ${isStartNow ? 'border-oura-accent bg-oura-accent/10' : 'border-oura-border bg-oura-card hover:border-oura-accent/50'}">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-oura-accent/20 flex items-center justify-center">
+              <svg class="w-6 h-6 text-oura-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 class="font-semibold">Start Now</h3>
+              <p class="text-sm text-oura-muted">Begin your challenge today</p>
+            </div>
+          </div>
+        </button>
+
+        <button onclick="Protocols._selectStartDate('pick')"
+          class="w-full text-left p-4 rounded-xl border-2 transition-all ${!isStartNow ? 'border-oura-accent bg-oura-accent/10' : 'border-oura-border bg-oura-card hover:border-oura-accent/50'}">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-oura-accent/20 flex items-center justify-center">
+              <svg class="w-6 h-6 text-oura-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 class="font-semibold">Pick a Date</h3>
+              <p class="text-sm text-oura-muted">Schedule your challenge for later</p>
+            </div>
+          </div>
+        </button>
+
+        <div id="date-picker-container" class="${isStartNow ? 'hidden' : ''} mt-4">
+          <label class="block text-sm font-medium text-oura-muted mb-2">Start Date</label>
+          <input type="date" id="start-date-input" value="${this._startDate || today}" min="${today}"
+            onchange="Protocols._onDateChange(this.value)"
+            class="w-full bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white focus:border-oura-accent focus:outline-none">
+        </div>
+      </div>
+    `;
+  },
+
+  // Step 3: Name the challenge
+  _renderNameStep(content, title, nextBtn) {
+    title.textContent = 'Name Your Challenge';
+    nextBtn.textContent = 'Create Challenge';
+    nextBtn.disabled = false;
+
+    content.innerHTML = `
+      <div class="space-y-6">
+        <!-- Preview of protocol icon -->
+        <div class="flex justify-center">
+          <div class="protocol-icon w-20 h-20 rounded-xl flex items-center justify-center text-2xl font-semibold text-white" id="preview-icon">
+            MC
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-oura-muted mb-2">Challenge Name</label>
+          <input type="text" id="challenge-name" value="My Challenge" placeholder="My Challenge"
+            oninput="Protocols._onNameChange(this.value)"
+            class="w-full bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white placeholder-oura-muted focus:border-oura-accent focus:outline-none text-center text-lg">
+          <p class="text-xs text-oura-muted text-center mt-2">You can keep the default or customize it</p>
+        </div>
+
+        <div class="bg-oura-card rounded-xl p-4">
+          <h4 class="text-sm font-medium text-oura-muted mb-3">Challenge Summary</h4>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-oura-muted">Habits</span>
+              <span>${this._customProtocolHabits.length} habit${this._customProtocolHabits.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-oura-muted">Duration</span>
+              <span>30 days</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-oura-muted">Start</span>
+              <span>${this._startDate ? new Date(this._startDate).toLocaleDateString() : 'Today'}</span>
+            </div>
           </div>
         </div>
       </div>
     `;
 
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    // Update preview icon with initials
+    this._onNameChange(document.getElementById('challenge-name').value);
+  },
 
-    // Add listener to name input for validation
-    document.getElementById('protocol-name').addEventListener('input', () => {
-      this._updateSelectedHabitsUI();
-    });
+  // Handle start date selection
+  _selectStartDate(option) {
+    if (option === null) {
+      this._startDate = null;
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      this._startDate = this._startDate || today;
+    }
+    this._renderStep();
+  },
+
+  // Handle date input change
+  _onDateChange(value) {
+    this._startDate = value;
+  },
+
+  // Handle name input change (update preview icon)
+  _onNameChange(value) {
+    const icon = document.getElementById('preview-icon');
+    if (icon) {
+      icon.textContent = this.getInitials(value || 'My Challenge');
+    }
+  },
+
+  // Go to previous step
+  _prevStep() {
+    if (this._createStep > 1) {
+      this._createStep--;
+      this._renderStep();
+    }
+  },
+
+  // Go to next step or finish
+  async _nextStep() {
+    if (this._createStep < 3) {
+      this._createStep++;
+      this._renderStep();
+    } else {
+      // Final step - create protocol and challenge
+      await this._finishCreation();
+    }
+  },
+
+  // Finish creation - create protocol and challenge
+  async _finishCreation() {
+    const name = document.getElementById('challenge-name').value.trim() || 'My Challenge';
+    const nextBtn = document.getElementById('next-btn');
+
+    nextBtn.disabled = true;
+    nextBtn.textContent = 'Creating...';
+
+    try {
+      // Create the custom protocol
+      const protocol = await this.createCustomProtocol(name, this._customProtocolHabits);
+
+      // Create the challenge with this protocol
+      const challenge = await Challenges.create({
+        protocolId: protocol.id,
+        name: name,
+        friendIds: [],
+        mode: 'pro',
+        startDate: this._startDate
+      });
+
+      this.closeCreateModal();
+
+      // Navigate to the new challenge
+      App.navigateTo('challenge-detail', challenge.id);
+    } catch (error) {
+      console.error('Error creating protocol and challenge:', error);
+      alert('Failed to create challenge: ' + error.message);
+      nextBtn.disabled = false;
+      nextBtn.textContent = 'Create Challenge';
+    }
   },
 
   // Close create modal
@@ -480,13 +698,17 @@ const Protocols = {
 
   // Add an existing habit to the custom protocol
   addExistingHabit(habitId, title, description) {
-    // Check if already added
-    if (this._customProtocolHabits.some(h => h.title === title)) {
-      return;
+    // Check if already added - if so, remove it (toggle)
+    const existingIndex = this._customProtocolHabits.findIndex(h => h.title === title);
+    if (existingIndex >= 0) {
+      this._customProtocolHabits.splice(existingIndex, 1);
+    } else {
+      this._customProtocolHabits.push({ title, description });
     }
-
-    this._customProtocolHabits.push({ title, description });
-    this._updateSelectedHabitsUI();
+    // Re-render step to update UI
+    if (this._createStep === 1) {
+      this._renderStep();
+    }
   },
 
   // Add a custom habit
@@ -503,73 +725,26 @@ const Protocols = {
     }
 
     this._customProtocolHabits.push({ title, description: '' });
-    input.value = '';
-    this._updateSelectedHabitsUI();
+    // Re-render step to update UI
+    if (this._createStep === 1) {
+      this._renderStep();
+      // Re-focus the input after re-render
+      setTimeout(() => {
+        const newInput = document.getElementById('custom-habit-title');
+        if (newInput) newInput.focus();
+      }, 0);
+    }
   },
 
   // Remove a habit from selection
   removeHabit(index) {
     this._customProtocolHabits.splice(index, 1);
-    this._updateSelectedHabitsUI();
+    // Re-render current step to update UI
+    if (this._createStep === 1) {
+      this._renderStep();
+    }
   },
 
-  // Update the selected habits UI
-  _updateSelectedHabitsUI() {
-    const container = document.getElementById('selected-habits');
-    const countEl = document.getElementById('habit-count');
-    const saveBtn = document.getElementById('save-protocol-btn');
-    const nameInput = document.getElementById('protocol-name');
-
-    const count = this._customProtocolHabits.length;
-    countEl.textContent = `${count} habit${count !== 1 ? 's' : ''}`;
-
-    // Enable save button if name and at least one habit
-    const canSave = nameInput.value.trim() && count > 0;
-    saveBtn.disabled = !canSave;
-
-    if (count === 0) {
-      container.innerHTML = `<p class="text-sm text-oura-muted text-center py-2">Add habits from below or create your own</p>`;
-      return;
-    }
-
-    container.innerHTML = this._customProtocolHabits.map((habit, index) => `
-      <div class="flex items-center gap-3 bg-oura-subtle rounded-lg px-3 py-2">
-        <span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-oura-border rounded-full text-xs font-medium">${index + 1}</span>
-        <span class="flex-1 text-sm">${habit.title}</span>
-        <button onclick="Protocols.removeHabit(${index})" class="min-h-[32px] min-w-[32px] flex items-center justify-center text-oura-muted hover:text-red-400">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-          </svg>
-        </button>
-      </div>
-    `).join('');
-  },
-
-  // Save the custom protocol
-  async saveCustomProtocol() {
-    const name = document.getElementById('protocol-name').value.trim();
-    const description = document.getElementById('protocol-description').value.trim();
-    const icon = document.getElementById('protocol-icon').value.trim() || '✨';
-
-    if (!name || this._customProtocolHabits.length === 0) {
-      return;
-    }
-
-    const saveBtn = document.getElementById('save-protocol-btn');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Creating...';
-
-    try {
-      await this.createCustomProtocol(name, description, icon, this._customProtocolHabits);
-      this.closeCreateModal();
-      await this.renderList();
-    } catch (error) {
-      console.error('Error creating protocol:', error);
-      alert('Failed to create protocol: ' + error.message);
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Create Protocol';
-    }
-  }
 };
 
 // Export for use in other modules

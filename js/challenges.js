@@ -2,15 +2,16 @@
 
 const Challenges = {
   // Create a new challenge
-  async create({ protocolId, name, friendIds, mode }) {
+  async create({ protocolId, name, friendIds, mode, startDate: customStartDate }) {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
 
     const currentUser = await SupabaseClient.getCurrentUser();
     if (!currentUser) throw new Error('Not authenticated');
 
-    const startDate = new Date();
-    const endDate = new Date();
+    // Use custom start date if provided, otherwise use today
+    const startDate = customStartDate ? this.parseLocalDate(customStartDate) : new Date();
+    const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 30);
 
     // Create challenge
