@@ -6,24 +6,49 @@ const Dashboard = {
     const container = document.getElementById('dashboard-container');
     if (!container) return;
 
-    container.innerHTML = `
-      <div class="text-center py-10 text-oura-muted text-sm">Loading dashboard...</div>
-    `;
+    // Try to render instantly from cache (but always refresh in background)
+    const cachedData = Cache.get('dashboard');
+    if (cachedData) {
+      this._renderContent(container, cachedData);
+    } else {
+      container.innerHTML = `
+        <div class="text-center py-10 text-oura-muted text-sm">Loading dashboard...</div>
+      `;
+    }
 
+    // Fetch fresh data (in background if we have cache)
     try {
-      const [profile, activeChallenges, friends, recentSleep] = await Promise.all([
+      const [profile, activeChallenges, recentSleep] = await Promise.all([
         Auth.getProfile(),
         Challenges.getActiveChallenges().catch(() => []),
-        Friends.getFriends().catch(() => []),
         this.getRecentSleepData().catch(() => [])
       ]);
 
-      const avgHR = this.calcAvgHR(recentSleep);
+      // Cache the data
+      Cache.set('dashboard', { profile, activeChallenges, recentSleep });
+
+      // Re-render with fresh data
+      this._renderContent(container, { profile, activeChallenges, recentSleep });
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      if (!cachedData) {
+        container.innerHTML = `
+          <div class="bg-red-900/20 border border-red-500 rounded-2xl p-4">
+            <p class="text-red-400">Failed to load dashboard: ${error.message}</p>
+          </div>
+        `;
+      }
+    }
+  },
+
+  // Render dashboard content (separated for caching)
+  _renderContent(container, { profile, activeChallenges, recentSleep }) {
+    try {
+
       const avgPreSleepHR = this.calcAvgPreSleepHR(recentSleep);
       const avgDeepSleep = this.calcAvgDeepSleep(recentSleep);
       const avgSleepScore = this.calcAvgSleepScore(recentSleep);
       const challenge = activeChallenges[0] || null;
-      const message = this.getMotivationalMessage(avgHR, challenge);
 
       // Chronological order for sparklines
       const chronologicalSleep = [...recentSleep].sort((a, b) => a.date.localeCompare(b.date));
@@ -39,8 +64,8 @@ const Dashboard = {
               <div>
                 <p class="font-semibold text-amber-400 mb-1">Connect Your Oura Ring</p>
                 <p class="text-sm text-oura-muted">Link your Oura ring to see heart rate data and sleep insights.</p>
-                <button onclick="App.showSettings()" class="mt-3 px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg text-sm font-medium hover:bg-amber-500/30 transition-colors">
-                  Open Settings
+                <button onclick="App.navigateTo('account')" class="mt-3 px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg text-sm font-medium hover:bg-amber-500/30 transition-colors">
+                  Connect Oura
                 </button>
               </div>
             </div>
@@ -48,62 +73,32 @@ const Dashboard = {
         `;
       }
 
-      // Pre-Sleep HR card
+      // 30-Day Baseline card (contains metric cards)
       html += `
-        <div class="bg-oura-card rounded-2xl p-6 mb-4">
-          <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">7-Day Avg Heart Rate</div>
-          <div class="text-center py-4">
-            <span class="text-5xl font-bold text-oura-accent leading-none tracking-tight">${avgHR !== null ? avgHR : '--'}</span>
-            <span class="text-2xl font-normal text-oura-accent ml-1">bpm</span>
-            <div class="text-sm text-oura-muted mt-2 font-medium">Pre-Sleep Average</div>
-          </div>
-          ${recentSleep.length > 0 ? `
-            <div class="flex justify-center gap-8 pt-4 border-t border-oura-border mt-4">
-              <div class="text-center">
-                <div class="text-xl font-semibold text-white">${this.getMinHR(recentSleep)}</div>
-                <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Lowest</div>
-              </div>
-              <div class="text-center">
-                <div class="text-xl font-semibold text-white">${this.getMaxHR(recentSleep)}</div>
-                <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Highest</div>
-              </div>
-              <div class="text-center">
-                <div class="text-xl font-semibold text-white">${recentSleep.length}</div>
-                <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Nights</div>
-              </div>
+        <div class="bg-oura-card rounded-2xl p-5 mb-4">
+          <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">Your 30-Day Baseline</div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors" onclick="Dashboard.showMetricDetail('pre_sleep_hr')">
+              <div class="text-[0.6rem] font-semibold text-teal-400 uppercase tracking-wider mb-1">Lowest HR</div>
+              <div class="text-xl font-bold text-teal-400 leading-none">${avgPreSleepHR !== null ? avgPreSleepHR : '--'}</div>
+              <div class="text-[0.55rem] text-oura-muted mt-0.5">bpm avg</div>
+              <div class="mt-2 h-8"><canvas id="sparkline-presleep-hr"></canvas></div>
             </div>
-          ` : ''}
-        </div>
-      `;
-
-      // Metric sparkline cards row (tappable)
-      html += `
-        <div class="grid grid-cols-3 gap-3 mb-4">
-          <div class="bg-oura-card rounded-2xl p-4 cursor-pointer hover:bg-oura-subtle transition-colors" onclick="Dashboard.showMetricDetail('pre_sleep_hr')">
-            <div class="text-[0.65rem] font-semibold text-teal-400 uppercase tracking-wider mb-2">Pre-Sleep HR</div>
-            <div class="text-2xl font-bold text-teal-400 leading-none">${avgPreSleepHR !== null ? avgPreSleepHR : '--'}</div>
-            <div class="text-[0.6rem] text-oura-muted mt-0.5">bpm avg</div>
-            <div class="mt-2 h-10"><canvas id="sparkline-presleep-hr"></canvas></div>
-          </div>
-          <div class="bg-oura-card rounded-2xl p-4 cursor-pointer hover:bg-oura-subtle transition-colors" onclick="Dashboard.showMetricDetail('deep_sleep')">
-            <div class="text-[0.65rem] font-semibold text-blue-400 uppercase tracking-wider mb-2">Deep Sleep</div>
-            <div class="text-2xl font-bold text-blue-400 leading-none">${avgDeepSleep !== null ? avgDeepSleep : '--'}</div>
-            <div class="text-[0.6rem] text-oura-muted mt-0.5">min avg</div>
-            <div class="mt-2 h-10"><canvas id="sparkline-deep-sleep"></canvas></div>
-          </div>
-          <div class="bg-oura-card rounded-2xl p-4 cursor-pointer hover:bg-oura-subtle transition-colors" onclick="Dashboard.showMetricDetail('sleep_score')">
-            <div class="text-[0.65rem] font-semibold text-purple-400 uppercase tracking-wider mb-2">Sleep Score</div>
-            <div class="text-2xl font-bold text-purple-400 leading-none">${avgSleepScore !== null ? avgSleepScore : '--'}</div>
-            <div class="text-[0.6rem] text-oura-muted mt-0.5">pts avg</div>
-            <div class="mt-2 h-10"><canvas id="sparkline-sleep-score"></canvas></div>
+            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors" onclick="Dashboard.showMetricDetail('deep_sleep')">
+              <div class="text-[0.6rem] font-semibold text-blue-400 uppercase tracking-wider mb-1">Deep Sleep</div>
+              <div class="text-xl font-bold text-blue-400 leading-none">${avgDeepSleep !== null ? avgDeepSleep : '--'}</div>
+              <div class="text-[0.55rem] text-oura-muted mt-0.5">min avg</div>
+              <div class="mt-2 h-8"><canvas id="sparkline-deep-sleep"></canvas></div>
+            </div>
+            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors" onclick="Dashboard.showMetricDetail('sleep_score')">
+              <div class="text-[0.6rem] font-semibold text-purple-400 uppercase tracking-wider mb-1">Sleep Score</div>
+              <div class="text-xl font-bold text-purple-400 leading-none">${avgSleepScore !== null ? avgSleepScore : '--'}</div>
+              <div class="text-[0.55rem] text-oura-muted mt-0.5">pts avg</div>
+              <div class="mt-2 h-8"><canvas id="sparkline-sleep-score"></canvas></div>
+            </div>
           </div>
         </div>
       `;
-
-      // Friend comparison card
-      if (challenge && friends.length > 0) {
-        html += await this.renderFriendComparison(challenge);
-      }
 
       // Active challenge card
       if (challenge) {
@@ -131,25 +126,14 @@ const Dashboard = {
             </div>
           </div>
         `;
-      } else {
-        html += `
-          <div class="bg-oura-card rounded-2xl p-6 mb-4">
-            <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">Challenge</div>
-            <p class="text-oura-muted text-sm mb-4">No active challenge. Start one to track your progress!</p>
-            <button onclick="App.navigateTo('challenges')"
-              class="w-full py-3 bg-oura-border text-white font-medium rounded-xl hover:bg-oura-subtle transition-colors text-sm">
-              Browse Challenges
-            </button>
-          </div>
-        `;
       }
 
-      // Motivational card
+      // Start Protocol CTA button
       html += `
-        <div class="bg-gradient-to-br from-oura-card to-oura-subtle rounded-2xl p-6 mb-4">
-          <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</div>
-          <p class="text-sm leading-relaxed">${message}</p>
-        </div>
+        <button onclick="App.navigateTo('protocols')"
+          class="w-full py-4 bg-oura-teal text-gray-900 font-semibold rounded-xl hover:bg-oura-teal/90 transition-colors text-base mb-4">
+          + Start Protocol
+        </button>
       `;
 
       container.innerHTML = html;
@@ -168,7 +152,23 @@ const Dashboard = {
     }
   },
 
-  // Fetch last 7 days of sleep data for current user
+  // Minimum sleep hours to include (5 hours = 300 minutes)
+  MIN_SLEEP_MINUTES: 300,
+
+  // Filter sleep data to only include complete, valid nights
+  // Removes: nights < 5 hours, missing sleep score, missing HR data, missing deep sleep
+  filterValidNights(data) {
+    if (!data || !Array.isArray(data)) return [];
+    return data.filter(d =>
+      d.total_sleep_minutes >= this.MIN_SLEEP_MINUTES &&
+      d.sleep_score != null &&
+      d.pre_sleep_hr != null &&
+      d.avg_hr != null &&
+      d.deep_sleep_minutes != null
+    );
+  },
+
+  // Fetch last 30 days of sleep data for baseline view
   async getRecentSleepData() {
     const client = SupabaseClient.client;
     if (!client) return [];
@@ -176,9 +176,9 @@ const Dashboard = {
     const user = await SupabaseClient.getCurrentUser();
     if (!user) return [];
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const startStr = sevenDaysAgo.toISOString().split('T')[0];
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startStr = thirtyDaysAgo.toISOString().split('T')[0];
 
     const { data, error } = await client
       .from('sleep_data')
@@ -192,7 +192,8 @@ const Dashboard = {
       return [];
     }
 
-    return data || [];
+    // Filter to only valid nights (>= 5 hours, has all metrics)
+    return this.filterValidNights(data || []);
   },
 
   // Calculate average HR from recent sleep data
@@ -330,13 +331,14 @@ const Dashboard = {
       return [];
     }
 
-    return data || [];
+    // Filter to only valid nights (>= 5 hours, has all metrics)
+    return this.filterValidNights(data || []);
   },
 
   // Show detail modal for a metric
   async showMetricDetail(metric) {
     const config = {
-      pre_sleep_hr: { label: 'Pre-Sleep Heart Rate', unit: 'bpm', color: '#2dd4bf', field: 'pre_sleep_hr' },
+      pre_sleep_hr: { label: 'Lowest Heart Rate', unit: 'bpm', color: '#2dd4bf', field: 'pre_sleep_hr' },
       deep_sleep: { label: 'Deep Sleep', unit: 'min', color: '#60a5fa', field: 'deep_sleep_minutes' },
       sleep_score: { label: 'Sleep Score', unit: 'pts', color: '#c084fc', field: 'sleep_score' }
     }[metric];
@@ -349,11 +351,11 @@ const Dashboard = {
     modal.className = 'fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50';
     modal.innerHTML = `
       <div class="bg-oura-bg rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg sm:mx-4 p-6 max-h-[85vh] overflow-y-auto">
-        <div class="flex items-center justify-between mb-6">
-          <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
-          <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <div class="flex items-center gap-3 mb-6">
+          <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
           </button>
+          <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
         </div>
         <div class="text-center py-8 text-oura-muted text-sm">Loading 30-day data...</div>
       </div>
@@ -367,11 +369,11 @@ const Dashboard = {
 
     if (values.length === 0) {
       modal.querySelector('.bg-oura-bg').innerHTML = `
-        <div class="flex items-center justify-between mb-6">
-          <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
-          <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <div class="flex items-center gap-3 mb-6">
+          <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
           </button>
+          <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
         </div>
         <p class="text-oura-muted text-sm text-center py-8">No data available. Sync your Oura ring to see trends.</p>
       `;
@@ -383,11 +385,11 @@ const Dashboard = {
     const max = Math.round(Math.max(...values.map(d => d.value)));
 
     modal.querySelector('.bg-oura-bg').innerHTML = `
-      <div class="flex items-center justify-between mb-6">
-        <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
-        <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      <div class="flex items-center gap-3 mb-6">
+        <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
         </button>
+        <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
       </div>
 
       <!-- Summary stats -->

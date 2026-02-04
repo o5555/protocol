@@ -9,6 +9,10 @@ const Protocols = {
     '22222222-2222-2222-2222-222222222222': [1, 2, 6, 8, 11]
   },
 
+  // State for custom protocol creation
+  _customProtocolHabits: [],
+  _availableHabits: [],
+
   // Get all protocols
   async getAll() {
     const client = SupabaseClient.client;
@@ -21,6 +25,80 @@ const Protocols = {
 
     if (error) throw error;
     return data;
+  },
+
+  // Get all available habits from all system protocols (for picking)
+  async getAllHabits() {
+    const client = SupabaseClient.client;
+    if (!client) throw new Error('Supabase not initialized');
+
+    const { data, error } = await client
+      .from('protocol_habits')
+      .select(`
+        *,
+        protocol:protocols!inner(id, name)
+      `)
+      .order('protocol_id')
+      .order('sort_order');
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Create a custom protocol with habits
+  async createCustomProtocol(name, description, icon, habits) {
+    const client = SupabaseClient.client;
+    if (!client) throw new Error('Supabase not initialized');
+
+    const user = await SupabaseClient.getCurrentUser();
+    if (!user) throw new Error('Must be logged in to create protocols');
+
+    // Create the protocol with user_id for RLS policy
+    const insertData = {
+      name,
+      description,
+      icon: icon || '✨',
+      user_id: user.id
+    };
+
+    const { data: protocol, error: protocolError } = await client
+      .from('protocols')
+      .insert(insertData)
+      .select()
+      .single();
+
+    if (protocolError) throw protocolError;
+
+    // Create the habits
+    if (habits && habits.length > 0) {
+      const habitsToInsert = habits.map((habit, index) => ({
+        protocol_id: protocol.id,
+        title: habit.title,
+        description: habit.description || '',
+        sort_order: index + 1
+      }));
+
+      const { error: habitsError } = await client
+        .from('protocol_habits')
+        .insert(habitsToInsert);
+
+      if (habitsError) throw habitsError;
+    }
+
+    return protocol;
+  },
+
+  // Delete a custom protocol
+  async deleteCustomProtocol(protocolId) {
+    const client = SupabaseClient.client;
+    if (!client) throw new Error('Supabase not initialized');
+
+    const { error } = await client
+      .from('protocols')
+      .delete()
+      .eq('id', protocolId);
+
+    if (error) throw error;
   },
 
   // Get protocol by ID with habits
@@ -57,10 +135,23 @@ const Protocols = {
     return protocol.habits.filter(h => lightOrders.includes(h.sort_order));
   },
 
-  // Render mode selector UI (two selectable cards)
-  renderModeSelector(protocolId, selectedMode) {
+  // Render mode selector UI (two selectable cards, or single card for custom protocols)
+  renderModeSelector(protocolId, selectedMode, totalHabits) {
     const hasLightMapping = !!this.LIGHT_MODE_HABITS[protocolId];
     const lightCount = hasLightMapping ? this.LIGHT_MODE_HABITS[protocolId].length : 0;
+
+    // Custom protocols (no light mode mapping) only show Pro mode
+    if (!hasLightMapping) {
+      return `
+        <div id="mode-selector">
+          <div class="mode-card rounded-2xl p-4 border-2 border-oura-accent bg-oura-accent/5">
+            <div class="text-2xl mb-2">&#x1F525;</div>
+            <h4 class="font-semibold text-sm">Full Protocol</h4>
+            <p class="text-xs text-oura-muted mt-1">All ${totalHabits || ''} habits in your custom protocol.</p>
+          </div>
+        </div>
+      `;
+    }
 
     return `
       <div class="grid grid-cols-2 gap-3" id="mode-selector">
@@ -110,6 +201,15 @@ const Protocols = {
     return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-medium bg-oura-accent/15 text-oura-accent">&#x1F525; Pro</span>`;
   },
 
+  // Get initials from protocol name (first letter of first two words)
+  getInitials(name) {
+    const words = name.split(' ').filter(w => w.length > 0);
+    if (words.length >= 2) {
+      return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  },
+
   // Render protocols list page
   async renderList() {
     const container = document.getElementById('protocols-container');
@@ -117,21 +217,33 @@ const Protocols = {
 
     try {
       const protocols = await this.getAll();
+      const user = await SupabaseClient.getCurrentUser();
 
       container.innerHTML = `
-        <div class="space-y-4">
-          ${protocols.map(protocol => `
+        <button onclick="Protocols.showCreateModal()"
+          class="w-full mb-4 py-4 min-h-[48px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2">
+          + Create Your Own Protocol
+        </button>
+        <div class="space-y-3">
+          ${protocols.map(protocol => {
+            const initials = this.getInitials(protocol.name);
+            return `
             <div onclick="App.navigateTo('protocol-detail', '${protocol.id}')"
-              class="bg-oura-card rounded-2xl p-6 cursor-pointer hover:bg-oura-subtle transition-colors">
-              <div class="flex items-start gap-4">
-                <span class="text-4xl">${protocol.icon || '📋'}</span>
-                <div>
-                  <h3 class="text-xl font-semibold">${protocol.name}</h3>
-                  <p class="text-oura-muted mt-1">${protocol.description || ''}</p>
+              class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors">
+              <div class="flex items-center gap-4">
+                <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-lg font-semibold text-white flex-shrink-0">
+                  ${initials}
                 </div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-lg font-semibold">${protocol.name}</h3>
+                  <p class="text-oura-muted text-sm mt-1 line-clamp-3">${protocol.description || ''}</p>
+                </div>
+                <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
               </div>
             </div>
-          `).join('')}
+          `}).join('')}
         </div>
       `;
     } catch (error) {
@@ -151,16 +263,24 @@ const Protocols = {
 
     try {
       const protocol = await this.getById(protocolId);
+      const user = await SupabaseClient.getCurrentUser();
+      const isCustom = protocol.user_id && protocol.user_id === user?.id;
 
+      const initials = this.getInitials(protocol.name);
       container.innerHTML = `
         <div class="bg-oura-card rounded-2xl p-6 mb-6">
           <button onclick="App.navigateTo('protocols')" class="min-h-[44px] inline-flex items-center text-oura-muted hover:text-white mb-4">
             &larr; Back to Protocols
           </button>
           <div class="flex items-start gap-4">
-            <span class="text-5xl">${protocol.icon || '📋'}</span>
-            <div>
-              <h2 class="text-2xl font-bold">${protocol.name}</h2>
+            <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-xl font-semibold text-white flex-shrink-0">
+              ${initials}
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <h2 class="text-2xl font-bold">${protocol.name}</h2>
+                ${isCustom ? `<span class="px-2 py-0.5 text-[0.65rem] font-medium bg-purple-500/15 text-purple-400 rounded-full">Custom</span>` : ''}
+              </div>
               <p class="text-oura-muted mt-2">${protocol.description || ''}</p>
             </div>
           </div>
@@ -183,7 +303,7 @@ const Protocols = {
           </div>
         </div>
 
-        <div class="bg-oura-card rounded-2xl p-6">
+        <div class="bg-oura-card rounded-2xl p-6 ${isCustom ? 'mb-6' : ''}">
           <h3 class="text-lg font-semibold mb-4">Start a Challenge</h3>
           <p class="text-oura-muted mb-4">Ready to commit to this protocol? Create a 30-day challenge and invite friends to join you.</p>
           <button onclick="Challenges.showCreateModal()"
@@ -191,6 +311,17 @@ const Protocols = {
             Create Challenge with This Protocol
           </button>
         </div>
+
+        ${isCustom ? `
+          <div class="bg-oura-card rounded-2xl p-6">
+            <h3 class="text-lg font-semibold mb-4 text-red-400">Danger Zone</h3>
+            <p class="text-oura-muted mb-4">Delete this custom protocol. This cannot be undone.</p>
+            <button onclick="Protocols.confirmDeleteProtocol('${protocol.id}')"
+              class="w-full py-3 min-h-[48px] bg-red-500/20 text-red-400 font-semibold rounded-lg hover:bg-red-500/30 border border-red-500/30">
+              Delete Protocol
+            </button>
+          </div>
+        ` : ''}
       `;
     } catch (error) {
       console.error('Error rendering protocol detail:', error);
@@ -199,6 +330,244 @@ const Protocols = {
           <p class="text-red-400">Failed to load protocol: ${error.message}</p>
         </div>
       `;
+    }
+  },
+
+  // Confirm and delete a custom protocol
+  async confirmDeleteProtocol(protocolId) {
+    if (!confirm('Are you sure you want to delete this protocol? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await this.deleteCustomProtocol(protocolId);
+      App.navigateTo('protocols');
+    } catch (error) {
+      console.error('Error deleting protocol:', error);
+      alert('Failed to delete protocol: ' + error.message);
+    }
+  },
+
+  // Show create protocol modal
+  async showCreateModal() {
+    this._customProtocolHabits = [];
+
+    try {
+      this._availableHabits = await this.getAllHabits();
+    } catch (error) {
+      console.error('Error loading habits:', error);
+      this._availableHabits = [];
+    }
+
+    // Group habits by protocol
+    const habitsByProtocol = {};
+    this._availableHabits.forEach(habit => {
+      const protocolName = habit.protocol?.name || 'Unknown';
+      if (!habitsByProtocol[protocolName]) {
+        habitsByProtocol[protocolName] = [];
+      }
+      habitsByProtocol[protocolName].push(habit);
+    });
+
+    const modalHtml = `
+      <div id="create-protocol-modal" class="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-oura-bg w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div class="p-6 border-b border-oura-border flex-shrink-0">
+            <div class="flex items-center justify-between">
+              <h2 class="text-xl font-bold">Create Your Protocol</h2>
+              <button onclick="Protocols.closeCreateModal()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <!-- Protocol Info -->
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-oura-muted mb-2">Protocol Name</label>
+                <input type="text" id="protocol-name" placeholder="My Sleep Protocol"
+                  class="w-full bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white placeholder-oura-muted focus:border-oura-accent focus:outline-none">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-oura-muted mb-2">Description (optional)</label>
+                <input type="text" id="protocol-description" placeholder="A brief description of your protocol"
+                  class="w-full bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white placeholder-oura-muted focus:border-oura-accent focus:outline-none">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-oura-muted mb-2">Icon (emoji)</label>
+                <input type="text" id="protocol-icon" placeholder="✨" maxlength="2"
+                  class="w-20 bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white text-center text-2xl placeholder-oura-muted focus:border-oura-accent focus:outline-none">
+              </div>
+            </div>
+
+            <!-- Selected Habits -->
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <label class="text-sm font-medium text-oura-muted">Your Habits</label>
+                <span id="habit-count" class="text-xs text-oura-muted">0 habits</span>
+              </div>
+              <div id="selected-habits" class="space-y-2 min-h-[60px] bg-oura-card/50 rounded-lg p-3 border border-dashed border-oura-border">
+                <p class="text-sm text-oura-muted text-center py-2">Add habits from below or create your own</p>
+              </div>
+            </div>
+
+            <!-- Add Custom Habit -->
+            <div>
+              <label class="block text-sm font-medium text-oura-muted mb-2">Add Custom Habit</label>
+              <div class="flex gap-2">
+                <input type="text" id="custom-habit-title" placeholder="Enter a habit..."
+                  class="flex-1 bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white placeholder-oura-muted focus:border-oura-accent focus:outline-none"
+                  onkeypress="if(event.key === 'Enter') Protocols.addCustomHabit()">
+                <button onclick="Protocols.addCustomHabit()"
+                  class="min-h-[48px] min-w-[48px] bg-oura-accent text-gray-900 rounded-lg flex items-center justify-center hover:bg-oura-accent/90">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Available Habits from Existing Protocols -->
+            <div>
+              <label class="block text-sm font-medium text-oura-muted mb-3">Or pick from existing protocols</label>
+              <div class="space-y-4">
+                ${Object.entries(habitsByProtocol).map(([protocolName, habits]) => `
+                  <div class="bg-oura-card rounded-lg p-4">
+                    <h4 class="text-sm font-semibold text-white mb-3">${protocolName}</h4>
+                    <div class="space-y-2">
+                      ${habits.map(habit => `
+                        <button onclick="Protocols.addExistingHabit('${habit.id}', '${habit.title.replace(/'/g, "\\'")}', '${(habit.description || '').replace(/'/g, "\\'")}')"
+                          class="w-full text-left px-3 py-2 min-h-[44px] rounded-lg bg-oura-subtle hover:bg-oura-border transition-colors">
+                          <p class="text-sm font-medium">${habit.title}</p>
+                          ${habit.description ? `<p class="text-xs text-oura-muted mt-0.5">${habit.description}</p>` : ''}
+                        </button>
+                      `).join('')}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+
+          <div class="p-6 border-t border-oura-border flex-shrink-0">
+            <button onclick="Protocols.saveCustomProtocol()" id="save-protocol-btn"
+              class="w-full py-3 min-h-[48px] bg-oura-accent text-gray-900 font-semibold rounded-lg hover:bg-oura-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled>
+              Create Protocol
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Add listener to name input for validation
+    document.getElementById('protocol-name').addEventListener('input', () => {
+      this._updateSelectedHabitsUI();
+    });
+  },
+
+  // Close create modal
+  closeCreateModal() {
+    const modal = document.getElementById('create-protocol-modal');
+    if (modal) modal.remove();
+    this._customProtocolHabits = [];
+  },
+
+  // Add an existing habit to the custom protocol
+  addExistingHabit(habitId, title, description) {
+    // Check if already added
+    if (this._customProtocolHabits.some(h => h.title === title)) {
+      return;
+    }
+
+    this._customProtocolHabits.push({ title, description });
+    this._updateSelectedHabitsUI();
+  },
+
+  // Add a custom habit
+  addCustomHabit() {
+    const input = document.getElementById('custom-habit-title');
+    const title = input.value.trim();
+
+    if (!title) return;
+
+    // Check if already added
+    if (this._customProtocolHabits.some(h => h.title === title)) {
+      input.value = '';
+      return;
+    }
+
+    this._customProtocolHabits.push({ title, description: '' });
+    input.value = '';
+    this._updateSelectedHabitsUI();
+  },
+
+  // Remove a habit from selection
+  removeHabit(index) {
+    this._customProtocolHabits.splice(index, 1);
+    this._updateSelectedHabitsUI();
+  },
+
+  // Update the selected habits UI
+  _updateSelectedHabitsUI() {
+    const container = document.getElementById('selected-habits');
+    const countEl = document.getElementById('habit-count');
+    const saveBtn = document.getElementById('save-protocol-btn');
+    const nameInput = document.getElementById('protocol-name');
+
+    const count = this._customProtocolHabits.length;
+    countEl.textContent = `${count} habit${count !== 1 ? 's' : ''}`;
+
+    // Enable save button if name and at least one habit
+    const canSave = nameInput.value.trim() && count > 0;
+    saveBtn.disabled = !canSave;
+
+    if (count === 0) {
+      container.innerHTML = `<p class="text-sm text-oura-muted text-center py-2">Add habits from below or create your own</p>`;
+      return;
+    }
+
+    container.innerHTML = this._customProtocolHabits.map((habit, index) => `
+      <div class="flex items-center gap-3 bg-oura-subtle rounded-lg px-3 py-2">
+        <span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-oura-border rounded-full text-xs font-medium">${index + 1}</span>
+        <span class="flex-1 text-sm">${habit.title}</span>
+        <button onclick="Protocols.removeHabit(${index})" class="min-h-[32px] min-w-[32px] flex items-center justify-center text-oura-muted hover:text-red-400">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+    `).join('');
+  },
+
+  // Save the custom protocol
+  async saveCustomProtocol() {
+    const name = document.getElementById('protocol-name').value.trim();
+    const description = document.getElementById('protocol-description').value.trim();
+    const icon = document.getElementById('protocol-icon').value.trim() || '✨';
+
+    if (!name || this._customProtocolHabits.length === 0) {
+      return;
+    }
+
+    const saveBtn = document.getElementById('save-protocol-btn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Creating...';
+
+    try {
+      await this.createCustomProtocol(name, description, icon, this._customProtocolHabits);
+      this.closeCreateModal();
+      await this.renderList();
+    } catch (error) {
+      console.error('Error creating protocol:', error);
+      alert('Failed to create protocol: ' + error.message);
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Create Protocol';
     }
   }
 };

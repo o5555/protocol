@@ -181,14 +181,10 @@ const Auth = {
   updateUI(user) {
     const authSection = document.getElementById('auth-section');
     const appContent = document.getElementById('app-content');
-    const userInfo = document.getElementById('user-info');
-    const userEmail = document.getElementById('user-email');
 
     if (user) {
       // User is logged in — hide auth, check onboarding before showing app
       if (authSection) authSection.classList.add('hidden');
-      if (userInfo) userInfo.classList.remove('hidden');
-      if (userEmail) userEmail.textContent = user.email;
 
       // Check onboarding state before showing app
       this.checkOnboarding(user);
@@ -199,7 +195,6 @@ const Auth = {
       // User is not logged in
       if (authSection) authSection.classList.remove('hidden');
       if (appContent) appContent.classList.add('hidden');
-      if (userInfo) userInfo.classList.add('hidden');
       // Also hide onboarding section
       const onboardingSection = document.getElementById('onboarding-section');
       if (onboardingSection) onboardingSection.classList.add('hidden');
@@ -289,18 +284,6 @@ document.addEventListener('DOMContentLoaded', () => {
       } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Sign In';
-      }
-    });
-  }
-
-  // Sign out button
-  const signOutBtn = document.getElementById('sign-out-btn');
-  if (signOutBtn) {
-    signOutBtn.addEventListener('click', async () => {
-      try {
-        await Auth.signOut();
-      } catch (error) {
-        console.error('Sign out error:', error);
       }
     });
   }
