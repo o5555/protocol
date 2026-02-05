@@ -518,7 +518,7 @@ const SleepSync = {
   // Sync sleep data from Oura to Supabase
   // options.silent: suppress alerts and return result object instead
   async syncNow(options = {}) {
-    const { silent = false } = options;
+    const { silent = false, skipRefresh = false } = options;
     const client = SupabaseClient.client;
     if (!client) {
       if (silent) return { success: false, count: 0, error: 'Supabase not initialized' };
@@ -616,12 +616,14 @@ const SleepSync = {
         alert(`Synced ${sleepRecords.length} nights of sleep data!`);
       }
 
-      // Refresh current view if on challenge detail
-      const challengeContainer = document.getElementById('challenge-detail-container');
-      if (challengeContainer) {
-        const challengeId = challengeContainer.dataset.challengeId;
-        if (challengeId) {
-          Comparison.renderForChallenge(challengeId);
+      // Refresh current view if on challenge detail (skip if called from renderDetail itself)
+      if (!skipRefresh) {
+        const challengeContainer = document.getElementById('challenge-detail-container');
+        if (challengeContainer) {
+          const challengeId = challengeContainer.dataset.challengeId;
+          if (challengeId) {
+            await Challenges.renderDetail(challengeId, { skipSync: true });
+          }
         }
       }
 

@@ -497,7 +497,7 @@ const Challenges = {
   },
 
   // Render challenge detail page (Redesigned - simplified UX)
-  async renderDetail(challengeId) {
+  async renderDetail(challengeId, { skipSync = false } = {}) {
     const container = document.getElementById('challenge-detail-container');
     if (!container) return;
 
@@ -510,21 +510,19 @@ const Challenges = {
       // Store challengeId for sync refresh
       container.dataset.challengeId = challengeId;
 
-      // Show loading state immediately
-      container.innerHTML = `
-        <div class="nav-bar flex items-center justify-between mb-4">
-          <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
-            &larr; Back
-          </button>
-          <span class="text-base font-medium">${challenge.name}</span>
-          <span style="width: 50px;"></span>
-        </div>
-        <div class="text-center py-10 text-oura-muted text-sm">Syncing Oura data...</div>
-      `;
-
-      // Auto-sync Oura data silently before fetching
-      if (typeof SleepSync !== 'undefined') {
-        await SleepSync.syncNow({ silent: true });
+      // Auto-sync Oura data silently before fetching (skip on post-sync refresh)
+      if (!skipSync && typeof SleepSync !== 'undefined') {
+        container.innerHTML = `
+          <div class="nav-bar flex items-center justify-between mb-4">
+            <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+              &larr; Back
+            </button>
+            <span class="text-base font-medium">${challenge.name}</span>
+            <span style="width: 50px;"></span>
+          </div>
+          <div class="text-center py-10 text-oura-muted text-sm">Syncing Oura data...</div>
+        `;
+        await SleepSync.syncNow({ silent: true, skipRefresh: true });
       }
 
       // Fetch sleep data for comparison
