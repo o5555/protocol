@@ -622,7 +622,7 @@ const Challenges = {
             </div>
           ` : `
             <div class="text-4xl font-bold text-oura-muted leading-none">--</div>
-            <div class="text-sm text-oura-muted mt-2">Sync your Oura ring to see progress</div>
+            <div class="text-sm text-oura-muted mt-2">${challenge.dayNumber <= 1 ? 'Just started — check back tomorrow' : 'Waiting for sleep data'}</div>
           `}
         </div>
 
@@ -665,7 +665,7 @@ const Challenges = {
               `;
             }).join('') : `
               <div class="rounded-xl p-4 text-center" style="background: #0f1525">
-                <p class="text-oura-muted text-sm">No data yet. Sync your Oura ring!</p>
+                <p class="text-oura-muted text-sm">${challenge.dayNumber <= 1 ? 'Just started — standings update tomorrow' : 'No challenge data yet'}</p>
               </div>
             `}
           </div>
@@ -835,7 +835,7 @@ const Challenges = {
           <text x="${lastDotX}" y="125" text-anchor="middle" fill="${colors.textMuted}" font-size="9">${todayLabel}</text>
         ` : `
           <!-- No data placeholder -->
-          <text x="180" y="70" text-anchor="middle" fill="${colors.textMuted}" font-size="11">Sync data to see progress</text>
+          <text x="180" y="70" text-anchor="middle" fill="${colors.textMuted}" font-size="11">Data will appear as you progress</text>
         `}
       </svg>
     `;
