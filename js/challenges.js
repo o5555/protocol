@@ -133,7 +133,7 @@ const Challenges = {
           id,
           status,
           joined_at,
-          user:profiles(id, email, display_name)
+          user:profiles!challenge_participants_user_id_fkey(id, email, display_name)
         )
       `)
       .eq('id', challengeId)
