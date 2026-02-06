@@ -490,7 +490,7 @@ const Challenges = {
       console.error('Error rendering challenges:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load challenges: ${error.message}</p>
+          <p class="text-red-400">Failed to load challenges: ${escapeHtml(error.message)}</p>
         </div>
       `;
     }
@@ -599,6 +599,77 @@ const Challenges = {
       // Find my rank
       const myRank = leaderboard.findIndex(p => p.isMe) + 1;
 
+      // Check if we have no challenge data yet (just started, only baseline)
+      const hasNoChallengeData = myData.challengeData.length === 0;
+      const participantCount = challenge.participants.filter(p => p.status === 'accepted').length;
+
+      if (hasNoChallengeData) {
+        // Celebration hero view - "You're In!"
+        container.innerHTML = `
+          <!-- Navigation -->
+          <div class="flex items-center justify-between mb-4">
+            <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+              &larr; Back
+            </button>
+            <span class="text-base font-semibold">${challenge.name}</span>
+            <span style="width: 50px;"></span>
+          </div>
+
+          <!-- Challenge Active badge -->
+          <div class="flex justify-center mb-5">
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium" style="border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80;">
+              <span class="w-2 h-2 rounded-full inline-block" style="background: #4ade80;"></span>
+              Challenge Active
+            </div>
+          </div>
+
+          <!-- Celebration Hero Card -->
+          <div class="rounded-2xl p-6 text-center mb-6" style="background: linear-gradient(135deg, #0f1a2e 0%, #1a1035 100%); border: 1px solid rgba(74, 222, 128, 0.15);">
+            <div class="text-5xl mb-4">🚀</div>
+            <div class="text-2xl font-bold mb-3">You're In!</div>
+            <p class="text-sm leading-relaxed mb-6" style="color: #6b7280;">
+              Your 30-day challenge has begun.<br>
+              First results arrive tomorrow morning.
+            </p>
+            <div class="flex justify-center gap-10">
+              <div class="text-center">
+                <div class="text-3xl font-bold" style="color: #4ade80;">${challenge.daysRemaining}</div>
+                <div class="text-xs uppercase tracking-wider mt-1" style="color: #6b7280;">Days Left</div>
+              </div>
+              <div class="text-center">
+                <div class="text-3xl font-bold" style="color: #4ade80;">${participantCount}</div>
+                <div class="text-xs uppercase tracking-wider mt-1" style="color: #6b7280;">Challengers</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Baseline Section -->
+          ${myBaseline.score ? `
+            <div class="text-xs text-oura-muted uppercase tracking-widest text-center mb-3">Your Baseline</div>
+            <div class="flex items-center justify-between rounded-xl px-4 py-3.5 mb-6" style="background: #0f1525; border: 1px solid #1a2035;">
+              <span class="text-sm" style="color: #6b7280;">30-day average sleep score</span>
+              <span class="text-lg font-bold">${Math.round(myBaseline.score)}</span>
+            </div>
+          ` : ''}
+
+          <!-- Invite Friends -->
+          <button onclick="Challenges.showInviteFriendsModal('${challengeId}')"
+            class="w-full py-3 min-h-[44px] bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
+            + Invite Friends
+          </button>
+
+          <!-- Settings cogwheel -->
+          <div class="flex justify-center mt-6">
+            <button onclick="Challenges.showSettingsMenu('${challengeId}', ${challenge.creator.id === currentUser.id})"
+              class="p-3 text-oura-muted hover:text-white transition-colors">
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
+        `;
+      } else {
       container.innerHTML = `
         <!-- Navigation - minimal -->
         <div class="mb-4">
@@ -620,7 +691,7 @@ const Challenges = {
             </div>
           ` : `
             <div class="text-4xl font-bold text-oura-muted leading-none">--</div>
-            <div class="text-sm text-oura-muted mt-2">${challenge.dayNumber <= 1 ? 'Just started — check back tomorrow' : 'Waiting for sleep data'}</div>
+            <div class="text-sm text-oura-muted mt-2">Waiting for sleep data</div>
           `}
         </div>
 
@@ -663,7 +734,7 @@ const Challenges = {
               `;
             }).join('') : `
               <div class="rounded-xl p-4 text-center" style="background: #0f1525">
-                <p class="text-oura-muted text-sm">${challenge.dayNumber <= 1 ? 'Just started — standings update tomorrow' : 'No challenge data yet'}</p>
+                <p class="text-oura-muted text-sm">No challenge data yet</p>
               </div>
             `}
           </div>
@@ -697,6 +768,7 @@ const Challenges = {
           </button>
         </div>
       `;
+      }
 
       // Store data for metric switching
       this._currentChallengeData = { myData, challenge, improvements };
@@ -705,7 +777,7 @@ const Challenges = {
       console.error('Error rendering challenge detail:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load challenge: ${error.message}</p>
+          <p class="text-red-400">Failed to load challenge: ${escapeHtml(error.message)}</p>
         </div>
       `;
     }

@@ -141,8 +141,8 @@ const Onboarding = {
           <div class="flex items-center gap-4">
             <span class="text-3xl">${p.icon || '&#x1F4CB;'}</span>
             <div>
-              <h3 class="font-semibold">${p.name}</h3>
-              <p class="text-oura-muted text-sm mt-0.5">${p.description || ''}</p>
+              <h3 class="font-semibold">${escapeHtml(p.name)}</h3>
+              <p class="text-oura-muted text-sm mt-0.5">${escapeHtml(p.description || '')}</p>
             </div>
           </div>
         </div>

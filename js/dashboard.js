@@ -34,7 +34,7 @@ const Dashboard = {
       if (!cachedData) {
         container.innerHTML = `
           <div class="bg-red-900/20 border border-red-500 rounded-2xl p-4">
-            <p class="text-red-400">Failed to load dashboard: ${error.message}</p>
+            <p class="text-red-400">Failed to load dashboard: ${escapeHtml(error.message)}</p>
           </div>
         `;
       }
@@ -146,7 +146,7 @@ const Dashboard = {
       console.error('Error rendering dashboard:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-2xl p-4">
-          <p class="text-red-400">Failed to load dashboard: ${error.message}</p>
+          <p class="text-red-400">Failed to load dashboard: ${escapeHtml(error.message)}</p>
         </div>
       `;
     }
@@ -268,7 +268,7 @@ const Dashboard = {
   // Render friend comparison for a challenge
   async renderFriendComparison(challenge) {
     try {
-      const sleepData = await Comparison.getChallengeSleepData(challenge.id);
+      const { sleepData } = await Comparison.getChallengeSleepData(challenge.id);
       const hasData = sleepData.some(p => p.data.length > 0);
 
       if (!hasData) return '';
@@ -293,7 +293,7 @@ const Dashboard = {
               const color = i === 0 ? 'text-oura-accent' : 'text-blue-400';
               return `
                 <div class="flex items-center justify-between">
-                  <span class="text-sm text-oura-muted">${p.name}</span>
+                  <span class="text-sm text-oura-muted">${escapeHtml(p.name)}</span>
                   <span class="text-lg font-semibold ${color}">${p.avgHR} <span class="text-xs font-normal text-oura-muted">bpm</span></span>
                 </div>
               `;

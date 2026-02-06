@@ -146,8 +146,8 @@ const Comparison = {
   },
 
   // Render comparison charts for a challenge
-  async renderForChallenge(challengeId) {
-    const container = document.getElementById('comparison-charts');
+  async renderForChallenge(challengeId, containerId = 'comparison-charts') {
+    const container = document.getElementById(containerId);
     if (!container) return;
 
     try {
@@ -328,7 +328,7 @@ const Comparison = {
     } catch (error) {
       console.error('Error rendering comparison charts:', error);
       container.innerHTML = `
-        <p class="text-red-400 text-sm">Failed to load comparison data: ${error.message}</p>
+        <p class="text-red-400 text-sm">Failed to load comparison data: ${escapeHtml(error.message)}</p>
       `;
     }
   },

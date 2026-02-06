@@ -253,7 +253,7 @@ const Protocols = {
       console.error('Error rendering protocols:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load protocols: ${error.message}</p>
+          <p class="text-red-400">Failed to load protocols: ${escapeHtml(error.message)}</p>
         </div>
       `;
     }
@@ -281,10 +281,10 @@ const Protocols = {
             </div>
             <div class="flex-1">
               <div class="flex items-center gap-2">
-                <h2 class="text-2xl font-bold">${protocol.name}</h2>
+                <h2 class="text-2xl font-bold">${escapeHtml(protocol.name)}</h2>
                 ${isCustom ? `<span class="px-2 py-0.5 text-[0.65rem] font-medium bg-purple-500/15 text-purple-400 rounded-full">Custom</span>` : ''}
               </div>
-              <p class="text-oura-muted mt-2">${protocol.description || ''}</p>
+              <p class="text-oura-muted mt-2">${escapeHtml(protocol.description || '')}</p>
             </div>
           </div>
         </div>
@@ -298,8 +298,8 @@ const Protocols = {
                   ${index + 1}
                 </span>
                 <div>
-                  <p class="font-medium">${habit.title}</p>
-                  ${habit.description ? `<p class="text-sm text-oura-muted mt-1">${habit.description}</p>` : ''}
+                  <p class="font-medium">${escapeHtml(habit.title)}</p>
+                  ${habit.description ? `<p class="text-sm text-oura-muted mt-1">${escapeHtml(habit.description)}</p>` : ''}
                 </div>
               </div>
             `).join('') || '<p class="text-oura-muted">No habits defined for this protocol.</p>'}
@@ -330,7 +330,7 @@ const Protocols = {
       console.error('Error rendering protocol detail:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load protocol: ${error.message}</p>
+          <p class="text-red-400">Failed to load protocol: ${escapeHtml(error.message)}</p>
         </div>
       `;
     }
