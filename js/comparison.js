@@ -580,6 +580,11 @@ const SleepSync = {
       }
       console.log('[SleepSync] scoresByDay:', scoresByDay);
 
+      // Guard: ensure Oura returned a valid data array
+      if (!Array.isArray(ouraData.data)) {
+        throw new Error('No sleep data returned from Oura');
+      }
+
       // Transform and upsert sleep data
       // Oura can return multiple sessions per day (naps + main sleep),
       // so deduplicate by date, keeping the longest session

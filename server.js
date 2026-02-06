@@ -8,6 +8,7 @@ const PORT = 3000;
 const OURA_API_BASE = 'https://api.ouraring.com';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fhsbkcvepvlqbygpmdpc.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 
 const MIME_TYPES = {
     '.html': 'text/html',
@@ -51,12 +52,27 @@ const server = http.createServer(async (req, res) => {
     // This can be called by a cron job or external service
     if (req.url === '/webhook/sync-sleep' && req.method === 'POST') {
         try {
-            const body = await parseBody(req);
-            const { userId, ouraToken, supabaseUrl, supabaseKey } = body;
+            // Authenticate webhook requests via shared secret
+            const authHeader = req.headers['authorization'] || '';
+            const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+            if (!WEBHOOK_SECRET || token !== WEBHOOK_SECRET) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unauthorized' }));
+                return;
+            }
 
-            if (!userId || !ouraToken || !supabaseUrl || !supabaseKey) {
+            const body = await parseBody(req);
+            const { userId, ouraToken } = body;
+
+            if (!userId || !ouraToken) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Missing required fields: userId, ouraToken, supabaseUrl, supabaseKey' }));
+                res.end(JSON.stringify({ error: 'Missing required fields: userId, ouraToken' }));
+                return;
+            }
+
+            if (!SUPABASE_SERVICE_ROLE_KEY) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Server not configured: missing SUPABASE_SERVICE_ROLE_KEY' }));
                 return;
             }
 
@@ -135,9 +151,9 @@ const server = http.createServer(async (req, res) => {
                 pre_sleep_hr: sleep.lowest_heart_rate || null
             }));
 
-            // Upsert to Supabase
+            // Upsert to Supabase using server-side credentials
             const supabaseResponse = await new Promise((resolve, reject) => {
-                const url = new URL('/rest/v1/sleep_data', supabaseUrl);
+                const url = new URL('/rest/v1/sleep_data', SUPABASE_URL);
                 const postData = JSON.stringify(sleepRecords);
 
                 const options = {
@@ -146,8 +162,8 @@ const server = http.createServer(async (req, res) => {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'apikey': supabaseKey,
-                        'Authorization': `Bearer ${supabaseKey}`,
+                        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
                         'Prefer': 'resolution=merge-duplicates',
                         'Content-Length': Buffer.byteLength(postData)
                     }
@@ -297,7 +313,23 @@ const server = http.createServer(async (req, res) => {
     // Remove query strings
     filePath = filePath.split('?')[0];
 
-    filePath = path.join(__dirname, filePath);
+    // Decode URI components and resolve to absolute path
+    filePath = path.resolve(__dirname, '.' + decodeURIComponent(filePath));
+
+    // Block path traversal: ensure resolved path is within __dirname
+    if (!filePath.startsWith(__dirname + path.sep) && filePath !== __dirname) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
+
+    // Block dotfiles (e.g. .env, .git, .gitignore)
+    const relativePath = path.relative(__dirname, filePath);
+    if (relativePath.split(path.sep).some(segment => segment.startsWith('.'))) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
 
     const ext = path.extname(filePath);
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';

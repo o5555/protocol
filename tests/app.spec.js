@@ -194,27 +194,29 @@ test.describe('Oura Token Connection', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Sleep Sync', () => {
-  test('webhook endpoint exists', async ({ request }) => {
+  test('webhook rejects unauthenticated requests', async ({ request }) => {
     const response = await request.post('/webhook/sync-sleep', {
-      data: {},
+      data: { userId: 'x', ouraToken: 'x' },
     });
-    expect(response.status()).toBe(400);
+    expect(response.status()).toBe(401);
     const body = await response.json();
-    expect(body.error).toContain('Missing required fields');
+    expect(body.error).toBe('Unauthorized');
   });
 
-  test('webhook rejects missing userId', async ({ request }) => {
+  test('webhook rejects wrong secret', async ({ request }) => {
     const response = await request.post('/webhook/sync-sleep', {
-      data: { ouraToken: 'x', supabaseUrl: 'x', supabaseKey: 'x' },
+      headers: { 'Authorization': 'Bearer wrong-secret' },
+      data: { userId: 'x', ouraToken: 'x' },
     });
-    expect(response.status()).toBe(400);
+    expect(response.status()).toBe(401);
   });
 
-  test('webhook rejects missing ouraToken', async ({ request }) => {
+  test('webhook no longer accepts supabaseUrl or supabaseKey in body', async ({ request }) => {
+    // Even with a valid-looking payload using old fields, auth is required
     const response = await request.post('/webhook/sync-sleep', {
-      data: { userId: 'x', supabaseUrl: 'x', supabaseKey: 'x' },
+      data: { userId: 'x', ouraToken: 'x', supabaseUrl: 'https://evil.com', supabaseKey: 'stolen' },
     });
-    expect(response.status()).toBe(400);
+    expect(response.status()).toBe(401);
   });
 
   test('SleepSync module is available on page', async ({ page }) => {
@@ -414,5 +416,114 @@ test.describe('Mobile responsive', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/');
     await expect(page.locator('#auth-section')).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Security: Static file server (C2)
+// ---------------------------------------------------------------------------
+
+test.describe('Security: dotfile and path traversal protection', () => {
+  test('blocks access to .env', async ({ request }) => {
+    const response = await request.get('/.env');
+    expect(response.status()).toBe(403);
+  });
+
+  test('blocks access to .gitignore', async ({ request }) => {
+    const response = await request.get('/.gitignore');
+    expect(response.status()).toBe(403);
+  });
+
+  test('blocks access to .env.test.local', async ({ request }) => {
+    const response = await request.get('/.env.test.local');
+    expect(response.status()).toBe(403);
+  });
+
+  test('blocks access to dotfiles in subdirectories', async ({ request }) => {
+    const response = await request.get('/.claude/settings.json');
+    expect(response.status()).toBe(403);
+  });
+
+  test('blocks path traversal with encoded sequences', async ({ request }) => {
+    const response = await request.get('/%2e%2e/%2e%2e/etc/passwd');
+    // Either 403 (blocked by dotfile/traversal check) or 404 (path resolved safely but not found)
+    expect([403, 404]).toContain(response.status());
+  });
+
+  test('blocks path traversal with ../', async ({ request }) => {
+    const response = await request.get('/../../../etc/passwd');
+    // Should be 403 (path outside root) or 404 (doesn't exist after normalization)
+    expect([403, 404]).toContain(response.status());
+  });
+
+  test('still serves legitimate static files', async ({ request }) => {
+    const response = await request.get('/');
+    expect(response.ok()).toBeTruthy();
+    const body = await response.text();
+    expect(body).toContain('html');
+  });
+
+  test('.env content is never leaked in response body', async ({ request }) => {
+    const response = await request.get('/.env');
+    const body = await response.text();
+    expect(body).not.toContain('SUPABASE');
+    expect(body).not.toContain('SERVICE_ROLE');
+    expect(body).not.toContain('sb_secret');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Security: Oura data guard (C3)
+// ---------------------------------------------------------------------------
+
+test.describe('Security: Oura data guard', () => {
+  test('SleepSync handles invalid Oura response gracefully', async ({ page }) => {
+    await page.goto('/');
+
+    // Mock all dependencies so syncNow can run without real Supabase
+    const result = await page.evaluate(async () => {
+      // Fully stub SupabaseClient and Auth to bypass real Supabase calls
+      const fakeClient = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              single: () => Promise.resolve({
+                data: { oura_token: 'fake-token' },
+                error: null,
+              }),
+            }),
+          }),
+          upsert: () => Promise.resolve({ error: null }),
+        }),
+      };
+      window.SupabaseClient = {
+        client: fakeClient,
+        getCurrentUser: () => Promise.resolve({ id: 'test-user' }),
+      };
+      // Override Auth.getProfile to return a profile with a token
+      window.Auth.getProfile = () => Promise.resolve({ oura_token: 'fake-token' });
+
+      // Mock fetch to return an Oura error response (no .data field)
+      const originalFetch = window.fetch;
+      window.fetch = (url) => {
+        if (url.includes('/sleep')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ detail: 'Unauthorized' }),
+          });
+        }
+        return originalFetch(url);
+      };
+
+      try {
+        const result = await window.SleepSync.syncNow({ silent: true });
+        return result;
+      } finally {
+        window.fetch = originalFetch;
+      }
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('No sleep data returned from Oura');
   });
 });
