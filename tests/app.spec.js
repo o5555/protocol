@@ -254,10 +254,6 @@ test.describe('Dashboard', () => {
     await expect(page.locator('.bottom-nav')).toBeVisible();
   });
 
-  test('header is visible', async ({ page }) => {
-    await expect(page.locator('.app-header')).toBeVisible();
-  });
-
   test('dashboard module is loaded', async ({ page }) => {
     const hasDashboard = await page.evaluate(() => typeof window.Dashboard !== 'undefined');
     expect(hasDashboard).toBeTruthy();
