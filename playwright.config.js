@@ -9,8 +9,11 @@ module.exports = defineConfig({
     launchOptions: { slowMo: 500 },
   },
   webServer: {
-    command: 'node server.js',
+    command: 'WEBHOOK_SECRET=test-webhook-secret node server.js',
     port: 3000,
     reuseExistingServer: true,
+    env: {
+      WEBHOOK_SECRET: 'test-webhook-secret',
+    },
   },
 });
