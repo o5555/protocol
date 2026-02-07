@@ -115,7 +115,7 @@ const Friends = {
       .from('friendships')
       .select('id, status')
       .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${currentUser.id})`)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       if (existing.status === 'accepted') {

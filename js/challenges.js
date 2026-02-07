@@ -81,7 +81,7 @@ const Challenges = {
         )
       `)
       .eq('user_id', currentUser.id)
-      .order('created_at', { foreignTable: 'challenges', ascending: false });
+      .order('created_at', { referencedTable: 'challenges', ascending: false });
 
     if (error) throw error;
 
@@ -192,7 +192,7 @@ const Challenges = {
           .from('friendships')
           .select('id')
           .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${participant.invited_by}),and(user_id.eq.${participant.invited_by},friend_id.eq.${currentUser.id})`)
-          .single();
+          .maybeSingle();
 
         if (!existing) {
           // Create auto-accepted friendship
@@ -303,7 +303,7 @@ const Challenges = {
       .eq('habit_id', habitId)
       .eq('user_id', currentUser.id)
       .eq('completed_date', date)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       // Remove completion
