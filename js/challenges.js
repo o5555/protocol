@@ -1877,6 +1877,23 @@ const Challenges = {
           </div>
 
           <div>
+            <label class="block text-sm font-medium mb-2">Start Date</label>
+            <div class="flex gap-2" id="start-date-toggle">
+              <button type="button" data-start="today"
+                class="flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-teal bg-oura-teal/10 text-oura-teal">
+                Start Today
+              </button>
+              <button type="button" data-start="pick"
+                class="flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-border text-oura-muted">
+                Pick a Date
+              </button>
+            </div>
+            <input type="date" id="challenge-start-date"
+              class="hidden w-full mt-2 px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white"
+              min="${new Date().toISOString().split('T')[0]}">
+          </div>
+
+          <div>
             <label class="block text-sm font-medium mb-1">Invite Friends</label>
             ${friends.length > 0 ? `
               <div class="space-y-2 max-h-40 overflow-y-auto">
@@ -1909,6 +1926,30 @@ const Challenges = {
 
     document.body.appendChild(modal);
 
+    // Start date toggle
+    const dateToggle = document.getElementById('start-date-toggle');
+    const dateInput = document.getElementById('challenge-start-date');
+    let useCustomDate = false;
+
+    dateToggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-start]');
+      if (!btn) return;
+      const todayBtn = dateToggle.querySelector('[data-start="today"]');
+      const pickBtn = dateToggle.querySelector('[data-start="pick"]');
+
+      if (btn.dataset.start === 'today') {
+        useCustomDate = false;
+        dateInput.classList.add('hidden');
+        todayBtn.className = 'flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-teal bg-oura-teal/10 text-oura-teal';
+        pickBtn.className = 'flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-border text-oura-muted';
+      } else {
+        useCustomDate = true;
+        dateInput.classList.remove('hidden');
+        pickBtn.className = 'flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-teal bg-oura-teal/10 text-oura-teal';
+        todayBtn.className = 'flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-border text-oura-muted';
+      }
+    });
+
     // Update mode selector when protocol changes
     const protocolSelect = document.getElementById('challenge-protocol');
     protocolSelect.addEventListener('change', () => {
@@ -1929,9 +1970,10 @@ const Challenges = {
       const friendCheckboxes = document.querySelectorAll('input[name="friends"]:checked');
       const friendIds = Array.from(friendCheckboxes).map(cb => cb.value);
       const mode = Protocols._selectedMode;
+      const startDate = useCustomDate ? dateInput.value : null;
 
       try {
-        const challenge = await this.create({ protocolId, name, friendIds, mode });
+        const challenge = await this.create({ protocolId, name, friendIds, mode, startDate });
         this.closeCreateModal();
         // Navigate directly into the new challenge
         App.navigateTo('challenge-detail', challenge.id);
