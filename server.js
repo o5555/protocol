@@ -4,7 +4,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const OURA_API_BASE = 'https://api.ouraring.com';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fhsbkcvepvlqbygpmdpc.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
