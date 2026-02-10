@@ -307,6 +307,64 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Bug report endpoint - saves to Supabase and forwards to Telegram
+    if (req.url === '/api/bug-report' && req.method === 'POST') {
+        try {
+            const body = await parseBody(req);
+            const { message, screen, deviceInfo, errorLog, userEmail } = body;
+
+            if (!message) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Message is required' }));
+                return;
+            }
+
+            // Forward to Telegram if configured
+            const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+            const chatId = process.env.TELEGRAM_CHAT_ID || '';
+
+            if (botToken && chatId) {
+                const text = [
+                    '\u{1F41B} <b>Bug Report</b>',
+                    '',
+                    `<b>From:</b> ${userEmail || 'Unknown'}`,
+                    `<b>Screen:</b> ${screen || 'Unknown'}`,
+                    '',
+                    message,
+                    '',
+                    deviceInfo ? `<i>${deviceInfo.browser || ''} \u{2022} ${deviceInfo.screenSize || ''}</i>` : '',
+                    errorLog ? `\n<pre>${errorLog.slice(0, 500)}</pre>` : ''
+                ].filter(Boolean).join('\n');
+
+                const payload = JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' });
+
+                const telegramReq = https.request({
+                    hostname: 'api.telegram.org',
+                    path: `/bot${botToken}/sendMessage`,
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+                }, (telegramRes) => {
+                    let d = '';
+                    telegramRes.on('data', c => d += c);
+                    telegramRes.on('end', () => {
+                        if (telegramRes.statusCode >= 300) console.error('[bug-report] Telegram error:', d);
+                    });
+                });
+                telegramReq.on('error', (e) => console.error('[bug-report] Telegram error:', e.message));
+                telegramReq.write(payload);
+                telegramReq.end();
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true }));
+        } catch (error) {
+            console.error('[bug-report] Error:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+    }
+
     // Serve static files
     let filePath = req.url === '/' ? '/index.html' : req.url;
 
