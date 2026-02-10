@@ -31,8 +31,8 @@ const Account = {
               ${displayName.charAt(0).toUpperCase()}
             </div>
             <div class="flex-1">
-              <h3 class="text-lg font-semibold">${displayName}</h3>
-              <p class="text-sm text-oura-muted">${currentUser.email}</p>
+              <h3 class="text-lg font-semibold">${escapeHtml(displayName)}</h3>
+              <p class="text-sm text-oura-muted">${escapeHtml(currentUser.email)}</p>
             </div>
           </div>
 
@@ -127,7 +127,7 @@ const Account = {
         <form id="edit-profile-form" class="space-y-4">
           <div>
             <label class="block text-sm font-medium mb-1">Display Name</label>
-            <input type="text" id="display-name-input" value="${displayName}" placeholder="Your name"
+            <input type="text" id="display-name-input" value="${escapeHtml(displayName)}" placeholder="Your name"
               class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white placeholder-neutral-600 focus:outline-none focus:border-oura-teal">
           </div>
           <div class="flex gap-3 pt-4">

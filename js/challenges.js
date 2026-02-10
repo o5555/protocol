@@ -195,12 +195,12 @@ const Challenges = {
           .maybeSingle();
 
         if (!existing) {
-          // Create auto-accepted friendship
+          // Create auto-accepted friendship (current user as user_id for RLS)
           await client
             .from('friendships')
             .insert({
-              user_id: participant.invited_by,
-              friend_id: currentUser.id,
+              user_id: currentUser.id,
+              friend_id: participant.invited_by,
               status: 'accepted'
             });
         }
@@ -439,9 +439,9 @@ const Challenges = {
                 <div class="bg-oura-card rounded-2xl p-4">
                   <div class="flex items-start justify-between">
                     <div>
-                      <p class="font-semibold">${inv.name} ${Protocols.renderModeBadge(inv.mode || 'pro')}</p>
-                      <p class="text-sm text-oura-muted">${inv.protocol.icon} ${inv.protocol.name}</p>
-                      <p class="text-sm text-oura-muted">From: ${inv.creator.display_name || inv.creator.email}</p>
+                      <p class="font-semibold">${escapeHtml(inv.name)} ${Protocols.renderModeBadge(inv.mode || 'pro')}</p>
+                      <p class="text-sm text-oura-muted">${escapeHtml(inv.protocol.icon)} ${escapeHtml(inv.protocol.name)}</p>
+                      <p class="text-sm text-oura-muted">From: ${escapeHtml(inv.creator.display_name || inv.creator.email)}</p>
                     </div>
                     <div class="flex gap-2">
                       <button onclick="Challenges.handleAcceptInvite('${inv.participantId}')"
@@ -470,8 +470,8 @@ const Challenges = {
                   class="bg-oura-subtle rounded-lg p-4 cursor-pointer hover:bg-oura-border transition-colors">
                   <div class="flex items-start justify-between">
                     <div>
-                      <p class="font-semibold">${challenge.name} ${Protocols.renderModeBadge(challenge.mode || 'pro')}</p>
-                      <p class="text-sm text-oura-muted">${challenge.protocol.icon} ${challenge.protocol.name}</p>
+                      <p class="font-semibold">${escapeHtml(challenge.name)} ${Protocols.renderModeBadge(challenge.mode || 'pro')}</p>
+                      <p class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.icon)} ${escapeHtml(challenge.protocol.name)}</p>
                     </div>
                     <div class="text-right">
                       <p class="text-oura-teal font-semibold">${challenge.daysRemaining} days left</p>
@@ -517,7 +517,7 @@ const Challenges = {
             <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
               &larr; Back
             </button>
-            <span class="text-base font-medium">${challenge.name}</span>
+            <span class="text-base font-medium">${escapeHtml(challenge.name)}</span>
             <span style="width: 50px;"></span>
           </div>
           <div class="text-center py-10 text-oura-muted text-sm">Syncing Oura data...</div>
@@ -611,7 +611,7 @@ const Challenges = {
             <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
               &larr; Back
             </button>
-            <span class="text-base font-semibold">${challenge.name}</span>
+            <span class="text-base font-semibold">${escapeHtml(challenge.name)}</span>
             <span style="width: 50px;"></span>
           </div>
 
@@ -718,13 +718,13 @@ const Challenges = {
           <div class="space-y-2">
             ${leaderboard.length > 0 ? leaderboard.map(p => {
               const name = p.user.display_name || p.user.email.split('@')[0];
-              const initial = name.charAt(0).toUpperCase();
+              const initial = escapeHtml(name.charAt(0).toUpperCase());
               return `
                 <div class="flex items-center p-3.5 rounded-xl" style="background: ${p.isMe ? '#1a2035' : '#0f1525'}; ${p.isMe ? 'border: 1px solid rgba(108, 99, 255, 0.2);' : ''}">
                   <span class="text-lg mr-3 w-7">${p.rank}</span>
                   <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm mr-3" style="background: #1a2035">${p.isMe ? '👤' : initial}</div>
                   <div class="flex-1">
-                    <div class="text-sm font-medium">${p.isMe ? 'You' : name}</div>
+                    <div class="text-sm font-medium">${p.isMe ? 'You' : escapeHtml(name)}</div>
                     <div class="text-xs text-oura-muted">${Math.round(p.baselineScore)} → ${Math.round(p.currentScore)}</div>
                   </div>
                   <span class="text-lg font-semibold" style="color: ${p.improvementPct >= 0 ? '#4ade80' : '#f87171'}">
@@ -742,7 +742,7 @@ const Challenges = {
 
         <!-- Day Badge - Protocol info -->
         <div class="text-center py-3 px-4 bg-oura-card rounded-lg mb-4">
-          <span class="text-sm text-oura-muted">${challenge.protocol.icon} ${challenge.protocol.name} · Day <strong class="text-white">${challenge.dayNumber}</strong> of 30</span>
+          <span class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.icon)} ${escapeHtml(challenge.protocol.name)} · Day <strong class="text-white">${challenge.dayNumber}</strong> of 30</span>
         </div>
 
         <!-- Details Link -->
@@ -1180,8 +1180,8 @@ const Challenges = {
                     onchange="Challenges.handleToggleHabit('${challengeId}', '${habit.id}', '${today}')"
                     class="mt-1 w-5 h-5 rounded border-oura-border text-oura-teal focus:ring-oura-teal bg-oura-border">
                   <div>
-                    <p class="font-medium text-sm">${habit.title}</p>
-                    ${habit.description ? `<p class="text-xs text-oura-muted">${habit.description}</p>` : ''}
+                    <p class="font-medium text-sm">${escapeHtml(habit.title)}</p>
+                    ${habit.description ? `<p class="text-xs text-oura-muted">${escapeHtml(habit.description)}</p>` : ''}
                   </div>
                 </label>
               `).join('')}
@@ -1195,7 +1195,7 @@ const Challenges = {
               ${participantProgress.sort((a, b) => b.percentage - a.percentage).map(p => `
                 <div>
                   <div class="flex justify-between mb-1">
-                    <span class="text-sm font-medium">${p.user.display_name || p.user.email}</span>
+                    <span class="text-sm font-medium">${escapeHtml(p.user.display_name || p.user.email)}</span>
                     <span class="text-sm text-oura-muted">${p.percentage}%</span>
                   </div>
                   <div class="w-full bg-oura-card rounded-full h-2">
@@ -1443,7 +1443,7 @@ const Challenges = {
                   <label class="flex items-center gap-3 p-3 bg-oura-subtle rounded-lg cursor-pointer hover:bg-oura-border">
                     <input type="checkbox" name="friends" value="${f.id}"
                       class="w-5 h-5 rounded border-oura-border text-oura-teal focus:ring-oura-teal bg-oura-border">
-                    <span class="font-medium">${f.displayName || f.email}</span>
+                    <span class="font-medium">${escapeHtml(f.displayName || f.email)}</span>
                   </label>
                 `).join('')}
               </div>
@@ -1590,7 +1590,7 @@ const Challenges = {
                   <label class="flex items-center gap-2 p-2 bg-oura-subtle rounded">
                     <input type="checkbox" name="friends" value="${f.id}"
                       class="rounded border-oura-border text-oura-teal focus:ring-oura-teal bg-oura-border">
-                    <span>${f.displayName || f.email}</span>
+                    <span>${escapeHtml(f.displayName || f.email)}</span>
                   </label>
                 `).join('')}
               </div>

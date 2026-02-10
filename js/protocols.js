@@ -238,8 +238,8 @@ const Protocols = {
                   ${initials}
                 </div>
                 <div class="flex-1 min-w-0">
-                  <h3 class="text-lg font-semibold">${protocol.name}</h3>
-                  <p class="text-oura-muted text-sm mt-1 line-clamp-3">${protocol.description || ''}</p>
+                  <h3 class="text-lg font-semibold">${escapeHtml(protocol.name)}</h3>
+                  <p class="text-oura-muted text-sm mt-1 line-clamp-3">${escapeHtml(protocol.description || '')}</p>
                 </div>
                 <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />

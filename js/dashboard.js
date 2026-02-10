@@ -111,8 +111,8 @@ const Dashboard = {
             <div class="flex items-center gap-4 mb-4">
               <span class="text-3xl">${challenge.protocol?.icon || '&#x1F3C6;'}</span>
               <div>
-                <h3 class="font-semibold text-lg">${challenge.name}</h3>
-                <p class="text-oura-muted text-sm">${challenge.protocol?.name || 'Protocol'}</p>
+                <h3 class="font-semibold text-lg">${escapeHtml(challenge.name)}</h3>
+                <p class="text-oura-muted text-sm">${escapeHtml(challenge.protocol?.name || 'Protocol')}</p>
               </div>
             </div>
             <div class="mb-2">
