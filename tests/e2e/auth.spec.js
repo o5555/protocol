@@ -175,7 +175,8 @@ test.describe('Magic link flow', () => {
     });
 
     // Wait for the button to revert back to "Send Magic Link"
-    await expect(submitBtn).toHaveText('Send Magic Link', { timeout: 10000 });
+    // The Supabase magic link API call may take a while in test environments
+    await expect(submitBtn).toHaveText('Send Magic Link', { timeout: 25000 });
 
     // A message should appear (success or error depending on Supabase availability)
     const messageEl = page.locator('#auth-message');

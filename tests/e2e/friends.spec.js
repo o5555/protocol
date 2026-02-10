@@ -255,7 +255,7 @@ test.describe('Navigation', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'friends', 'account'];
+    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
 
     for (const tab of tabs) {
       // Click the nav button
@@ -280,7 +280,7 @@ test.describe('Navigation', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['protocols', 'challenges', 'friends', 'account', 'dashboard'];
+    const tabs = ['protocols', 'challenges', 'account', 'dashboard'];
 
     for (const tab of tabs) {
       await page.click(`.nav-btn[data-page="${tab}"]`);
@@ -336,7 +336,7 @@ test.describe('Navigation', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'friends', 'account'];
+    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
 
     // Rapidly cycle through all tabs 3 times with minimal delays
     for (let round = 0; round < 3; round++) {
@@ -365,7 +365,7 @@ test.describe('Navigation', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'friends', 'account'];
+    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
 
     // Navigate to every page and pause to let async rendering settle
     for (const tab of tabs) {

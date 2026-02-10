@@ -302,7 +302,7 @@ test.describe('Navigation', () => {
     await expect(page.locator('.nav-btn[data-page="dashboard"]')).toBeVisible();
     await expect(page.locator('.nav-btn[data-page="protocols"]')).toBeVisible();
     await expect(page.locator('.nav-btn[data-page="challenges"]')).toBeVisible();
-    await expect(page.locator('.nav-btn[data-page="friends"]')).toBeVisible();
+    await expect(page.locator('.nav-btn[data-page="account"]')).toBeVisible();
   });
 
   test('clicking dashboard tab shows dashboard page', async ({ page }) => {
@@ -320,9 +320,9 @@ test.describe('Navigation', () => {
     await expect(page.locator('#page-challenges')).toBeVisible();
   });
 
-  test('clicking friends tab shows friends page', async ({ page }) => {
-    await page.locator('.nav-btn[data-page="friends"]').click();
-    await expect(page.locator('#page-friends')).toBeVisible();
+  test('clicking account tab shows account page', async ({ page }) => {
+    await page.locator('.nav-btn[data-page="account"]').click();
+    await expect(page.locator('#page-account')).toBeVisible();
   });
 
   test('switching tabs hides previous page', async ({ page }) => {
@@ -345,8 +345,8 @@ test.describe('Navigation', () => {
     await expect(page.locator('#page-friends')).toBeVisible();
   });
 
-  test('full tab cycle: dashboard -> protocols -> challenges -> friends -> dashboard', async ({ page }) => {
-    const tabs = ['dashboard', 'protocols', 'challenges', 'friends', 'dashboard'];
+  test('full tab cycle: dashboard -> protocols -> challenges -> account -> dashboard', async ({ page }) => {
+    const tabs = ['dashboard', 'protocols', 'challenges', 'account', 'dashboard'];
     for (const tab of tabs) {
       await page.locator(`.nav-btn[data-page="${tab}"]`).click();
       await expect(page.locator(`#page-${tab}`)).toBeVisible();
