@@ -82,7 +82,21 @@ const Onboarding = {
         <h2 class="text-2xl font-bold mb-2">Connect Your Oura Ring</h2>
         <p class="text-oura-muted text-sm">Enter your Oura Personal Access Token to sync sleep data automatically.</p>
       </div>
-      <div class="bg-oura-card rounded-2xl p-6 mb-6">
+      <div class="bg-oura-card rounded-2xl p-6 mb-4">
+        <div class="bg-oura-subtle rounded-lg p-3 mb-4 text-xs text-oura-muted">
+          <p class="font-medium text-white mb-1">How to get your token:</p>
+          <ol class="list-decimal list-inside space-y-1">
+            <li>Tap the button below to open Oura Cloud</li>
+            <li>Sign in to your Oura account</li>
+            <li>Create a new Personal Access Token</li>
+            <li>Copy and paste it below</li>
+          </ol>
+        </div>
+        <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank"
+          class="flex items-center justify-center gap-2 w-full py-3 mb-4 bg-oura-subtle border border-oura-border rounded-xl text-oura-accent text-sm font-medium hover:bg-oura-border transition-colors">
+          <span>Open Oura Cloud</span>
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
+        </a>
         <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-2">Oura Personal Access Token</label>
         <input type="password" id="onboarding-token" placeholder="Paste your token here"
           class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
