@@ -271,7 +271,7 @@
             currentPage: 'dashboard',
             currentDetailId: null,
 
-            navigateTo(page, detailId = null, options = {}) {
+            navigateTo(page, detailId = null) {
                 // Hide all pages
                 document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
 
@@ -305,10 +305,10 @@
                 window.scrollTo(0, 0);
 
                 // Load page content
-                this.loadPageContent(page, detailId, options);
+                this.loadPageContent(page, detailId);
             },
 
-            loadPageContent(page, detailId, options = {}) {
+            loadPageContent(page, detailId) {
                 switch (page) {
                     case 'protocols':
                         Protocols.renderList();

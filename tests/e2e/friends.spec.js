@@ -320,13 +320,13 @@ test.describe('Navigation', () => {
     if (backBtnExists) {
       await backBtn.click();
     } else {
-      // Use nav button to go back to challenges (protocols now live under Challenge tab)
-      await page.click('.nav-btn[data-page="challenges"]');
+      // Use nav button to go back to protocols
+      await page.click('.nav-btn[data-page="protocols"]');
     }
     await page.waitForTimeout(300);
 
-    // Verify return to challenges page (protocols are sub-views within challenge flow)
-    await expect(page.locator('#page-challenges')).toBeVisible();
+    // Verify return to protocols page
+    await expect(page.locator('#page-protocols')).toBeVisible();
     await expect(page.locator('#page-protocol-detail')).toBeHidden();
 
     expect(unexpectedErrors(errors)).toEqual([]);
@@ -376,7 +376,7 @@ test.describe('Navigation', () => {
     // Also visit detail pages
     await page.evaluate(() => App.navigateTo('protocol-detail', 'test-protocol'));
     await page.waitForTimeout(500);
-    await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
+    await page.evaluate(() => App.navigateTo('challenges'));
     await page.waitForTimeout(300);
 
     // Verify zero unexpected errors across the entire cycle

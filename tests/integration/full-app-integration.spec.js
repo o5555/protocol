@@ -406,21 +406,20 @@ test.describe('Full App Integration (Real Supabase)', () => {
       await waitForAppReady(page);
     });
 
-    test('protocols browser loads via Challenge tab (smart view)', async ({ page }) => {
+    test('protocols list loads', async ({ page }) => {
       const errors = collectErrors(page);
 
-      // Challenge tab with no active challenges should show protocol browser
-      await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
+      await page.evaluate(() => App.navigateTo('protocols'));
       await page.waitForTimeout(2000);
 
-      const container = page.locator('#challenges-container');
+      const container = page.locator('#page-protocols');
       const html = await container.innerHTML();
 
       // Should have the "Create Your Own Protocol" button
       expect(html).toContain('Create Your Own Protocol');
 
-      // Should have protocol cards in the browse section
-      const protocolCards = page.locator('#challenges-container .bg-oura-card');
+      // Should have protocol cards
+      const protocolCards = page.locator('#page-protocols .bg-oura-card');
       const count = await protocolCards.count();
       expect(count).toBeGreaterThanOrEqual(1);
 
@@ -430,12 +429,11 @@ test.describe('Full App Integration (Real Supabase)', () => {
     test('clicking a protocol navigates to protocol detail', async ({ page }) => {
       const errors = collectErrors(page);
 
-      // Navigate to challenge list which includes protocol browser
-      await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
+      await page.evaluate(() => App.navigateTo('protocols'));
       await page.waitForTimeout(2000);
 
-      // Click a protocol card (in the Browse Protocols section)
-      const protocolCard = page.locator('#challenges-container .protocol-icon').first().locator('..');
+      // Click a protocol card
+      const protocolCard = page.locator('#page-protocols .protocol-icon').first().locator('..');
       if (await protocolCard.isVisible()) {
         await protocolCard.click();
         await page.waitForTimeout(2000);
@@ -455,13 +453,13 @@ test.describe('Full App Integration (Real Supabase)', () => {
       assertNoUnexpectedErrors(errors, 'protocol-detail');
     });
 
-    test('Back button in protocol detail returns to challenges', async ({ page }) => {
+    test('Back button in protocol detail returns to protocols', async ({ page }) => {
       const errors = collectErrors(page);
 
-      await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
+      await page.evaluate(() => App.navigateTo('protocols'));
       await page.waitForTimeout(2000);
 
-      const protocolCard = page.locator('#challenges-container .protocol-icon').first().locator('..');
+      const protocolCard = page.locator('#page-protocols .protocol-icon').first().locator('..');
       if (await protocolCard.isVisible()) {
         await protocolCard.click();
         await page.waitForTimeout(2000);
@@ -472,7 +470,7 @@ test.describe('Full App Integration (Real Supabase)', () => {
         await backBtn.click();
         await page.waitForTimeout(500);
 
-        await expect(page.locator('#page-challenges')).toBeVisible();
+        await expect(page.locator('#page-protocols')).toBeVisible();
       }
 
       assertNoUnexpectedErrors(errors, 'protocol-back');
@@ -481,7 +479,7 @@ test.describe('Full App Integration (Real Supabase)', () => {
     test('Create Your Own Protocol modal opens and has wizard steps', async ({ page }) => {
       const errors = collectErrors(page);
 
-      await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
+      await page.evaluate(() => App.navigateTo('protocols'));
       await page.waitForTimeout(2000);
 
       // Click "Create Your Own Protocol"
@@ -1097,15 +1095,15 @@ test.describe('Full App Integration (Real Supabase)', () => {
         await page.waitForTimeout(2000);
       }
 
-      // Visit protocol detail via challenges list
-      await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
+      // Visit protocol detail via protocols page
+      await page.evaluate(() => App.navigateTo('protocols'));
       await page.waitForTimeout(2000);
-      const firstProtocol = page.locator('#challenges-container .protocol-icon').first().locator('..');
+      const firstProtocol = page.locator('#page-protocols .protocol-icon').first().locator('..');
       if (await firstProtocol.isVisible()) {
         await firstProtocol.click();
         await page.waitForTimeout(2000);
         // Go back
-        await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
+        await page.evaluate(() => App.navigateTo('protocols'));
         await page.waitForTimeout(1000);
       }
 
