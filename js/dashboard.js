@@ -58,6 +58,7 @@ const Dashboard = {
     try {
 
       const avgPreSleepHR = this.calcAvgPreSleepHR(recentSleep);
+      const avgHR = this.calcAvgHR(recentSleep);
       const avgDeepSleep = this.calcAvgDeepSleep(recentSleep);
       const avgSleepScore = this.calcAvgSleepScore(recentSleep);
       const challenge = activeChallenges[0] || null;
@@ -85,28 +86,38 @@ const Dashboard = {
         `;
       }
 
-      // 30-Day Baseline card (contains metric cards)
+      // 30-Day Baseline — 4 full-width metric bars stacked vertically
       html += `
         <div class="bg-oura-card rounded-2xl p-5 mb-4">
           <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">Your 30-Day Baseline</div>
-          <div class="grid grid-cols-3 gap-3">
-            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors" onclick="Dashboard.showMetricDetail('pre_sleep_hr')">
-              <div class="text-[0.6rem] font-semibold text-teal-400 uppercase tracking-wider mb-1">Lowest HR</div>
-              <div class="text-xl font-bold text-teal-400 leading-none">${avgPreSleepHR !== null ? avgPreSleepHR : '--'}</div>
-              <div class="text-[0.55rem] text-oura-muted mt-0.5">bpm avg</div>
-              <div class="mt-2 h-8"><canvas id="sparkline-presleep-hr"></canvas></div>
+          <div class="space-y-3">
+            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('sleep_score')">
+              <div class="flex-shrink-0">
+                <div class="text-[0.6rem] font-semibold text-purple-400 uppercase tracking-wider mb-1">Sleep Score</div>
+                <div class="text-xl font-bold text-purple-400 leading-none">${avgSleepScore !== null ? avgSleepScore : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">pts</span></div>
+              </div>
+              <div class="flex-1 h-10"><canvas id="sparkline-sleep-score"></canvas></div>
             </div>
-            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors" onclick="Dashboard.showMetricDetail('deep_sleep')">
-              <div class="text-[0.6rem] font-semibold text-blue-400 uppercase tracking-wider mb-1">Deep Sleep</div>
-              <div class="text-xl font-bold text-blue-400 leading-none">${avgDeepSleep !== null ? avgDeepSleep : '--'}</div>
-              <div class="text-[0.55rem] text-oura-muted mt-0.5">min avg</div>
-              <div class="mt-2 h-8"><canvas id="sparkline-deep-sleep"></canvas></div>
+            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('avg_hr')">
+              <div class="flex-shrink-0">
+                <div class="text-[0.6rem] font-semibold text-orange-400 uppercase tracking-wider mb-1">Avg HR</div>
+                <div class="text-xl font-bold text-orange-400 leading-none">${avgHR !== null ? avgHR : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">bpm</span></div>
+              </div>
+              <div class="flex-1 h-10"><canvas id="sparkline-avg-hr"></canvas></div>
             </div>
-            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors" onclick="Dashboard.showMetricDetail('sleep_score')">
-              <div class="text-[0.6rem] font-semibold text-purple-400 uppercase tracking-wider mb-1">Sleep Score</div>
-              <div class="text-xl font-bold text-purple-400 leading-none">${avgSleepScore !== null ? avgSleepScore : '--'}</div>
-              <div class="text-[0.55rem] text-oura-muted mt-0.5">pts avg</div>
-              <div class="mt-2 h-8"><canvas id="sparkline-sleep-score"></canvas></div>
+            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('pre_sleep_hr')">
+              <div class="flex-shrink-0">
+                <div class="text-[0.6rem] font-semibold text-teal-400 uppercase tracking-wider mb-1">Lowest HR</div>
+                <div class="text-xl font-bold text-teal-400 leading-none">${avgPreSleepHR !== null ? avgPreSleepHR : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">bpm</span></div>
+              </div>
+              <div class="flex-1 h-10"><canvas id="sparkline-presleep-hr"></canvas></div>
+            </div>
+            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('deep_sleep')">
+              <div class="flex-shrink-0">
+                <div class="text-[0.6rem] font-semibold text-blue-400 uppercase tracking-wider mb-1">Deep Sleep</div>
+                <div class="text-xl font-bold text-blue-400 leading-none">${avgDeepSleep !== null ? avgDeepSleep : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">min</span></div>
+              </div>
+              <div class="flex-1 h-10"><canvas id="sparkline-deep-sleep"></canvas></div>
             </div>
           </div>
         </div>
@@ -121,7 +132,7 @@ const Dashboard = {
             class="bg-oura-card rounded-2xl p-6 mb-4 cursor-pointer hover:bg-oura-subtle transition-colors">
             <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">Active Challenge</div>
             <div class="flex items-center gap-4 mb-4">
-              <span class="text-3xl">${challenge.protocol?.icon || '&#x1F3C6;'}</span>
+              <div class="protocol-icon w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">${Protocols.getInitials(challenge.protocol?.name || 'CH')}</div>
               <div>
                 <h3 class="font-semibold text-lg">${escapeHtml(challenge.name)}</h3>
                 <p class="text-oura-muted text-sm">${escapeHtml(challenge.protocol?.name || 'Protocol')}</p>
@@ -140,20 +151,13 @@ const Dashboard = {
         `;
       }
 
-      // Start Protocol CTA button
-      html += `
-        <button onclick="App.navigateTo('protocols')"
-          class="w-full py-4 bg-oura-teal text-gray-900 font-semibold rounded-xl hover:bg-oura-teal/90 transition-colors text-base mb-4">
-          + Start Protocol
-        </button>
-      `;
-
       container.innerHTML = html;
 
       // Initialize sparklines after DOM is ready
+      this.renderSparkline('sparkline-sleep-score', chronologicalSleep.map(d => d.sleep_score), '#c084fc');
+      this.renderSparkline('sparkline-avg-hr', chronologicalSleep.map(d => d.avg_hr), '#fb923c');
       this.renderSparkline('sparkline-presleep-hr', chronologicalSleep.map(d => d.pre_sleep_hr), '#2dd4bf');
       this.renderSparkline('sparkline-deep-sleep', chronologicalSleep.map(d => d.deep_sleep_minutes), '#60a5fa');
-      this.renderSparkline('sparkline-sleep-score', chronologicalSleep.map(d => d.sleep_score), '#c084fc');
     } catch (error) {
       console.error('Error rendering dashboard:', error);
       container.innerHTML = `
@@ -356,9 +360,10 @@ const Dashboard = {
   // Show detail modal for a metric
   async showMetricDetail(metric) {
     const config = {
+      sleep_score: { label: 'Sleep Score', unit: 'pts', color: '#c084fc', field: 'sleep_score' },
+      avg_hr: { label: 'Average Heart Rate', unit: 'bpm', color: '#fb923c', field: 'avg_hr' },
       pre_sleep_hr: { label: 'Lowest Heart Rate', unit: 'bpm', color: '#2dd4bf', field: 'pre_sleep_hr' },
-      deep_sleep: { label: 'Deep Sleep', unit: 'min', color: '#60a5fa', field: 'deep_sleep_minutes' },
-      sleep_score: { label: 'Sleep Score', unit: 'pts', color: '#c084fc', field: 'sleep_score' }
+      deep_sleep: { label: 'Deep Sleep', unit: 'min', color: '#60a5fa', field: 'deep_sleep_minutes' }
     }[metric];
 
     if (!config) return;

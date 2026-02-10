@@ -452,7 +452,7 @@ const Challenges = {
                   <div class="flex items-start justify-between">
                     <div>
                       <p class="font-semibold">${escapeHtml(inv.name)} ${Protocols.renderModeBadge(inv.mode || 'pro')}</p>
-                      <p class="text-sm text-oura-muted">${escapeHtml(inv.protocol.icon)} ${escapeHtml(inv.protocol.name)}</p>
+                      <p class="text-sm text-oura-muted">${escapeHtml(inv.protocol.name)}</p>
                       <p class="text-sm text-oura-muted">From: ${escapeHtml(inv.creator.display_name || inv.creator.email)}</p>
                     </div>
                     <div class="flex gap-2">
@@ -483,7 +483,7 @@ const Challenges = {
                   <div class="flex items-start justify-between">
                     <div>
                       <p class="font-semibold">${escapeHtml(challenge.name)} ${Protocols.renderModeBadge(challenge.mode || 'pro')}</p>
-                      <p class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.icon)} ${escapeHtml(challenge.protocol.name)}</p>
+                      <p class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.name)}</p>
                     </div>
                     <div class="text-right">
                       <p class="text-oura-teal font-semibold">${challenge.daysRemaining} days left</p>
@@ -766,7 +766,7 @@ const Challenges = {
 
         <!-- Day Badge - Protocol info -->
         <div class="text-center py-3 px-4 bg-oura-card rounded-lg mb-4">
-          <span class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.icon)} ${escapeHtml(challenge.protocol.name)} · Day <strong class="text-white">${challenge.dayNumber}</strong> of 30</span>
+          <span class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.name)} · Day <strong class="text-white">${challenge.dayNumber}</strong> of 30</span>
         </div>
 
         <!-- Details Link -->
@@ -1725,7 +1725,7 @@ const Challenges = {
             <label class="block text-sm font-medium mb-1">Protocol</label>
             <select id="challenge-protocol" required
               class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white">
-              ${protocols.map(p => `<option value="${p.id}">${p.icon} ${p.name}</option>`).join('')}
+              ${protocols.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
             </select>
           </div>
 
