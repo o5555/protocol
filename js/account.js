@@ -76,6 +76,18 @@ const Account = {
           </div>
         </div>
 
+        <!-- Feedback -->
+        <div class="bg-oura-card rounded-2xl p-6 mb-4">
+          <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-4">Help</h4>
+          <button onclick="Account.showBugReportModal()"
+            class="w-full flex items-center justify-between p-3 bg-oura-subtle rounded-lg hover:bg-oura-border transition-colors">
+            <span class="text-sm font-medium">Report a Bug</span>
+            <svg class="w-5 h-5 text-oura-muted" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 12.75c1.148 0 2.278.08 3.383.237 1.037.146 1.866.966 1.866 2.013 0 3.728-2.35 6.75-5.25 6.75S6.75 18.728 6.75 15c0-1.046.83-1.867 1.866-2.013A24.204 24.204 0 0 1 12 12.75ZM12 12.75c2.883 0 5.647.508 8.207 1.44a23.91 23.91 0 0 1-1.152-6.135c-.22-2.057-1.907-3.555-3.966-3.555h-6.178c-2.06 0-3.746 1.498-3.966 3.555a23.91 23.91 0 0 1-1.152 6.135A24.142 24.142 0 0 1 12 12.75ZM9.75 8.625a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+            </svg>
+          </button>
+        </div>
+
         <!-- Sign Out -->
         <button onclick="Account.signOut()"
           class="w-full py-3 min-h-[44px] bg-red-500/10 text-red-400 rounded-xl text-sm font-medium hover:bg-red-500/20 transition-colors">
@@ -280,6 +292,120 @@ const Account = {
   // Close Oura token modal
   closeOuraTokenModal() {
     const modal = document.getElementById('oura-token-modal');
+    if (modal) modal.remove();
+  },
+
+  // Show bug report modal
+  async showBugReportModal() {
+    // Capture current screen before opening modal
+    const currentScreen = document.querySelector('.page:not([style*="display: none"])')?.id?.replace('page-', '') || 'unknown';
+
+    const modal = document.createElement('div');
+    modal.id = 'bug-report-modal';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-oura-card rounded-2xl p-6 w-full max-w-md mx-4">
+        <h3 class="text-xl font-bold mb-2">Report a Bug</h3>
+        <p class="text-sm text-oura-muted mb-4">Describe what happened and we'll look into it.</p>
+        <form id="bug-report-form" class="space-y-4">
+          <div>
+            <textarea id="bug-description" rows="4" required
+              placeholder="What went wrong? What did you expect to happen?"
+              class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white placeholder-neutral-600 focus:outline-none focus:border-oura-teal resize-none"></textarea>
+          </div>
+          <p id="bug-status" class="text-xs hidden"></p>
+          <div class="flex gap-3">
+            <button type="button" onclick="Account.closeBugReportModal()"
+              class="flex-1 py-3 min-h-[44px] bg-oura-border rounded-lg hover:bg-oura-subtle">
+              Cancel
+            </button>
+            <button type="submit" id="bug-submit-btn"
+              class="flex-1 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+              Submit
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('bug-report-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await this.submitBugReport(currentScreen);
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) this.closeBugReportModal();
+    });
+  },
+
+  async submitBugReport(screen) {
+    const description = document.getElementById('bug-description').value.trim();
+    const statusEl = document.getElementById('bug-status');
+    const submitBtn = document.getElementById('bug-submit-btn');
+
+    if (!description) {
+      statusEl.className = 'text-xs text-red-400';
+      statusEl.textContent = 'Please describe the issue';
+      statusEl.classList.remove('hidden');
+      return;
+    }
+
+    try {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+      statusEl.className = 'text-xs text-oura-muted';
+      statusEl.textContent = 'Submitting...';
+      statusEl.classList.remove('hidden');
+
+      const currentUser = await SupabaseClient.getCurrentUser();
+      const client = SupabaseClient.client;
+
+      const deviceInfo = {
+        browser: navigator.userAgent,
+        screenSize: `${window.innerWidth}x${window.innerHeight}`,
+        platform: navigator.platform,
+        language: navigator.language
+      };
+
+      // Save to Supabase
+      if (client && currentUser) {
+        await client.from('feedback').insert({
+          user_id: currentUser.id,
+          message: description,
+          screen: screen,
+          device_info: deviceInfo
+        });
+      }
+
+      // Also send to Telegram via server
+      await fetch('/api/bug-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: description,
+          screen: screen,
+          deviceInfo: deviceInfo,
+          userEmail: currentUser?.email
+        })
+      });
+
+      statusEl.className = 'text-xs text-green-400';
+      statusEl.textContent = 'Thanks! Bug report submitted.';
+
+      setTimeout(() => this.closeBugReportModal(), 1500);
+    } catch (error) {
+      console.error('Error submitting bug report:', error);
+      statusEl.className = 'text-xs text-red-400';
+      statusEl.textContent = 'Failed to submit. Try again.';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit';
+    }
+  },
+
+  closeBugReportModal() {
+    const modal = document.getElementById('bug-report-modal');
     if (modal) modal.remove();
   },
 
