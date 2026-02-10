@@ -26,15 +26,18 @@ const Onboarding = {
 
     switch (step) {
       case 0:
-        this.renderTokenStep(container);
+        this.renderNameStep(container);
         break;
       case 1:
-        this.renderChallengeStep(container);
+        this.renderTokenStep(container);
         break;
       case 2:
-        this.renderFriendStep(container);
+        this.renderChallengeStep(container);
         break;
       case 3:
+        this.renderFriendStep(container);
+        break;
+      case 4:
         this.renderCompleteStep(container);
         break;
       default:
@@ -54,7 +57,7 @@ const Onboarding = {
 
   // 4-dot horizontal progress indicator
   renderProgressBar(currentStep) {
-    const steps = ['Token', 'Challenge', 'Friend', 'Done'];
+    const steps = ['Name', 'Token', 'Challenge', 'Friend', 'Done'];
     return `
       <div class="flex items-center justify-center gap-3 mb-10">
         ${steps.map((label, i) => {
@@ -74,7 +77,50 @@ const Onboarding = {
     `;
   },
 
-  // Step 0 — Connect Oura Ring
+  // Step 0 — Set Display Name
+  renderNameStep(container) {
+    container.innerHTML += `
+      <div class="text-center mb-8">
+        <div class="text-5xl mb-4">&#x1F44B;</div>
+        <h2 class="text-2xl font-bold mb-2">What's Your Name?</h2>
+        <p class="text-oura-muted text-sm">This is how you'll appear to friends on the leaderboard.</p>
+      </div>
+      <div class="bg-oura-card rounded-2xl p-6 mb-4">
+        <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-2">Display Name</label>
+        <input type="text" id="onboarding-name" placeholder="e.g. Alex"
+          maxlength="30"
+          class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
+      </div>
+      <button onclick="Onboarding.handleNameSave()"
+        class="w-full py-3.5 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all mb-3">
+        Continue
+      </button>
+      <button onclick="Onboarding.advanceStep(1)"
+        class="w-full py-3 text-oura-muted text-sm hover:text-white transition-colors">
+        Skip for now
+      </button>
+    `;
+    // Auto-focus the input
+    setTimeout(() => document.getElementById('onboarding-name')?.focus(), 100);
+  },
+
+  async handleNameSave() {
+    const input = document.getElementById('onboarding-name');
+    const name = input?.value.trim();
+    if (!name) {
+      this.advanceStep(1);
+      return;
+    }
+    try {
+      await Auth.updateProfile({ display_name: name });
+      await this.advanceStep(1);
+    } catch (error) {
+      console.error('Error saving name:', error);
+      await this.advanceStep(1);
+    }
+  },
+
+  // Step 1 — Connect Oura Ring
   renderTokenStep(container) {
     container.innerHTML += `
       <div class="text-center mb-8">
@@ -106,14 +152,14 @@ const Onboarding = {
         class="w-full py-3.5 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all mb-3">
         Continue
       </button>
-      <button onclick="Onboarding.advanceStep(1)"
+      <button onclick="Onboarding.advanceStep(2)"
         class="w-full py-3 text-oura-muted text-sm hover:text-white transition-colors">
         Skip for now
       </button>
     `;
   },
 
-  // Step 1 — Pick a Challenge (protocol → mode → name)
+  // Step 2 — Pick a Challenge (protocol → mode → name)
   async renderChallengeStep(container) {
     container.innerHTML += `
       <div class="text-center mb-8">
@@ -134,7 +180,7 @@ const Onboarding = {
           Start Challenge
         </button>
       </div>
-      <button onclick="Onboarding.advanceStep(2)"
+      <button onclick="Onboarding.advanceStep(3)"
         class="w-full py-3 text-oura-muted text-sm hover:text-white transition-colors">
         Skip for now
       </button>
@@ -173,7 +219,7 @@ const Onboarding = {
   selectedProtocolId: null,
   selectedProtocolName: null,
 
-  selectProtocol(protocolId, el) {
+  async selectProtocol(protocolId, el) {
     this.selectedProtocolId = protocolId;
     // Get protocol name from the clicked element
     this.selectedProtocolName = el.querySelector('h3')?.textContent || 'Sleep';
@@ -192,7 +238,9 @@ const Onboarding = {
     const modeSection = document.getElementById('onboarding-mode-selector');
     const modeCards = document.getElementById('onboarding-mode-cards');
     if (modeSection && modeCards) {
-      modeCards.innerHTML = Protocols.renderModeSelector(protocolId, Protocols._selectedMode);
+      const protocol = (await Protocols.getAll()).find(p => p.id === protocolId);
+      const totalHabits = protocol?.habits?.length;
+      modeCards.innerHTML = Protocols.renderModeSelector(protocolId, Protocols._selectedMode, totalHabits);
       modeSection.classList.remove('hidden');
     }
 
@@ -220,7 +268,7 @@ const Onboarding = {
         mode
       });
 
-      await this.advanceStep(2);
+      await this.advanceStep(3);
     } catch (error) {
       console.error('Error creating challenge:', error);
       if (btn) {
@@ -249,7 +297,7 @@ const Onboarding = {
         class="w-full py-3.5 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all mb-3">
         Send Invite
       </button>
-      <button onclick="Onboarding.advanceStep(3)" id="onboarding-friend-continue"
+      <button onclick="Onboarding.advanceStep(4)" id="onboarding-friend-continue"
         class="w-full py-3 text-oura-muted text-sm hover:text-white transition-colors">
         Skip for now
       </button>
@@ -316,7 +364,7 @@ const Onboarding = {
       }
 
       // Advance after a brief delay so user sees success message
-      setTimeout(() => this.advanceStep(3), 1000);
+      setTimeout(() => this.advanceStep(4), 1000);
     } catch (error) {
       console.error('Error sending invite:', error);
       if (statusEl) {
@@ -393,7 +441,7 @@ const Onboarding = {
       });
 
       // Advance to next step
-      await this.advanceStep(1);
+      await this.advanceStep(2);
     } catch (error) {
       console.error('Error saving token:', error);
       if (statusEl) {
@@ -410,7 +458,7 @@ const Onboarding = {
   // Complete onboarding — show main app
   async handleComplete() {
     try {
-      await Auth.updateProfile({ onboarding_step: 4 });
+      await Auth.updateProfile({ onboarding_step: 5 });
     } catch (error) {
       console.error('Error completing onboarding:', error);
     }

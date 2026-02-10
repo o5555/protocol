@@ -208,7 +208,7 @@ const Auth = {
   async checkOnboarding(user) {
     try {
       const profile = await this.getProfile();
-      if (!profile || profile.onboarding_step < 4) {
+      if (!profile || profile.onboarding_step < 5) {
         // No profile yet or onboarding incomplete — show onboarding flow
         Onboarding.start(profile || { onboarding_step: 0 });
       } else {
