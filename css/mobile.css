@@ -22,10 +22,10 @@ button, a, input, select, textarea, label {
   padding-bottom: var(--sab);
 }
 
-/* Main content: clear notch/Dynamic Island at top, floating pill nav at bottom */
+/* Main content: clear notch/Dynamic Island at top, tab bar at bottom */
 .app-main {
   padding-top: calc(16px + var(--sat));
-  padding-bottom: calc(76px + var(--sab));
+  padding-bottom: calc(64px + var(--sab));
 }
 
 /* Header: pad for standalone mode status bar */

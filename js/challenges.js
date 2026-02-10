@@ -110,6 +110,60 @@ const Challenges = {
     return challenges.filter(c => c.status === 'accepted' && c.isActive);
   },
 
+  // Get completed challenges (ended, not dismissed)
+  async getCompletedChallenges() {
+    const challenges = await this.getMyChallenges();
+    const dismissed = this._getDismissedSummaries();
+    return challenges.filter(c => c.status === 'accepted' && !c.isActive && c.daysRemaining === 0 && !dismissed.includes(c.id));
+  },
+
+  // Dismissed summary helpers (localStorage)
+  _getDismissedSummaries() {
+    try {
+      return JSON.parse(localStorage.getItem('dismissed_summaries') || '[]');
+    } catch { return []; }
+  },
+
+  dismissSummary(challengeId) {
+    const dismissed = this._getDismissedSummaries();
+    if (!dismissed.includes(challengeId)) {
+      dismissed.push(challengeId);
+      localStorage.setItem('dismissed_summaries', JSON.stringify(dismissed));
+    }
+    // Re-render the current view
+    this.renderSmartView();
+  },
+
+  // Render a summary card for a completed challenge
+  _renderSummaryCard(challenge) {
+    return `
+      <div class="rounded-2xl overflow-hidden" style="background: linear-gradient(135deg, #0f1a2e 0%, #1a1035 100%); border: 1px solid rgba(168, 85, 247, 0.2);">
+        <div onclick="App.navigateTo('challenge-detail', '${challenge.id}')" class="p-5 cursor-pointer">
+          <div class="flex items-center justify-between mb-3">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Challenge Complete
+            </div>
+            <svg class="w-4 h-4 text-oura-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+          <h3 class="font-semibold text-lg mb-0.5">${escapeHtml(challenge.name)}</h3>
+          <p class="text-sm text-oura-muted mb-4">${escapeHtml(challenge.protocol.name)} · 30 days</p>
+          <div class="text-xs text-oura-muted">Tap to view your final results</div>
+        </div>
+        <div class="px-5 pb-4">
+          <button onclick="event.stopPropagation(); Challenges.dismissSummary('${challenge.id}')"
+            class="w-full py-2.5 min-h-[44px] rounded-xl text-sm font-medium text-oura-muted hover:text-white transition-colors" style="background: rgba(255,255,255,0.05);">
+            Dismiss
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
   // Get challenge by ID with full details
   async getChallenge(challengeId) {
     const client = SupabaseClient.client;
@@ -431,24 +485,31 @@ const Challenges = {
     container.innerHTML = '<div class="text-center py-10 text-oura-muted text-sm">Loading...</div>';
 
     try {
-      const [invitations, activeChallenges] = await Promise.all([
+      const [invitations, activeChallenges, completedChallenges] = await Promise.all([
         this.getInvitations(),
-        this.getActiveChallenges()
+        this.getActiveChallenges(),
+        this.getCompletedChallenges()
       ]);
 
-      // Single active challenge, no invitations → go straight to detail
-      if (activeChallenges.length === 1 && invitations.length === 0) {
+      // Single active challenge, no invitations, no completed → go straight to detail
+      if (activeChallenges.length === 1 && invitations.length === 0 && completedChallenges.length === 0) {
         App.navigateTo('challenge-detail', activeChallenges[0].id);
         return;
       }
 
-      // Has active challenges → show full list
+      // Has active challenges → show full list (includes completed summaries)
       if (activeChallenges.length > 0) {
         this.renderList();
         return;
       }
 
-      // No active challenges → show protocol browser (with invitations if any)
+      // Completed challenges exist but no active → show summaries + protocol browser
+      if (completedChallenges.length > 0) {
+        this._renderProtocolBrowser(container, invitations, completedChallenges);
+        return;
+      }
+
+      // No active, no completed → show protocol browser (with invitations if any)
       this._renderProtocolBrowser(container, invitations);
     } catch (error) {
       console.error('Error in smart view:', error);
@@ -461,7 +522,7 @@ const Challenges = {
   },
 
   // Protocol browser: shown when no active challenges
-  async _renderProtocolBrowser(container, invitations = []) {
+  async _renderProtocolBrowser(container, invitations = [], completedChallenges = []) {
     try {
       const protocols = await Protocols.getAll();
 
@@ -471,6 +532,12 @@ const Challenges = {
           <h2 class="text-2xl font-semibold mb-1">Challenge</h2>
           <p class="text-oura-muted text-sm">Pick a protocol and challenge yourself for 30 days</p>
         </div>
+
+        ${completedChallenges.length > 0 ? `
+          <div class="space-y-3 mb-6" id="completed-summaries-browser">
+            ${completedChallenges.map(c => this._renderSummaryCard(c)).join('')}
+          </div>
+        ` : ''}
 
         ${invitations.length > 0 ? `
           <div class="bg-yellow-900/20 border border-yellow-600 rounded-lg p-6 mb-6">
@@ -546,9 +613,10 @@ const Challenges = {
     if (!container) return;
 
     try {
-      const [invitations, activeChallenges, protocols] = await Promise.all([
+      const [invitations, activeChallenges, completedChallenges, protocols] = await Promise.all([
         this.getInvitations(),
         this.getActiveChallenges(),
+        this.getCompletedChallenges(),
         Protocols.getAll()
       ]);
 
@@ -589,35 +657,50 @@ const Challenges = {
           </div>
         ` : ''}
 
+        <!-- Completed Challenge Summaries -->
+        ${completedChallenges.length > 0 ? `
+          <div class="space-y-3 mb-6" id="completed-summaries-list">
+            ${completedChallenges.map(c => this._renderSummaryCard(c)).join('')}
+          </div>
+        ` : ''}
+
         <!-- Active Challenges -->
         ${activeChallenges.length > 0 ? `
-          <div class="bg-oura-card rounded-2xl p-6 mb-6">
-            <h3 class="text-lg font-semibold mb-4">Active Challenges (${activeChallenges.length})</h3>
-            <div class="space-y-3">
-              ${activeChallenges.map(challenge => `
-                <div onclick="App.navigateTo('challenge-detail', '${challenge.id}')"
-                  class="bg-oura-subtle rounded-lg p-4 cursor-pointer hover:bg-oura-border transition-colors">
-                  <div class="flex items-start justify-between">
-                    <div>
-                      <p class="font-semibold">${escapeHtml(challenge.name)} ${Protocols.renderModeBadge(challenge.mode || 'pro')}</p>
-                      <p class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.name)}</p>
-                    </div>
-                    <div class="text-right">
-                      <p class="text-oura-teal font-semibold">${challenge.daysRemaining} days left</p>
-                      <p class="text-sm text-oura-muted">Day ${this.getDayNumber(challenge.start_date)} of 30</p>
-                    </div>
+          <div class="space-y-3 mb-6">
+            ${activeChallenges.map(challenge => {
+              const initials = Protocols.getInitials(challenge.protocol.name);
+              return `
+              <div onclick="App.navigateTo('challenge-detail', '${challenge.id}')"
+                class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors">
+                <div class="flex items-center gap-4">
+                  <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-lg font-semibold text-white flex-shrink-0">
+                    ${initials}
                   </div>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold">${escapeHtml(challenge.name)} ${Protocols.renderModeBadge(challenge.mode || 'pro')}</h3>
+                    <p class="text-oura-muted text-sm mt-1">${escapeHtml(challenge.protocol.name)}</p>
+                  </div>
+                  <div class="text-right flex-shrink-0">
+                    <p class="text-oura-teal font-semibold text-sm">${challenge.daysRemaining}d left</p>
+                    <p class="text-xs text-oura-muted mt-0.5">Day ${this.getDayNumber(challenge.start_date)}/30</p>
+                  </div>
+                  <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
                 </div>
-              `).join('')}
-            </div>
+              </div>
+            `}).join('')}
           </div>
         ` : ''}
 
         <!-- Browse Protocols -->
         <div>
-          <div class="text-xs text-oura-muted uppercase tracking-wider mb-3">BROWSE PROTOCOLS</div>
+          <div class="mb-6">
+            <h2 class="text-2xl font-semibold mb-1">Browse Protocols</h2>
+            <p class="text-oura-muted text-sm">Science-backed routines for better sleep</p>
+          </div>
           <button onclick="Protocols.showCreateModal()"
-            class="w-full mb-3 py-3 min-h-[44px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2 text-sm">
+            class="w-full mb-4 py-4 min-h-[48px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2">
             + Create Your Own Protocol
           </button>
           <div class="space-y-3">
@@ -625,14 +708,14 @@ const Challenges = {
               const initials = Protocols.getInitials(protocol.name);
               return `
               <div onclick="App.navigateTo('protocol-detail', '${protocol.id}')"
-                class="bg-oura-card rounded-2xl p-4 cursor-pointer hover:bg-oura-subtle transition-colors">
+                class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors">
                 <div class="flex items-center gap-4">
-                  <div class="protocol-icon w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">
+                  <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-lg font-semibold text-white flex-shrink-0">
                     ${initials}
                   </div>
                   <div class="flex-1 min-w-0">
-                    <h3 class="font-semibold">${escapeHtml(protocol.name)}</h3>
-                    <p class="text-oura-muted text-xs mt-0.5 line-clamp-2">${escapeHtml(protocol.description || '')}</p>
+                    <h3 class="text-lg font-semibold">${escapeHtml(protocol.name)}</h3>
+                    <p class="text-oura-muted text-sm mt-1 line-clamp-3">${escapeHtml(protocol.description || '')}</p>
                   </div>
                   <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -759,6 +842,7 @@ const Challenges = {
       // Check if we have no challenge data yet (just started, only baseline)
       const hasNoChallengeData = myData.challengeData.length === 0;
       const participantCount = challenge.participants.filter(p => p.status === 'accepted').length;
+      const isCompleted = !challenge.isActive && challenge.daysRemaining === 0;
 
       if (hasNoChallengeData) {
         // Celebration hero view - "You're In!"
@@ -772,26 +856,34 @@ const Challenges = {
             <span style="width: 50px;"></span>
           </div>
 
-          <!-- Challenge Active badge -->
+          <!-- Challenge status badge -->
           <div class="flex justify-center mb-5">
+            ${isCompleted ? `
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium" style="border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc;">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Challenge Complete
+            </div>
+            ` : `
             <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium" style="border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80;">
               <span class="w-2 h-2 rounded-full inline-block" style="background: #4ade80;"></span>
               Challenge Active
             </div>
+            `}
           </div>
 
           <!-- Celebration Hero Card -->
-          <div class="rounded-2xl p-6 text-center mb-6" style="background: linear-gradient(135deg, #0f1a2e 0%, #1a1035 100%); border: 1px solid rgba(74, 222, 128, 0.15);">
-            <div class="text-5xl mb-4">🚀</div>
-            <div class="text-2xl font-bold mb-3">You're In!</div>
+          <div class="rounded-2xl p-6 text-center mb-6" style="background: linear-gradient(135deg, #0f1a2e 0%, #1a1035 100%); border: 1px solid ${isCompleted ? 'rgba(168, 85, 247, 0.15)' : 'rgba(74, 222, 128, 0.15)'};">
+            <div class="text-5xl mb-4">${isCompleted ? '🏁' : '🚀'}</div>
+            <div class="text-2xl font-bold mb-3">${isCompleted ? 'Challenge Complete!' : "You're In!"}</div>
             <p class="text-sm leading-relaxed mb-6" style="color: #6b7280;">
-              Your 30-day challenge has begun.<br>
-              First results arrive tomorrow morning.
+              ${isCompleted ? 'Your 30-day challenge has ended.<br>No sleep data was recorded during this challenge.' : 'Your 30-day challenge has begun.<br>First results arrive tomorrow morning.'}
             </p>
             <div class="flex justify-center gap-10">
               <div class="text-center">
-                <div class="text-3xl font-bold" style="color: #4ade80;">${challenge.daysRemaining}</div>
-                <div class="text-xs uppercase tracking-wider mt-1" style="color: #6b7280;">Days Left</div>
+                <div class="text-3xl font-bold" style="color: ${isCompleted ? '#c084fc' : '#4ade80'};">${isCompleted ? 'Done' : challenge.daysRemaining}</div>
+                <div class="text-xs uppercase tracking-wider mt-1" style="color: #6b7280;">${isCompleted ? 'Completed' : 'Days Left'}</div>
               </div>
               <div class="text-center">
                 <div class="text-3xl font-bold" style="color: #4ade80;">${participantCount}</div>
@@ -809,15 +901,17 @@ const Challenges = {
             </div>
           ` : ''}
 
+          ${!isCompleted ? `
           <!-- Invite Friends -->
           <button onclick="Challenges.showInviteFriendsModal('${challengeId}')"
             class="w-full py-3 min-h-[44px] bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
             + Invite Friends
           </button>
+          ` : ''}
 
           <!-- Browse Protocols -->
           <button onclick="App.navigateTo('challenges', null, {showList:true})"
-            class="w-full py-3 min-h-[44px] mt-3 bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
+            class="w-full py-3 min-h-[44px] ${!isCompleted ? 'mt-3 ' : ''}bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
             Browse Protocols
           </button>
 
@@ -840,6 +934,18 @@ const Challenges = {
             &larr; Back
           </button>
         </div>
+
+        ${isCompleted ? `
+        <!-- Challenge Complete banner -->
+        <div class="flex justify-center mb-5">
+          <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium" style="border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc;">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Challenge Complete
+          </div>
+        </div>
+        ` : ''}
 
         <!-- Hero Stat -->
         <div id="hero-stat-container" class="text-center py-6 mb-4">
@@ -889,7 +995,7 @@ const Challenges = {
 
         <!-- Leaderboard -->
         <div class="mb-6">
-          <div class="text-xs text-oura-muted uppercase tracking-wider mb-3">CHALLENGE STANDINGS</div>
+          <div class="text-xs text-oura-muted uppercase tracking-wider mb-3">${isCompleted ? 'FINAL STANDINGS' : 'CHALLENGE STANDINGS'}</div>
           <div class="space-y-2">
             ${leaderboard.length > 0 ? leaderboard.map(p => {
               const name = p.user.display_name || p.user.email.split('@')[0];
@@ -917,7 +1023,10 @@ const Challenges = {
 
         <!-- Day Badge - Protocol info -->
         <div class="text-center py-3 px-4 bg-oura-card rounded-lg mb-4">
-          <span class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.name)} · Day <strong class="text-white">${challenge.dayNumber}</strong> of 30</span>
+          ${isCompleted
+            ? `<span class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.name)} · <strong class="text-white">Completed</strong></span>`
+            : `<span class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.name)} · Day <strong class="text-white">${challenge.dayNumber}</strong> of 30</span>`
+          }
         </div>
 
         <!-- Details Link -->
@@ -926,15 +1035,17 @@ const Challenges = {
           View detailed metrics & habits →
         </button>
 
+        ${!isCompleted ? `
         <!-- Invite Friends -->
         <button onclick="Challenges.showInviteFriendsModal('${challengeId}')"
           class="w-full py-3 min-h-[44px] bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
           + Invite Friends
         </button>
+        ` : ''}
 
         <!-- Browse Protocols -->
         <button onclick="App.navigateTo('challenges', null, {showList:true})"
-          class="w-full py-3 min-h-[44px] mt-3 bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
+          class="w-full py-3 min-h-[44px] ${!isCompleted ? 'mt-3 ' : ''}bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
           Browse Protocols
         </button>
 
