@@ -1854,7 +1854,7 @@ const Challenges = {
   },
 
   // Show create challenge modal
-  async showCreateModal() {
+  async showCreateModal(preselectedProtocolId = null) {
     const protocols = await Protocols.getAll();
     const friends = await Friends.getFriends();
 
@@ -1872,13 +1872,13 @@ const Challenges = {
             <label class="block text-sm font-medium mb-1">Protocol</label>
             <select id="challenge-protocol" required
               class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white">
-              ${protocols.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+              ${protocols.map(p => `<option value="${p.id}" ${p.id === preselectedProtocolId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
             </select>
           </div>
 
           <div>
             <label class="block text-sm font-medium mb-2">Mode</label>
-            ${Protocols.renderModeSelector(protocols[0]?.id, 'pro')}
+            ${Protocols.renderModeSelector(preselectedProtocolId || protocols[0]?.id, 'pro')}
           </div>
 
           <div>

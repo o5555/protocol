@@ -309,7 +309,7 @@ const Protocols = {
         <div class="bg-oura-card rounded-2xl p-6 ${isCustom ? 'mb-6' : ''}">
           <h3 class="text-lg font-semibold mb-4">Start a Challenge</h3>
           <p class="text-oura-muted mb-4">Ready to commit to this protocol? Create a 30-day challenge and invite friends to join you.</p>
-          <button onclick="Challenges.showCreateModal()"
+          <button onclick="Challenges.showCreateModal('${protocol.id}')"
             class="w-full py-3 min-h-[48px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
             Create Challenge with This Protocol
           </button>
