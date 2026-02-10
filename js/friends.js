@@ -476,14 +476,24 @@ const Friends = {
       const result = await this.sendInviteLink(email);
 
       const inviteUrl = window.location.origin;
-      await navigator.clipboard.writeText(inviteUrl);
+      let clipboardOk = false;
+      try {
+        await navigator.clipboard.writeText(inviteUrl);
+        clipboardOk = true;
+      } catch (clipErr) {
+        console.warn('Clipboard write failed:', clipErr);
+      }
 
       if (result.emailSent) {
         messageEl.className = 'text-sm mt-2 text-green-400';
-        messageEl.textContent = `Invite email sent to ${email}! Link also copied to clipboard.`;
+        messageEl.textContent = clipboardOk
+          ? `Invite email sent to ${email}! Link also copied to clipboard.`
+          : `Invite email sent to ${email}! Share this link: ${inviteUrl}`;
       } else {
         messageEl.className = 'text-sm mt-2 text-yellow-400';
-        messageEl.textContent = `Invite saved but email could not be sent (${result.emailError}). Link copied to clipboard — share it manually.`;
+        messageEl.textContent = clipboardOk
+          ? `Invite saved but email could not be sent (${result.emailError}). Link copied to clipboard — share it manually.`
+          : `Invite saved but email could not be sent (${result.emailError}). Share this link: ${inviteUrl}`;
       }
       emailInput.value = '';
 

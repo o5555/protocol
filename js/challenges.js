@@ -1174,7 +1174,13 @@ const Challenges = {
       const chartData = allData.filter(d => d[config.field] != null);
       const challengeStartIndex = chartData.findIndex(d => d.period === 'challenge');
 
-      new Chart(canvas, {
+      // Destroy previous modal chart if it exists
+      if (this._metricDetailChartInstance) {
+        this._metricDetailChartInstance.destroy();
+        this._metricDetailChartInstance = null;
+      }
+
+      this._metricDetailChartInstance = new Chart(canvas, {
         type: 'line',
         data: {
           labels: chartData.map(d => {
@@ -1243,6 +1249,11 @@ const Challenges = {
 
   // Close metric detail modal
   closeMetricDetailModal() {
+    // Destroy chart before removing modal
+    if (this._metricDetailChartInstance) {
+      this._metricDetailChartInstance.destroy();
+      this._metricDetailChartInstance = null;
+    }
     document.getElementById('metric-detail-modal')?.remove();
   },
 
@@ -1602,6 +1613,7 @@ const Challenges = {
 
           // Refresh challenge detail after short delay
           setTimeout(async () => {
+            this.closeInviteFriendsModal();
             await this.renderDetail(challengeId);
           }, 1500);
         } catch (error) {

@@ -1,10 +1,18 @@
 // Performance Dashboard Module
 
 const Dashboard = {
+  // Chart instances for cleanup (prevent memory leaks)
+  charts: {},
+
+  // Render generation counter to prevent stale async callbacks from overwriting fresher renders
+  _renderGeneration: 0,
+
   // Main render entry point
   async render() {
     const container = document.getElementById('dashboard-container');
     if (!container) return;
+
+    const generation = ++this._renderGeneration;
 
     // Try to render instantly from cache (but always refresh in background)
     const cachedData = Cache.get('dashboard');
@@ -24,6 +32,9 @@ const Dashboard = {
         this.getRecentSleepData().catch(() => [])
       ]);
 
+      // Only update DOM if this is still the most recent render call
+      if (generation !== this._renderGeneration) return;
+
       // Cache the data
       Cache.set('dashboard', { profile, activeChallenges, recentSleep });
 
@@ -31,6 +42,7 @@ const Dashboard = {
       this._renderContent(container, { profile, activeChallenges, recentSleep });
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      if (generation !== this._renderGeneration) return;
       if (!cachedData) {
         container.innerHTML = `
           <div class="bg-red-900/20 border border-red-500 rounded-2xl p-4">
@@ -239,7 +251,13 @@ const Dashboard = {
     const values = data.filter(v => v != null);
     if (values.length < 2) return;
 
-    new Chart(canvas, {
+    // Destroy old chart instance if it exists
+    if (this.charts[canvasId]) {
+      this.charts[canvasId].destroy();
+      delete this.charts[canvasId];
+    }
+
+    this.charts[canvasId] = new Chart(canvas, {
       type: 'line',
       data: {
         labels: values.map((_, i) => i),
@@ -434,7 +452,13 @@ const Dashboard = {
     // Render 30-day chart
     const canvas = document.getElementById('detail-chart-30d');
     if (canvas) {
-      new Chart(canvas, {
+      // Destroy old chart instance if it exists
+      if (this.charts['detail-chart-30d']) {
+        this.charts['detail-chart-30d'].destroy();
+        delete this.charts['detail-chart-30d'];
+      }
+
+      this.charts['detail-chart-30d'] = new Chart(canvas, {
         type: 'line',
         data: {
           labels: values.map(d => {
@@ -482,6 +506,11 @@ const Dashboard = {
   },
 
   closeMetricDetail() {
+    // Destroy chart before removing modal
+    if (this.charts['detail-chart-30d']) {
+      this.charts['detail-chart-30d'].destroy();
+      delete this.charts['detail-chart-30d'];
+    }
     document.getElementById('metric-detail-modal')?.remove();
   },
 

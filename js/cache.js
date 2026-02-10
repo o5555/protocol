@@ -3,13 +3,15 @@ const Cache = {
   PREFIX: 'protocol_cache_',
   TTL: 5 * 60 * 1000, // 5 minutes cache validity
 
-  // Get cached data
+  // Get cached data (returns null if expired)
   get(key) {
     try {
       const item = localStorage.getItem(this.PREFIX + key);
       if (!item) return null;
 
       const { data, timestamp } = JSON.parse(item);
+      // Return null if cache has expired
+      if (Date.now() - timestamp >= this.TTL) return null;
       return data;
     } catch (e) {
       return null;

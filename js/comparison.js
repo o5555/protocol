@@ -539,10 +539,27 @@ const SleepSync = {
     }
 
     try {
-      // Fetch last 30 days of sleep data
+      // Determine earliest needed date: default 30 days, but extend
+      // if any active challenge needs baseline data from further back
+      // (challenge start_date minus 30 days for baseline comparison)
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 30);
+
+      try {
+        const activeChallenges = await Challenges.getActiveChallenges();
+        for (const ch of activeChallenges) {
+          const challengeStart = Challenges.parseLocalDate(ch.start_date);
+          const baselineNeeded = new Date(challengeStart);
+          baselineNeeded.setDate(baselineNeeded.getDate() - 30);
+          if (baselineNeeded < startDate) {
+            startDate.setTime(baselineNeeded.getTime());
+          }
+        }
+      } catch (e) {
+        // If we can't fetch challenges, fall back to default 30 days
+        console.warn('[SleepSync] Could not check active challenges for baseline range:', e);
+      }
 
       const startStr = startDate.toISOString().split('T')[0];
       const endStr = endDate.toISOString().split('T')[0];

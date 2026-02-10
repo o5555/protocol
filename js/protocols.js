@@ -56,11 +56,11 @@ const Protocols = {
     if (!user) throw new Error('Must be logged in to create protocols');
 
     // Create the protocol with user_id for RLS policy
-    // Icon will be auto-generated from initials, description is optional
+    // Use a default icon emoji for custom protocols so challenge views show an icon
     const insertData = {
       name,
       description: '',
-      icon: '',
+      icon: '\u{1F3AF}',
       user_id: user.id
     };
 
