@@ -88,7 +88,7 @@ const Challenges = {
 
     if (error) throw error;
 
-    return data.filter(p => p.challenge).map(p => ({
+    return data.filter(p => p.challenge && p.challenge.protocol && p.challenge.creator).map(p => ({
       participantId: p.id,
       status: p.status,
       joinedAt: p.joined_at,
