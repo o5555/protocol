@@ -115,7 +115,7 @@ const Friends = {
       .from('friendships')
       .select('id, status')
       .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${currentUser.id})`)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       if (existing.status === 'accepted') {
@@ -315,8 +315,8 @@ const Friends = {
               ${pendingRequests.map(req => `
                 <div class="flex items-center justify-between p-3 bg-oura-subtle rounded-lg">
                   <div>
-                    <p class="font-medium">${req.displayName || req.email}</p>
-                    <p class="text-sm text-oura-muted">${req.email}</p>
+                    <p class="font-medium">${escapeHtml(req.displayName || req.email)}</p>
+                    <p class="text-sm text-oura-muted">${escapeHtml(req.email)}</p>
                   </div>
                   <div class="flex gap-2">
                     <button onclick="Friends.handleAccept('${req.friendshipId}')"
@@ -342,8 +342,8 @@ const Friends = {
               ${sentRequests.map(req => `
                 <div class="flex items-center justify-between p-3 bg-oura-subtle/50 rounded-lg">
                   <div>
-                    <p class="font-medium text-neutral-300">${req.displayName || req.email}</p>
-                    <p class="text-sm text-oura-muted">${req.email}</p>
+                    <p class="font-medium text-neutral-300">${escapeHtml(req.displayName || req.email)}</p>
+                    <p class="text-sm text-oura-muted">${escapeHtml(req.email)}</p>
                   </div>
                   <span class="text-sm text-oura-muted">Pending</span>
                 </div>
@@ -360,7 +360,7 @@ const Friends = {
               ${pendingInvites.map(inv => `
                 <div class="flex items-center justify-between p-3 bg-oura-subtle/50 rounded-lg">
                   <div>
-                    <p class="font-medium text-neutral-300">${inv.invited_email}</p>
+                    <p class="font-medium text-neutral-300">${escapeHtml(inv.invited_email)}</p>
                     <p class="text-xs text-oura-muted">Auto-connects when they sign up</p>
                   </div>
                   <button onclick="Friends.handleCancelInvite('${inv.id}')"
@@ -381,8 +381,8 @@ const Friends = {
               ${friends.map(friend => `
                 <div class="flex items-center justify-between p-3 bg-oura-subtle rounded-lg">
                   <div>
-                    <p class="font-medium">${friend.displayName || friend.email}</p>
-                    <p class="text-sm text-oura-muted">${friend.email}</p>
+                    <p class="font-medium">${escapeHtml(friend.displayName || friend.email)}</p>
+                    <p class="text-sm text-oura-muted">${escapeHtml(friend.email)}</p>
                   </div>
                   <button onclick="Friends.handleRemove('${friend.friendshipId}')"
                     class="text-sm text-oura-muted hover:text-red-400">

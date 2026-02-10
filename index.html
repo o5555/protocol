@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Protocol</title>
+    <title>Sleep Challenge</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
@@ -19,13 +19,13 @@
                     colors: {
                         'oura-teal': '#00c8a0',
                         oura: {
-                            bg: '#0d0d0d',
-                            card: '#1a1a1a',
-                            border: '#2a2a2a',
+                            bg: '#0a0a12',
+                            card: '#0f0f1a',
+                            border: '#2a2a4e',
                             accent: '#00c8a0',
                             'accent-dark': '#00a080',
-                            muted: '#6b6b6b',
-                            subtle: '#1f1f1f'
+                            muted: '#6b7280',
+                            subtle: '#1a1a2e'
                         },
                         gray: {
                             600: '#4b5563',
@@ -54,6 +54,23 @@
         }
         input[type="checkbox"] {
             accent-color: #00c8a0;
+        }
+        /* Protocol icon with gradient ring */
+        .protocol-icon {
+            position: relative;
+            background: #0f0f1a;
+            border-radius: 14px;
+        }
+        .protocol-icon::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 14px;
+            padding: 2px;
+            background: linear-gradient(135deg, #6c63ff, #4ade80);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
         }
     </style>
 </head>
@@ -127,23 +144,6 @@
 
     <!-- App Content (shown when logged in) -->
     <div id="app-content" class="hidden">
-        <!-- Slim top bar -->
-        <header class="app-header sticky top-0 z-40 bg-oura-bg/80 backdrop-blur-sm border-b border-oura-border">
-            <div class="px-4 py-3 sm:max-w-4xl sm:mx-auto sm:px-5 flex items-center justify-between">
-                <h1 class="text-lg font-semibold">Protocol</h1>
-                <div id="user-info" class="hidden flex items-center gap-3">
-                    <span id="user-email" class="text-sm text-oura-muted truncate max-w-[140px] sm:max-w-none"></span>
-                    <button onclick="App.showSettings()" class="text-oura-muted hover:text-white transition-colors p-1" aria-label="Settings">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                        </svg>
-                    </button>
-                    <button id="sign-out-btn" class="text-sm text-oura-muted hover:text-white whitespace-nowrap">Sign Out</button>
-                </div>
-            </div>
-        </header>
-
         <main class="app-main px-4 pt-4 sm:max-w-4xl sm:mx-auto sm:px-5">
             <!-- Dashboard Page -->
             <div id="page-dashboard" class="page">
@@ -177,7 +177,7 @@
             <!-- Challenges Page -->
             <div id="page-challenges" class="page hidden">
                 <div class="mb-6">
-                    <h2 class="text-2xl font-semibold mb-1">Challenges</h2>
+                    <h2 class="text-2xl font-semibold mb-1">Team Up</h2>
                     <p class="text-oura-muted text-sm">30-day challenges with friends</p>
                 </div>
                 <div id="challenges-container">
@@ -200,6 +200,17 @@
                 </div>
                 <div id="friends-container">
                     <div class="text-center py-10 text-oura-muted">Loading friends...</div>
+                </div>
+            </div>
+
+            <!-- Account Page -->
+            <div id="page-account" class="page hidden">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-semibold mb-1">Account</h2>
+                    <p class="text-oura-muted text-sm">Manage your profile and settings</p>
+                </div>
+                <div id="account-container">
+                    <div class="text-center py-10 text-oura-muted">Loading...</div>
                 </div>
             </div>
         </main>
@@ -226,11 +237,13 @@
                         class="nav-btn relative flex flex-col items-center justify-center min-h-[52px] min-w-[68px] py-2 rounded-full text-oura-muted transition-all">
                         <div class="relative">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .982-3.172M8.25 8.25a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0Z" />
+                                <circle cx="12" cy="12" r="9" stroke-linecap="round" stroke-linejoin="round" />
+                                <circle cx="12" cy="10" r="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 18.5a5 5 0 0 1 9 0" />
                             </svg>
                             <span id="challenges-badge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
                         </div>
-                        <span class="text-[10px] mt-0.5 font-medium">Challenges</span>
+                        <span class="text-[10px] mt-0.5 font-medium">Team Up</span>
                     </button>
                     <button onclick="App.navigateTo('friends')" data-page="friends"
                         class="nav-btn relative flex flex-col items-center justify-center min-h-[52px] min-w-[68px] py-2 rounded-full text-oura-muted transition-all">
@@ -242,12 +255,20 @@
                         </div>
                         <span class="text-[10px] mt-0.5 font-medium">Friends</span>
                     </button>
+                    <button onclick="App.navigateTo('account')" data-page="account"
+                        class="nav-btn flex flex-col items-center justify-center min-h-[52px] min-w-[68px] py-2 rounded-full text-oura-muted transition-all">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
+                        <span class="text-[10px] mt-0.5 font-medium">Account</span>
+                    </button>
                 </div>
             </div>
         </nav>
     </div>
 
     <!-- Load modules -->
+    <script src="js/cache.js"></script>
     <script src="js/supabase.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/friends.js"></script>
@@ -256,6 +277,7 @@
     <script src="js/comparison.js"></script>
     <script src="js/onboarding.js"></script>
     <script src="js/dashboard.js"></script>
+    <script src="js/account.js"></script>
 
     <!-- App Navigation -->
     <script>
@@ -324,6 +346,9 @@
                     case 'dashboard':
                         Dashboard.render();
                         break;
+                    case 'account':
+                        Account.render();
+                        break;
                 }
             },
 
@@ -369,129 +394,6 @@
                 }
             },
 
-            // Settings modal
-            showSettings() {
-                const modal = document.createElement('div');
-                modal.id = 'settings-modal';
-                modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
-                modal.innerHTML = `
-                    <div class="bg-oura-card rounded-2xl p-6 w-full max-w-md mx-4">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-xl font-bold">Settings</h3>
-                            <button onclick="App.hideSettings()" class="text-oura-muted hover:text-white p-1">
-                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-2">Oura Personal Access Token</label>
-                                <input type="password" id="settings-token" placeholder="Enter your token"
-                                    class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
-                                <p id="settings-token-status" class="text-xs text-oura-muted mt-2"></p>
-                            </div>
-                            <div class="flex gap-2.5">
-                                <button onclick="App.saveSettingsToken()"
-                                    class="flex-1 py-3 rounded-xl font-semibold text-sm bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black transition-all hover:shadow-lg hover:shadow-oura-accent/30">
-                                    Save Token
-                                </button>
-                                <button onclick="App.syncFromSettings()"
-                                    class="flex-1 py-3 rounded-xl font-semibold text-sm bg-oura-border text-neutral-300 transition-all hover:bg-neutral-700 hover:text-white">
-                                    Sync Data
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(modal);
-
-                // Close on backdrop click
-                modal.addEventListener('click', (e) => {
-                    if (e.target === modal) App.hideSettings();
-                });
-
-                // Load existing token
-                Auth.getOuraToken().then(token => {
-                    const input = document.getElementById('settings-token');
-                    const status = document.getElementById('settings-token-status');
-                    if (token && input) {
-                        input.value = token;
-                        if (status) {
-                            status.textContent = 'Token loaded from profile';
-                            status.classList.add('text-oura-accent');
-                        }
-                    }
-                });
-            },
-
-            hideSettings() {
-                const modal = document.getElementById('settings-modal');
-                if (modal) modal.remove();
-            },
-
-            async saveSettingsToken() {
-                const input = document.getElementById('settings-token');
-                const status = document.getElementById('settings-token-status');
-                const token = input?.value.trim();
-
-                if (!token) {
-                    if (status) {
-                        status.textContent = 'Please enter a token';
-                        status.className = 'text-xs mt-2 text-red-400';
-                    }
-                    return;
-                }
-
-                try {
-                    await Auth.saveOuraToken(token);
-                    if (status) {
-                        status.textContent = 'Token saved!';
-                        status.className = 'text-xs mt-2 text-oura-accent';
-                    }
-
-                    // Kick off background sync
-                    SleepSync.syncNow({ silent: true }).then(result => {
-                        if (result.success && status) {
-                            status.textContent = `Token saved! Synced ${result.count} nights.`;
-                        }
-                        // Refresh dashboard if visible
-                        if (App.currentPage === 'dashboard') {
-                            Dashboard.render();
-                        }
-                    });
-                } catch (error) {
-                    if (status) {
-                        status.textContent = 'Failed to save: ' + error.message;
-                        status.className = 'text-xs mt-2 text-red-400';
-                    }
-                }
-            },
-
-            async syncFromSettings() {
-                const status = document.getElementById('settings-token-status');
-                if (status) {
-                    status.textContent = 'Syncing...';
-                    status.className = 'text-xs mt-2 text-oura-muted';
-                }
-
-                const result = await SleepSync.syncNow({ silent: true });
-
-                if (status) {
-                    if (result.success) {
-                        status.textContent = `Synced ${result.count} nights of sleep data!`;
-                        status.className = 'text-xs mt-2 text-oura-accent';
-                    } else {
-                        status.textContent = 'Sync failed: ' + (result.error || 'Unknown error');
-                        status.className = 'text-xs mt-2 text-red-400';
-                    }
-                }
-
-                // Refresh dashboard if visible
-                if (App.currentPage === 'dashboard') {
-                    Dashboard.render();
-                }
-            }
         };
 
         // Initialize app when DOM is ready

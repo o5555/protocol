@@ -146,8 +146,8 @@ const Comparison = {
   },
 
   // Render comparison charts for a challenge
-  async renderForChallenge(challengeId) {
-    const container = document.getElementById('comparison-charts');
+  async renderForChallenge(challengeId, containerId = 'comparison-charts') {
+    const container = document.getElementById(containerId);
     if (!container) return;
 
     try {
@@ -328,7 +328,7 @@ const Comparison = {
     } catch (error) {
       console.error('Error rendering comparison charts:', error);
       container.innerHTML = `
-        <p class="text-red-400 text-sm">Failed to load comparison data: ${error.message}</p>
+        <p class="text-red-400 text-sm">Failed to load comparison data: ${escapeHtml(error.message)}</p>
       `;
     }
   },
@@ -518,7 +518,7 @@ const SleepSync = {
   // Sync sleep data from Oura to Supabase
   // options.silent: suppress alerts and return result object instead
   async syncNow(options = {}) {
-    const { silent = false } = options;
+    const { silent = false, skipRefresh = false } = options;
     const client = SupabaseClient.client;
     if (!client) {
       if (silent) return { success: false, count: 0, error: 'Supabase not initialized' };
@@ -580,6 +580,11 @@ const SleepSync = {
       }
       console.log('[SleepSync] scoresByDay:', scoresByDay);
 
+      // Guard: ensure Oura returned a valid data array
+      if (!Array.isArray(ouraData.data)) {
+        throw new Error('No sleep data returned from Oura');
+      }
+
       // Transform and upsert sleep data
       // Oura can return multiple sessions per day (naps + main sleep),
       // so deduplicate by date, keeping the longest session
@@ -616,12 +621,14 @@ const SleepSync = {
         alert(`Synced ${sleepRecords.length} nights of sleep data!`);
       }
 
-      // Refresh current view if on challenge detail
-      const challengeContainer = document.getElementById('challenge-detail-container');
-      if (challengeContainer) {
-        const challengeId = challengeContainer.dataset.challengeId;
-        if (challengeId) {
-          Comparison.renderForChallenge(challengeId);
+      // Refresh current view if on challenge detail (skip if called from renderDetail itself)
+      if (!skipRefresh) {
+        const challengeContainer = document.getElementById('challenge-detail-container');
+        if (challengeContainer) {
+          const challengeId = challengeContainer.dataset.challengeId;
+          if (challengeId) {
+            await Challenges.renderDetail(challengeId, { skipSync: true });
+          }
         }
       }
 

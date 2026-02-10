@@ -1,3 +1,26 @@
 node_modules/
 test-results/
 .env
+.env.*
+
+# Design prototypes and dev artifacts
+challenge-*.html
+chart-*.html
+dashboard-*.html
+design-system-*.html
+graph-*.html
+oura-style*.html
+protocol-circle-*.html
+protocol-icons*.html
+protocols-screen-*.html
+timeline-*.html
+ultra-minimal.html
+challenge-day-*.html
+DESIGN-SYSTEM.md
+IMPLEMENTATION-SPEC.md
+protocol-circle-screens.md
+protocol-circle-ux-flow.mermaid
+whatsapp-bot-concept.md
+test-failures.log
+.claude/
+scripts/
