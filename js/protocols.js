@@ -272,7 +272,7 @@ const Protocols = {
       const initials = this.getInitials(protocol.name);
       container.innerHTML = `
         <div class="bg-oura-card rounded-2xl p-6 mb-6">
-          <button onclick="App.navigateTo('challenges', null, {showList:true})" class="min-h-[44px] inline-flex items-center text-oura-muted hover:text-white mb-4">
+          <button onclick="App.navigateTo('protocols')" class="min-h-[44px] inline-flex items-center text-oura-muted hover:text-white mb-4">
             &larr; Back
           </button>
           <div class="flex items-start gap-4">
@@ -344,7 +344,7 @@ const Protocols = {
 
     try {
       await this.deleteCustomProtocol(protocolId);
-      App.navigateTo('challenges');
+      App.navigateTo('protocols');
     } catch (error) {
       console.error('Error deleting protocol:', error);
       alert('Failed to delete protocol: ' + error.message);
