@@ -176,12 +176,8 @@
 
             <!-- Challenges Page -->
             <div id="page-challenges" class="page hidden">
-                <div class="mb-6">
-                    <h2 class="text-2xl font-semibold mb-1">Challenges</h2>
-                    <p class="text-oura-muted text-sm">30-day challenges with friends</p>
-                </div>
                 <div id="challenges-container">
-                    <div class="text-center py-10 text-oura-muted">Loading challenges...</div>
+                    <div class="text-center py-10 text-oura-muted">Loading...</div>
                 </div>
             </div>
 
@@ -226,13 +222,6 @@
                         </svg>
                         <span class="text-[10px] mt-0.5 font-medium">Home</span>
                     </button>
-                    <button onclick="App.navigateTo('protocols')" data-page="protocols"
-                        class="nav-btn flex flex-col items-center justify-center min-h-[52px] min-w-[68px] py-2 rounded-full text-oura-muted transition-all">
-                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15a2.25 2.25 0 0 1 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
-                        </svg>
-                        <span class="text-[10px] mt-0.5 font-medium">Protocols</span>
-                    </button>
                     <button onclick="App.navigateTo('challenges')" data-page="challenges"
                         class="nav-btn relative flex flex-col items-center justify-center min-h-[52px] min-w-[68px] py-2 rounded-full text-oura-muted transition-all">
                         <div class="relative">
@@ -275,7 +264,7 @@
             currentPage: 'dashboard',
             currentDetailId: null,
 
-            navigateTo(page, detailId = null) {
+            navigateTo(page, detailId = null, options = {}) {
                 // Hide all pages
                 document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
 
@@ -287,7 +276,7 @@
 
                 // Determine actual page name (for detail pages, highlight parent)
                 let navPage = page;
-                if (page === 'protocol-detail') navPage = 'protocols';
+                if (page === 'protocol-detail') navPage = 'challenges';
                 if (page === 'challenge-detail') navPage = 'challenges';
 
                 const activeBtn = document.querySelector(`.nav-btn[data-page="${navPage}"]`);
@@ -309,10 +298,10 @@
                 window.scrollTo(0, 0);
 
                 // Load page content
-                this.loadPageContent(page, detailId);
+                this.loadPageContent(page, detailId, options);
             },
 
-            loadPageContent(page, detailId) {
+            loadPageContent(page, detailId, options = {}) {
                 switch (page) {
                     case 'protocols':
                         Protocols.renderList();
@@ -321,8 +310,12 @@
                         Protocols.renderDetail(detailId);
                         break;
                     case 'challenges':
-                        Challenges.renderList();
-                        this.checkNotifications(); // Refresh badges
+                        if (options.showList) {
+                            Challenges.renderList();
+                        } else {
+                            Challenges.renderSmartView();
+                        }
+                        this.checkNotifications();
                         break;
                     case 'challenge-detail':
                         const container = document.getElementById('challenge-detail-container');

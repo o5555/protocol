@@ -300,7 +300,6 @@ test.describe('Navigation', () => {
 
   test('bottom nav has all tab buttons', async ({ page }) => {
     await expect(page.locator('.nav-btn[data-page="dashboard"]')).toBeVisible();
-    await expect(page.locator('.nav-btn[data-page="protocols"]')).toBeVisible();
     await expect(page.locator('.nav-btn[data-page="challenges"]')).toBeVisible();
     await expect(page.locator('.nav-btn[data-page="account"]')).toBeVisible();
   });
@@ -308,11 +307,6 @@ test.describe('Navigation', () => {
   test('clicking dashboard tab shows dashboard page', async ({ page }) => {
     await page.locator('.nav-btn[data-page="dashboard"]').click();
     await expect(page.locator('#page-dashboard')).toBeVisible();
-  });
-
-  test('clicking protocols tab shows protocols page', async ({ page }) => {
-    await page.locator('.nav-btn[data-page="protocols"]').click();
-    await expect(page.locator('#page-protocols')).toBeVisible();
   });
 
   test('clicking challenges tab shows challenges page', async ({ page }) => {
@@ -329,8 +323,8 @@ test.describe('Navigation', () => {
     await page.locator('.nav-btn[data-page="dashboard"]').click();
     await expect(page.locator('#page-dashboard')).toBeVisible();
 
-    await page.locator('.nav-btn[data-page="protocols"]').click();
-    await expect(page.locator('#page-protocols')).toBeVisible();
+    await page.locator('.nav-btn[data-page="challenges"]').click();
+    await expect(page.locator('#page-challenges')).toBeVisible();
     await expect(page.locator('#page-dashboard')).toBeHidden();
   });
 

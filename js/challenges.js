@@ -423,9 +423,12 @@ const Challenges = {
   },
 
   // Render challenges list page
-  async renderList() {
+  // Smart view: called when Challenge tab is tapped
+  async renderSmartView() {
     const container = document.getElementById('challenges-container');
     if (!container) return;
+
+    container.innerHTML = '<div class="text-center py-10 text-oura-muted text-sm">Loading...</div>';
 
     try {
       const [invitations, activeChallenges] = await Promise.all([
@@ -433,13 +436,127 @@ const Challenges = {
         this.getActiveChallenges()
       ]);
 
+      // Single active challenge, no invitations → go straight to detail
+      if (activeChallenges.length === 1 && invitations.length === 0) {
+        App.navigateTo('challenge-detail', activeChallenges[0].id);
+        return;
+      }
+
+      // Has active challenges → show full list
+      if (activeChallenges.length > 0) {
+        this.renderList();
+        return;
+      }
+
+      // No active challenges → show protocol browser (with invitations if any)
+      this._renderProtocolBrowser(container, invitations);
+    } catch (error) {
+      console.error('Error in smart view:', error);
       container.innerHTML = `
-        <!-- Create Challenge Button -->
+        <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
+          <p class="text-red-400">Failed to load: ${escapeHtml(error.message)}</p>
+        </div>
+      `;
+    }
+  },
+
+  // Protocol browser: shown when no active challenges
+  async _renderProtocolBrowser(container, invitations = []) {
+    try {
+      const protocols = await Protocols.getAll();
+
+      container.innerHTML = `
+        <!-- Page Header -->
         <div class="mb-6">
-          <button onclick="Challenges.showCreateModal()"
-            class="w-full py-3 min-h-[48px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
-            + Create New Challenge
-          </button>
+          <h2 class="text-2xl font-semibold mb-1">Challenge</h2>
+          <p class="text-oura-muted text-sm">Pick a protocol and challenge yourself for 30 days</p>
+        </div>
+
+        ${invitations.length > 0 ? `
+          <div class="bg-yellow-900/20 border border-yellow-600 rounded-lg p-6 mb-6">
+            <h3 class="text-lg font-semibold mb-4 text-yellow-400">Challenge Invitations (${invitations.length})</h3>
+            <div class="space-y-3">
+              ${invitations.map(inv => `
+                <div class="bg-oura-card rounded-2xl p-4">
+                  <div class="flex items-start justify-between">
+                    <div>
+                      <p class="font-semibold">${escapeHtml(inv.name)} ${Protocols.renderModeBadge(inv.mode || 'pro')}</p>
+                      <p class="text-sm text-oura-muted">${escapeHtml(inv.protocol.name)}</p>
+                      <p class="text-sm text-oura-muted">From: ${escapeHtml(inv.creator.display_name || inv.creator.email)}</p>
+                    </div>
+                    <div class="flex gap-2">
+                      <button onclick="Challenges.handleAcceptInvite('${inv.participantId}')"
+                        class="px-4 py-2 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-medium">
+                        Join
+                      </button>
+                      <button onclick="Challenges.handleDeclineInvite('${inv.participantId}')"
+                        class="px-4 py-2 min-h-[44px] bg-oura-border text-white rounded-lg text-sm font-medium">
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Create custom protocol -->
+        <button onclick="Protocols.showCreateModal()"
+          class="w-full mb-4 py-4 min-h-[48px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2">
+          + Create Your Own Protocol
+        </button>
+
+        <!-- Protocol list -->
+        <div class="space-y-3">
+          ${protocols.map(protocol => {
+            const initials = Protocols.getInitials(protocol.name);
+            return `
+            <div onclick="App.navigateTo('protocol-detail', '${protocol.id}')"
+              class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors">
+              <div class="flex items-center gap-4">
+                <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-lg font-semibold text-white flex-shrink-0">
+                  ${initials}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-lg font-semibold">${escapeHtml(protocol.name)}</h3>
+                  <p class="text-oura-muted text-sm mt-1 line-clamp-3">${escapeHtml(protocol.description || '')}</p>
+                </div>
+                <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          `}).join('')}
+        </div>
+      `;
+    } catch (error) {
+      console.error('Error rendering protocol browser:', error);
+      container.innerHTML = `
+        <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
+          <p class="text-red-400">Failed to load protocols: ${escapeHtml(error.message)}</p>
+        </div>
+      `;
+    }
+  },
+
+  // Full challenges list (always shows list, no smart routing)
+  async renderList() {
+    const container = document.getElementById('challenges-container');
+    if (!container) return;
+
+    try {
+      const [invitations, activeChallenges, protocols] = await Promise.all([
+        this.getInvitations(),
+        this.getActiveChallenges(),
+        Protocols.getAll()
+      ]);
+
+      container.innerHTML = `
+        <!-- Page Header -->
+        <div class="mb-6">
+          <h2 class="text-2xl font-semibold mb-1">Challenge</h2>
+          <p class="text-oura-muted text-sm">Track habits and compete with friends</p>
         </div>
 
         <!-- Invitations -->
@@ -473,9 +590,9 @@ const Challenges = {
         ` : ''}
 
         <!-- Active Challenges -->
-        <div class="bg-oura-card rounded-2xl p-6">
-          <h3 class="text-lg font-semibold mb-4">Active Challenges (${activeChallenges.length})</h3>
-          ${activeChallenges.length > 0 ? `
+        ${activeChallenges.length > 0 ? `
+          <div class="bg-oura-card rounded-2xl p-6 mb-6">
+            <h3 class="text-lg font-semibold mb-4">Active Challenges (${activeChallenges.length})</h3>
             <div class="space-y-3">
               ${activeChallenges.map(challenge => `
                 <div onclick="App.navigateTo('challenge-detail', '${challenge.id}')"
@@ -493,9 +610,37 @@ const Challenges = {
                 </div>
               `).join('')}
             </div>
-          ` : `
-            <p class="text-oura-muted">No active challenges. Create one to get started!</p>
-          `}
+          </div>
+        ` : ''}
+
+        <!-- Browse Protocols -->
+        <div>
+          <div class="text-xs text-oura-muted uppercase tracking-wider mb-3">BROWSE PROTOCOLS</div>
+          <button onclick="Protocols.showCreateModal()"
+            class="w-full mb-3 py-3 min-h-[44px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2 text-sm">
+            + Create Your Own Protocol
+          </button>
+          <div class="space-y-3">
+            ${protocols.map(protocol => {
+              const initials = Protocols.getInitials(protocol.name);
+              return `
+              <div onclick="App.navigateTo('protocol-detail', '${protocol.id}')"
+                class="bg-oura-card rounded-2xl p-4 cursor-pointer hover:bg-oura-subtle transition-colors">
+                <div class="flex items-center gap-4">
+                  <div class="protocol-icon w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">
+                    ${initials}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="font-semibold">${escapeHtml(protocol.name)}</h3>
+                    <p class="text-oura-muted text-xs mt-0.5 line-clamp-2">${escapeHtml(protocol.description || '')}</p>
+                  </div>
+                  <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            `}).join('')}
+          </div>
         </div>
       `;
     } catch (error) {
@@ -526,7 +671,7 @@ const Challenges = {
       if (!skipSync && typeof SleepSync !== 'undefined') {
         container.innerHTML = `
           <div class="nav-bar flex items-center justify-between mb-4">
-            <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+            <button onclick="App.navigateTo('challenges', null, {showList:true})" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
               &larr; Back
             </button>
             <span class="text-base font-medium">${escapeHtml(challenge.name)}</span>
@@ -620,7 +765,7 @@ const Challenges = {
         container.innerHTML = `
           <!-- Navigation -->
           <div class="flex items-center justify-between mb-4">
-            <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+            <button onclick="App.navigateTo('challenges', null, {showList:true})" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
               &larr; Back
             </button>
             <span class="text-base font-semibold">${escapeHtml(challenge.name)}</span>
@@ -670,6 +815,12 @@ const Challenges = {
             + Invite Friends
           </button>
 
+          <!-- Browse Protocols -->
+          <button onclick="App.navigateTo('challenges', null, {showList:true})"
+            class="w-full py-3 min-h-[44px] mt-3 bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
+            Browse Protocols
+          </button>
+
           <!-- Settings cogwheel -->
           <div class="flex justify-center mt-6">
             <button onclick="Challenges.showSettingsMenu('${challengeId}', ${challenge.creator.id === currentUser.id})"
@@ -685,7 +836,7 @@ const Challenges = {
       container.innerHTML = `
         <!-- Navigation - minimal -->
         <div class="mb-4">
-          <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+          <button onclick="App.navigateTo('challenges', null, {showList:true})" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
             &larr; Back
           </button>
         </div>
@@ -779,6 +930,12 @@ const Challenges = {
         <button onclick="Challenges.showInviteFriendsModal('${challengeId}')"
           class="w-full py-3 min-h-[44px] bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
           + Invite Friends
+        </button>
+
+        <!-- Browse Protocols -->
+        <button onclick="App.navigateTo('challenges', null, {showList:true})"
+          class="w-full py-3 min-h-[44px] mt-3 bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
+          Browse Protocols
         </button>
 
         <!-- Settings cogwheel -->

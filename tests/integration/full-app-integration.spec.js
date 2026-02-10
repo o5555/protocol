@@ -406,23 +406,21 @@ test.describe('Full App Integration (Real Supabase)', () => {
       await waitForAppReady(page);
     });
 
-    test('protocols list loads with real protocols from Supabase', async ({ page }) => {
+    test('protocols browser loads via Challenge tab (smart view)', async ({ page }) => {
       const errors = collectErrors(page);
 
-      await page.click('.nav-btn[data-page="protocols"]');
+      // Challenge tab with no active challenges should show protocol browser
+      await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
       await page.waitForTimeout(2000);
 
-      const container = page.locator('#protocols-container');
+      const container = page.locator('#challenges-container');
       const html = await container.innerHTML();
-
-      // Should NOT be loading
-      expect(html).not.toContain('Loading protocols...');
 
       // Should have the "Create Your Own Protocol" button
       expect(html).toContain('Create Your Own Protocol');
 
-      // Should have at least one protocol card (Supabase seeds Huberman, Bryan Johnson)
-      const protocolCards = page.locator('#protocols-container .bg-oura-card');
+      // Should have protocol cards in the browse section
+      const protocolCards = page.locator('#challenges-container .bg-oura-card');
       const count = await protocolCards.count();
       expect(count).toBeGreaterThanOrEqual(1);
 
@@ -432,13 +430,14 @@ test.describe('Full App Integration (Real Supabase)', () => {
     test('clicking a protocol navigates to protocol detail', async ({ page }) => {
       const errors = collectErrors(page);
 
-      await page.click('.nav-btn[data-page="protocols"]');
+      // Navigate to challenge list which includes protocol browser
+      await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
       await page.waitForTimeout(2000);
 
-      // Click the first protocol card
-      const firstCard = page.locator('#protocols-container .bg-oura-card').first();
-      if (await firstCard.isVisible()) {
-        await firstCard.click();
+      // Click a protocol card (in the Browse Protocols section)
+      const protocolCard = page.locator('#challenges-container .protocol-icon').first().locator('..');
+      if (await protocolCard.isVisible()) {
+        await protocolCard.click();
         await page.waitForTimeout(2000);
 
         // Should show protocol detail page
@@ -448,7 +447,7 @@ test.describe('Full App Integration (Real Supabase)', () => {
         expect(detailHtml).not.toContain('Loading...');
 
         // Should have Back button, habit list, "Create Challenge" button
-        expect(detailHtml).toContain('Back to Protocols');
+        expect(detailHtml).toContain('Back');
         expect(detailHtml).toContain('Daily Habits');
         expect(detailHtml).toContain('Create Challenge with This Protocol');
       }
@@ -456,24 +455,24 @@ test.describe('Full App Integration (Real Supabase)', () => {
       assertNoUnexpectedErrors(errors, 'protocol-detail');
     });
 
-    test('Back button in protocol detail returns to list', async ({ page }) => {
+    test('Back button in protocol detail returns to challenges', async ({ page }) => {
       const errors = collectErrors(page);
 
-      await page.click('.nav-btn[data-page="protocols"]');
+      await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
       await page.waitForTimeout(2000);
 
-      const firstCard = page.locator('#protocols-container .bg-oura-card').first();
-      if (await firstCard.isVisible()) {
-        await firstCard.click();
+      const protocolCard = page.locator('#challenges-container .protocol-icon').first().locator('..');
+      if (await protocolCard.isVisible()) {
+        await protocolCard.click();
         await page.waitForTimeout(2000);
 
         // Click Back
-        const backBtn = page.locator('button:has-text("Back to Protocols")');
+        const backBtn = page.locator('button:has-text("Back")').first();
         await expect(backBtn).toBeVisible();
         await backBtn.click();
         await page.waitForTimeout(500);
 
-        await expect(page.locator('#page-protocols')).toBeVisible();
+        await expect(page.locator('#page-challenges')).toBeVisible();
       }
 
       assertNoUnexpectedErrors(errors, 'protocol-back');
@@ -482,11 +481,11 @@ test.describe('Full App Integration (Real Supabase)', () => {
     test('Create Your Own Protocol modal opens and has wizard steps', async ({ page }) => {
       const errors = collectErrors(page);
 
-      await page.click('.nav-btn[data-page="protocols"]');
+      await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
       await page.waitForTimeout(2000);
 
       // Click "Create Your Own Protocol"
-      const createBtn = page.locator('button:has-text("Create Your Own Protocol")');
+      const createBtn = page.locator('button:has-text("Create Your Own Protocol")').first();
       await expect(createBtn).toBeVisible();
       await createBtn.click();
       await page.waitForTimeout(1000);
@@ -1091,22 +1090,22 @@ test.describe('Full App Integration (Real Supabase)', () => {
       }
       await waitForAppReady(page);
 
-      // Visit every page
-      const pages = ['dashboard', 'protocols', 'challenges', 'friends', 'account'];
+      // Visit every page via nav buttons
+      const pages = ['dashboard', 'challenges', 'account'];
       for (const p of pages) {
         await page.click(`.nav-btn[data-page="${p}"]`);
         await page.waitForTimeout(2000);
       }
 
-      // Visit protocol detail
-      await page.click('.nav-btn[data-page="protocols"]');
+      // Visit protocol detail via challenges list
+      await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
       await page.waitForTimeout(2000);
-      const firstProtocol = page.locator('#protocols-container .bg-oura-card').first();
+      const firstProtocol = page.locator('#challenges-container .protocol-icon').first().locator('..');
       if (await firstProtocol.isVisible()) {
         await firstProtocol.click();
         await page.waitForTimeout(2000);
         // Go back
-        await page.evaluate(() => App.navigateTo('protocols'));
+        await page.evaluate(() => App.navigateTo('challenges', null, {showList:true}));
         await page.waitForTimeout(1000);
       }
 
