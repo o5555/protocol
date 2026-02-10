@@ -690,6 +690,23 @@ const Challenges = {
           </button>
         </div>
 
+        <!-- Hero Stat -->
+        <div id="hero-stat-container" class="text-center py-6 mb-4">
+          <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">Your Sleep Score</div>
+          ${improvementPct !== null ? `
+            <div class="text-6xl font-bold leading-none" style="color: ${improvementDirection === 'up' ? '#4ade80' : improvementDirection === 'down' ? '#f87171' : '#ffffff'}">
+              ${improvementPct > 0 ? '+' : ''}${improvementPct}%
+            </div>
+            <div class="text-sm text-oura-muted mt-2">vs. your baseline</div>
+            <div class="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-bold" style="background: ${improvementDirection === 'up' ? 'rgba(74, 222, 128, 0.15)' : improvementDirection === 'down' ? 'rgba(248, 113, 113, 0.15)' : '#1a2035'}; color: ${improvementDirection === 'up' ? '#4ade80' : improvementDirection === 'down' ? '#f87171' : '#6b7280'}">
+              ${heroEmoji} ${improvementDirection === 'up' ? 'TRENDING UP' : improvementDirection === 'down' ? 'NEEDS ATTENTION' : 'STEADY'}
+            </div>
+          ` : `
+            <div class="text-4xl font-bold text-oura-muted leading-none">--</div>
+            <div class="text-sm text-oura-muted mt-2">Waiting for sleep data</div>
+          `}
+        </div>
+
         <!-- Stats Row -->
         <div id="stats-row-container" class="flex justify-around mb-5">
           <div class="text-center">
@@ -700,22 +717,16 @@ const Challenges = {
             <div class="text-3xl font-bold" style="color: #4ade80">${myCurrent.score ? Math.round(myCurrent.score) : '--'}</div>
             <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
           </div>
-          <div class="text-center">
-            <div class="text-3xl font-bold" style="color: ${improvementDirection === 'up' ? '#4ade80' : improvementDirection === 'down' ? '#f87171' : '#6b7280'}">
-              ${improvementPct !== null ? (improvementPct > 0 ? '+' : '') + improvementPct + '%' : '--'}
-            </div>
-            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Change</div>
-          </div>
         </div>
 
         <!-- Metric Toggle + Chart -->
         <div class="mb-6">
-          <div class="flex items-center justify-end mb-3">
-            <div class="flex gap-1" id="metric-toggle">
-              <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active px-2.5 py-1.5 text-xs rounded-md" style="background: #1a2035; color: #fff" data-metric="score">SLEEP</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn px-2.5 py-1.5 text-xs rounded-md text-oura-muted hover:bg-oura-card" data-metric="avghr">AVG HR</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn px-2.5 py-1.5 text-xs rounded-md text-oura-muted hover:bg-oura-card" data-metric="hr">LOW HR</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn px-2.5 py-1.5 text-xs rounded-md text-oura-muted hover:bg-oura-card" data-metric="deep">DEEP</button>
+          <div class="flex items-center justify-center mb-3">
+            <div class="flex gap-2" id="metric-toggle">
+              <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-4 py-1.5 text-xs rounded-md text-center" style="background: #1a2035; color: #fff" data-metric="score">SLEEP</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-4 py-1.5 text-xs rounded-md text-center text-oura-muted hover:bg-oura-card" data-metric="avghr">AVG HR</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-4 py-1.5 text-xs rounded-md text-center text-oura-muted hover:bg-oura-card" data-metric="hr">LOW HR</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-4 py-1.5 text-xs rounded-md text-center text-oura-muted hover:bg-oura-card" data-metric="deep">DEEP</button>
             </div>
           </div>
           <div class="rounded-2xl p-4" style="background: #0a0a14">
@@ -962,17 +973,19 @@ const Challenges = {
         }),
         datasets: [{
           data: allData.map(d => d[field]),
+          borderColor: '#6b7280',
           borderWidth: 2,
           pointRadius: allData.map((d, i) => i === allData.length - 1 ? 6 : 3),
           pointBackgroundColor: allData.map(d => d.period === 'challenge' ? challengeColor : '#6b7280'),
+          pointBorderColor: allData.map(d => d.period === 'challenge' ? challengeColor : '#6b7280'),
+          pointBorderWidth: 0,
           tension: 0.3,
           fill: false,
           segment: {
             borderColor: ctx => {
-              const curPeriod = allData[ctx.p0DataIndex]?.period;
-              const nextPeriod = allData[ctx.p1DataIndex]?.period;
-              // Transition segment: gray→green when crossing from baseline to challenge
-              if (curPeriod === 'challenge' || nextPeriod === 'challenge') return challengeColor;
+              // Only green when BOTH endpoints are challenge data
+              if (allData[ctx.p0DataIndex]?.period === 'challenge' && allData[ctx.p1DataIndex]?.period === 'challenge') return challengeColor;
+              // Transition segment (last baseline → first challenge) stays gray
               return '#6b7280';
             }
           }
@@ -1034,6 +1047,34 @@ const Challenges = {
     if (!this._currentChallengeData) return;
     const { myData, challenge, improvements } = this._currentChallengeData;
 
+    // Update hero stat
+    const heroContainer = document.getElementById('hero-stat-container');
+    if (heroContainer && improvements) {
+      const imp = improvements[metric];
+      const labels = { score: 'Your Sleep Score', hr: 'Your Lowest HR', avghr: 'Your Avg HR (Sleep)', deep: 'Your Deep Sleep' };
+
+      if (imp.pct !== null) {
+        const direction = imp.direction;
+        const heroEmoji = direction === 'up' ? '📈' : direction === 'down' ? '📉' : '📊';
+        heroContainer.innerHTML = `
+          <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">${labels[metric]}</div>
+          <div class="text-6xl font-bold leading-none" style="color: ${direction === 'up' ? '#4ade80' : direction === 'down' ? '#f87171' : '#ffffff'}">
+            ${imp.pct > 0 ? '+' : ''}${imp.pct}%
+          </div>
+          <div class="text-sm text-oura-muted mt-2">vs. your baseline</div>
+          <div class="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-bold" style="background: ${direction === 'up' ? 'rgba(74, 222, 128, 0.15)' : direction === 'down' ? 'rgba(248, 113, 113, 0.15)' : '#1a2035'}; color: ${direction === 'up' ? '#4ade80' : direction === 'down' ? '#f87171' : '#6b7280'}">
+            ${heroEmoji} ${direction === 'up' ? 'TRENDING UP' : direction === 'down' ? 'NEEDS ATTENTION' : 'STEADY'}
+          </div>
+        `;
+      } else {
+        heroContainer.innerHTML = `
+          <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">${labels[metric]}</div>
+          <div class="text-4xl font-bold text-oura-muted leading-none">--</div>
+          <div class="text-sm text-oura-muted mt-2">Sync your Oura ring to see progress</div>
+        `;
+      }
+    }
+
     // Update stats row
     const statsRow = document.getElementById('stats-row-container');
     if (statsRow && improvements) {
@@ -1056,12 +1097,6 @@ const Challenges = {
         <div class="text-center">
           <div class="text-3xl font-bold" style="color: #4ade80">${challengeAvg ?? '--'}</div>
           <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
-        </div>
-        <div class="text-center">
-          <div class="text-3xl font-bold" style="color: ${changeColor}">
-            ${imp.pct !== null ? (imp.pct > 0 ? '+' : '') + imp.pct + '%' : '--'}
-          </div>
-          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Change</div>
         </div>
       `;
     }
