@@ -96,28 +96,28 @@ const Dashboard = {
                 <div class="text-[0.6rem] font-semibold text-purple-400 uppercase tracking-wider mb-1">Sleep Score</div>
                 <div class="text-xl font-bold text-purple-400 leading-none">${avgSleepScore !== null ? avgSleepScore : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">pts</span></div>
               </div>
-              <div class="flex-1 h-10"><canvas id="sparkline-sleep-score"></canvas></div>
+              <div class="flex-1 h-10 overflow-hidden"><canvas id="sparkline-sleep-score"></canvas></div>
             </div>
             <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('avg_hr')">
               <div class="flex-shrink-0">
                 <div class="text-[0.6rem] font-semibold text-orange-400 uppercase tracking-wider mb-1">Avg HR</div>
                 <div class="text-xl font-bold text-orange-400 leading-none">${avgHR !== null ? avgHR : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">bpm</span></div>
               </div>
-              <div class="flex-1 h-10"><canvas id="sparkline-avg-hr"></canvas></div>
+              <div class="flex-1 h-10 overflow-hidden"><canvas id="sparkline-avg-hr"></canvas></div>
             </div>
             <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('pre_sleep_hr')">
               <div class="flex-shrink-0">
                 <div class="text-[0.6rem] font-semibold text-teal-400 uppercase tracking-wider mb-1">Lowest HR</div>
                 <div class="text-xl font-bold text-teal-400 leading-none">${avgPreSleepHR !== null ? avgPreSleepHR : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">bpm</span></div>
               </div>
-              <div class="flex-1 h-10"><canvas id="sparkline-presleep-hr"></canvas></div>
+              <div class="flex-1 h-10 overflow-hidden"><canvas id="sparkline-presleep-hr"></canvas></div>
             </div>
             <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('deep_sleep')">
               <div class="flex-shrink-0">
                 <div class="text-[0.6rem] font-semibold text-blue-400 uppercase tracking-wider mb-1">Deep Sleep</div>
                 <div class="text-xl font-bold text-blue-400 leading-none">${avgDeepSleep !== null ? avgDeepSleep : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">min</span></div>
               </div>
-              <div class="flex-1 h-10"><canvas id="sparkline-deep-sleep"></canvas></div>
+              <div class="flex-1 h-10 overflow-hidden"><canvas id="sparkline-deep-sleep"></canvas></div>
             </div>
           </div>
         </div>
