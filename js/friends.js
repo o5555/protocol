@@ -9,21 +9,14 @@ const Friends = {
     const currentUser = await SupabaseClient.getCurrentUser();
     if (!currentUser) throw new Error('Not authenticated');
 
+    // Use SECURITY DEFINER function to avoid exposing oura_token
     const { data, error } = await client
-      .from('profiles')
-      .select('id, email, display_name')
-      .eq('email', email.toLowerCase())
-      .neq('id', currentUser.id)
-      .single();
+      .rpc('search_profiles_by_email', { search_email: email.toLowerCase() });
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null; // No user found
-      }
-      throw error;
-    }
+    if (error) throw error;
 
-    return data;
+    // RPC returns an array; return first match or null
+    return data && data.length > 0 ? data[0] : null;
   },
 
   // Store a pending invite and send an invite email via the server
@@ -406,7 +399,7 @@ const Friends = {
       console.error('Error rendering friends:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load friends: ${error.message}</p>
+          <p class="text-red-400">Failed to load friends: ${escapeHtml(error.message)}</p>
         </div>
       `;
     }

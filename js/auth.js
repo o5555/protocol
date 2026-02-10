@@ -208,9 +208,9 @@ const Auth = {
   async checkOnboarding(user) {
     try {
       const profile = await this.getProfile();
-      if (profile && profile.onboarding_step < 4) {
-        // Show onboarding flow
-        Onboarding.start(profile);
+      if (!profile || profile.onboarding_step < 4) {
+        // No profile yet or onboarding incomplete — show onboarding flow
+        Onboarding.start(profile || { onboarding_step: 0 });
       } else {
         // Onboarding complete — show main app
         const appContent = document.getElementById('app-content');
@@ -220,9 +220,8 @@ const Auth = {
       }
     } catch (error) {
       console.error('Error checking onboarding:', error);
-      // Fallback: show app content
-      const appContent = document.getElementById('app-content');
-      if (appContent) appContent.classList.remove('hidden');
+      // Fallback: show onboarding to avoid bypassing it
+      Onboarding.start({ onboarding_step: 0 });
     }
   }
 };

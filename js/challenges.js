@@ -1,6 +1,9 @@
 // Challenges Module
 
 const Challenges = {
+  // Track in-flight habit toggles to prevent race conditions
+  _togglingHabits: new Set(),
+
   // Create a new challenge
   async create({ protocolId, name, friendIds, mode, startDate: customStartDate }) {
     const client = SupabaseClient.client;
@@ -85,7 +88,7 @@ const Challenges = {
 
     if (error) throw error;
 
-    return data.map(p => ({
+    return data.filter(p => p.challenge).map(p => ({
       participantId: p.id,
       status: p.status,
       joinedAt: p.joined_at,
@@ -287,42 +290,50 @@ const Challenges = {
     return data.map(c => c.habit_id);
   },
 
-  // Toggle habit completion
+  // Toggle habit completion (guarded against rapid double-clicks)
   async toggleHabit(challengeId, habitId, date) {
-    const client = SupabaseClient.client;
-    if (!client) throw new Error('Supabase not initialized');
+    const key = `${challengeId}:${habitId}:${date}`;
+    if (this._togglingHabits.has(key)) return;
 
-    const currentUser = await SupabaseClient.getCurrentUser();
-    if (!currentUser) throw new Error('Not authenticated');
+    this._togglingHabits.add(key);
+    try {
+      const client = SupabaseClient.client;
+      if (!client) throw new Error('Supabase not initialized');
 
-    // Check if already completed
-    const { data: existing } = await client
-      .from('habit_completions')
-      .select('id')
-      .eq('challenge_id', challengeId)
-      .eq('habit_id', habitId)
-      .eq('user_id', currentUser.id)
-      .eq('completed_date', date)
-      .maybeSingle();
+      const currentUser = await SupabaseClient.getCurrentUser();
+      if (!currentUser) throw new Error('Not authenticated');
 
-    if (existing) {
-      // Remove completion
-      await client
+      // Check if already completed
+      const { data: existing } = await client
         .from('habit_completions')
-        .delete()
-        .eq('id', existing.id);
-      return false;
-    } else {
-      // Add completion
-      await client
-        .from('habit_completions')
-        .insert({
-          challenge_id: challengeId,
-          habit_id: habitId,
-          user_id: currentUser.id,
-          completed_date: date
-        });
-      return true;
+        .select('id')
+        .eq('challenge_id', challengeId)
+        .eq('habit_id', habitId)
+        .eq('user_id', currentUser.id)
+        .eq('completed_date', date)
+        .maybeSingle();
+
+      if (existing) {
+        // Remove completion
+        await client
+          .from('habit_completions')
+          .delete()
+          .eq('id', existing.id);
+        return false;
+      } else {
+        // Add completion
+        await client
+          .from('habit_completions')
+          .insert({
+            challenge_id: challengeId,
+            habit_id: habitId,
+            user_id: currentUser.id,
+            completed_date: date
+          });
+        return true;
+      }
+    } finally {
+      this._togglingHabits.delete(key);
     }
   },
 
@@ -393,12 +404,13 @@ const Challenges = {
   },
 
   // Helper: Calculate current day number
-  getDayNumber(startDate) {
+  getDayNumber(startDate, duration = 30) {
     const start = this.parseLocalDate(startDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    if (today < start) return 0;
     const diff = Math.floor((today - start) / (1000 * 60 * 60 * 24));
-    return Math.max(1, diff + 1);
+    return Math.min(diff + 1, duration);
   },
 
   // Helper: Check if challenge is active
@@ -1422,7 +1434,12 @@ const Challenges = {
       .from('challenge_participants')
       .insert(participants);
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23505') {
+        throw new Error('One or more friends have already been invited');
+      }
+      throw error;
+    }
   },
 
   // Invite someone by email to a challenge (even if not a friend yet)
