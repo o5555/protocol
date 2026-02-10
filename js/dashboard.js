@@ -40,6 +40,11 @@ const Dashboard = {
 
       // Re-render with fresh data
       this._renderContent(container, { profile, activeChallenges, recentSleep });
+
+      // Background sync: pull latest Oura data, then re-render if new data arrived
+      if (profile?.oura_token && typeof SleepSync !== 'undefined') {
+        this._backgroundSync(generation);
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       if (generation !== this._renderGeneration) return;
@@ -50,6 +55,28 @@ const Dashboard = {
           </div>
         `;
       }
+    }
+  },
+
+  // Sync Oura data in background, re-render dashboard if new data was written
+  async _backgroundSync(generation) {
+    try {
+      const result = await SleepSync.syncNow({ silent: true, skipRefresh: true });
+      if (generation !== this._renderGeneration) return;
+      if (result?.success && result.count > 0) {
+        // New data arrived — re-fetch and re-render
+        const [profile, activeChallenges, recentSleep] = await Promise.all([
+          Auth.getProfile(),
+          Challenges.getActiveChallenges().catch(() => []),
+          this.getRecentSleepData().catch(() => [])
+        ]);
+        if (generation !== this._renderGeneration) return;
+        Cache.set('dashboard', { profile, activeChallenges, recentSleep });
+        const container = document.getElementById('dashboard-container');
+        if (container) this._renderContent(container, { profile, activeChallenges, recentSleep });
+      }
+    } catch (e) {
+      console.warn('[Dashboard] Background sync failed:', e);
     }
   },
 
