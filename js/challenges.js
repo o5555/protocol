@@ -594,16 +594,11 @@ const Challenges = {
           </div>
         ` : ''}
 
-        <!-- Empty state -->
-        ${activeChallenges.length === 0 && invitations.length === 0 && completedChallenges.length === 0 ? `
-          <div class="text-center py-10 text-oura-muted">
-            <p class="mb-4">No active challenges yet.</p>
-            <button onclick="App.navigateTo('protocols')"
-              class="px-6 py-3 min-h-[44px] bg-oura-accent text-white rounded-xl text-sm font-medium hover:opacity-90 transition-opacity">
-              Browse Protocols
-            </button>
-          </div>
-        ` : ''}
+        <!-- Start Challenge button -->
+        <button onclick="App.navigateTo('protocols')"
+          class="w-full py-4 min-h-[48px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2">
+          + Start New Challenge
+        </button>
       `;
     } catch (error) {
       console.error('Error rendering challenges:', error);
