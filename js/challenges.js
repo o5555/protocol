@@ -678,24 +678,25 @@ const Challenges = {
           </button>
         </div>
 
-        <!-- Hero Stat -->
-        <div id="hero-stat-container" class="text-center py-6 mb-6">
-          <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">Your Sleep Score</div>
-          ${improvementPct !== null ? `
-            <div class="text-6xl font-bold leading-none" style="color: ${improvementDirection === 'up' ? '#4ade80' : improvementDirection === 'down' ? '#f87171' : '#ffffff'}">
-              ${improvementPct > 0 ? '+' : ''}${improvementPct}%
+        <!-- Stats Row -->
+        <div id="stats-row-container" class="flex justify-around mb-5">
+          <div class="text-center">
+            <div class="text-3xl font-bold text-oura-muted">${myBaseline.score ? Math.round(myBaseline.score) : '--'}</div>
+            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
+          </div>
+          <div class="text-center">
+            <div class="text-3xl font-bold" style="color: #4ade80">${myCurrent.score ? Math.round(myCurrent.score) : '--'}</div>
+            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
+          </div>
+          <div class="text-center">
+            <div class="text-3xl font-bold" style="color: ${improvementDirection === 'up' ? '#4ade80' : improvementDirection === 'down' ? '#f87171' : '#6b7280'}">
+              ${improvementPct !== null ? (improvementPct > 0 ? '+' : '') + improvementPct + '%' : '--'}
             </div>
-            <div class="text-sm text-oura-muted mt-2">vs. your baseline</div>
-            <div class="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-bold" style="background: ${improvementDirection === 'up' ? 'rgba(74, 222, 128, 0.15)' : improvementDirection === 'down' ? 'rgba(248, 113, 113, 0.15)' : '#1a2035'}; color: ${improvementDirection === 'up' ? '#4ade80' : improvementDirection === 'down' ? '#f87171' : '#6b7280'}">
-              ${heroEmoji} ${improvementDirection === 'up' ? 'TRENDING UP' : improvementDirection === 'down' ? 'NEEDS ATTENTION' : 'STEADY'}
-            </div>
-          ` : `
-            <div class="text-4xl font-bold text-oura-muted leading-none">--</div>
-            <div class="text-sm text-oura-muted mt-2">Waiting for sleep data</div>
-          `}
+            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Change</div>
+          </div>
         </div>
 
-        <!-- Trend Chart -->
+        <!-- Metric Toggle + Chart -->
         <div class="mb-6">
           <div class="flex items-center justify-end mb-3">
             <div class="flex gap-1" id="metric-toggle">
@@ -705,9 +706,9 @@ const Challenges = {
               <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn px-2.5 py-1.5 text-xs rounded-md text-oura-muted hover:bg-oura-card" data-metric="deep">DEEP</button>
             </div>
           </div>
-          <div class="rounded-2xl p-4 cursor-pointer hover:bg-oura-card/50 transition-colors" style="background: #0a0a14" onclick="Challenges.showMetricDetailModal('${challengeId}')">
-            <div id="trend-chart-container" class="h-44">
-              ${this.renderTrendChart(myData, challenge.start_date, 'score')}
+          <div class="rounded-2xl p-4" style="background: #0a0a14">
+            <div id="trend-chart-container" class="h-48">
+              <canvas id="main-trend-chart"></canvas>
             </div>
           </div>
         </div>
@@ -772,6 +773,11 @@ const Challenges = {
 
       // Store data for metric switching
       this._currentChallengeData = { myData, challenge, improvements };
+
+      // Render the main Chart.js trend chart
+      if (!hasNoChallengeData) {
+        this.renderMainChart(myData, challenge.start_date, 'score');
+      }
 
     } catch (error) {
       console.error('Error rendering challenge detail:', error);
@@ -911,13 +917,94 @@ const Challenges = {
     `;
   },
 
+  // Render Chart.js line chart on the main challenge detail page (gray baseline → green challenge)
+  renderMainChart(userData, challengeStartDate, metric = 'score') {
+    const { baselineData, challengeData } = userData;
+    const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes' };
+    const field = fieldMap[metric] || 'sleep_score';
+    const lowerIsBetter = metric === 'hr' || metric === 'avghr';
+
+    // Combine all data sorted by date
+    const allData = [
+      ...baselineData.map(d => ({ ...d, period: 'baseline' })),
+      ...challengeData.map(d => ({ ...d, period: 'challenge' }))
+    ].sort((a, b) => a.date.localeCompare(b.date)).filter(d => d[field] != null);
+
+    // Destroy previous chart instance if exists
+    if (this._mainChartInstance) {
+      this._mainChartInstance.destroy();
+      this._mainChartInstance = null;
+    }
+
+    const canvas = document.getElementById('main-trend-chart');
+    if (!canvas || allData.length === 0) return;
+
+    const challengeColor = lowerIsBetter ? '#2dd4bf' : '#4ade80';
+
+    this._mainChartInstance = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: allData.map(d => {
+          const dt = new Date(d.date + 'T00:00:00');
+          return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }),
+        datasets: [{
+          data: allData.map(d => d[field]),
+          borderWidth: 2,
+          pointRadius: allData.map((d, i) => i === allData.length - 1 ? 6 : 3),
+          pointBackgroundColor: allData.map(d => d.period === 'challenge' ? challengeColor : '#6b7280'),
+          tension: 0.3,
+          fill: false,
+          segment: {
+            borderColor: ctx => {
+              const curPeriod = allData[ctx.p0DataIndex]?.period;
+              const nextPeriod = allData[ctx.p1DataIndex]?.period;
+              // Transition segment: gray→green when crossing from baseline to challenge
+              if (curPeriod === 'challenge' || nextPeriod === 'challenge') return challengeColor;
+              return '#6b7280';
+            }
+          }
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1a1a2e',
+            titleColor: '#fff',
+            bodyColor: challengeColor,
+            callbacks: {
+              label: (ctx) => {
+                const val = Math.round(ctx.parsed.y);
+                const units = { score: 'pts', hr: 'bpm', avghr: 'bpm', deep: 'min' };
+                return val + ' ' + (units[metric] || '');
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#6b7280', font: { size: 10 }, maxTicksLimit: 6 },
+            grid: { display: false }
+          },
+          y: {
+            ticks: { color: '#6b7280', font: { size: 10 } },
+            grid: { color: '#ffffff10' }
+          }
+        }
+      }
+    });
+  },
+
   // Helper to calculate average
   calcAvg(values) {
     if (!values || values.length === 0) return null;
     return values.reduce((a, b) => a + b, 0) / values.length;
   },
 
-  // Switch metric on trend chart AND hero stat
+  // Switch metric on trend chart AND stats row
   switchMetric(challengeId, metric) {
     // Update toggle buttons
     document.querySelectorAll('.metric-btn').forEach(btn => {
@@ -935,39 +1022,40 @@ const Challenges = {
     if (!this._currentChallengeData) return;
     const { myData, challenge, improvements } = this._currentChallengeData;
 
-    // Update hero stat
-    const heroContainer = document.getElementById('hero-stat-container');
-    if (heroContainer && improvements) {
+    // Update stats row
+    const statsRow = document.getElementById('stats-row-container');
+    if (statsRow && improvements) {
       const imp = improvements[metric];
-      const labels = { score: 'Your Sleep Score', hr: 'Your Lowest HR', avghr: 'Your Avg HR (Sleep)', deep: 'Your Deep Sleep' };
+      const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes' };
+      const field = fieldMap[metric];
 
-      if (imp.pct !== null) {
-        const direction = imp.direction;
-        const heroEmoji = direction === 'up' ? '📈' : direction === 'down' ? '📉' : '📊';
-        heroContainer.innerHTML = `
-          <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">${labels[metric]}</div>
-          <div class="text-6xl font-bold leading-none" style="color: ${direction === 'up' ? '#4ade80' : direction === 'down' ? '#f87171' : '#ffffff'}">
-            ${imp.pct > 0 ? '+' : ''}${imp.pct}%
+      const baselineVals = myData.baselineData.filter(d => d[field]).map(d => d[field]);
+      const challengeVals = myData.challengeData.filter(d => d[field]).map(d => d[field]);
+      const baselineAvg = baselineVals.length > 0 ? Math.round(baselineVals.reduce((a, b) => a + b, 0) / baselineVals.length) : null;
+      const challengeAvg = challengeVals.length > 0 ? Math.round(challengeVals.reduce((a, b) => a + b, 0) / challengeVals.length) : null;
+
+      const changeColor = imp.pct !== null ? (imp.direction === 'up' ? '#4ade80' : imp.direction === 'down' ? '#f87171' : '#6b7280') : '#6b7280';
+
+      statsRow.innerHTML = `
+        <div class="text-center">
+          <div class="text-3xl font-bold text-oura-muted">${baselineAvg ?? '--'}</div>
+          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
+        </div>
+        <div class="text-center">
+          <div class="text-3xl font-bold" style="color: #4ade80">${challengeAvg ?? '--'}</div>
+          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
+        </div>
+        <div class="text-center">
+          <div class="text-3xl font-bold" style="color: ${changeColor}">
+            ${imp.pct !== null ? (imp.pct > 0 ? '+' : '') + imp.pct + '%' : '--'}
           </div>
-          <div class="text-sm text-oura-muted mt-2">vs. your baseline</div>
-          <div class="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-medium" style="background: ${direction === 'up' ? 'rgba(74, 222, 128, 0.15)' : direction === 'down' ? 'rgba(248, 113, 113, 0.15)' : '#1a2035'}; color: ${direction === 'up' ? '#4ade80' : direction === 'down' ? '#f87171' : '#6b7280'}">
-            ${heroEmoji} ${direction === 'up' ? 'Trending up' : direction === 'down' ? 'Needs attention' : 'Steady'}
-          </div>
-        `;
-      } else {
-        heroContainer.innerHTML = `
-          <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">${labels[metric]}</div>
-          <div class="text-4xl font-bold text-oura-muted leading-none">--</div>
-          <div class="text-sm text-oura-muted mt-2">Sync your Oura ring to see progress</div>
-        `;
-      }
+          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Change</div>
+        </div>
+      `;
     }
 
-    // Re-render chart
-    const chartContainer = document.getElementById('trend-chart-container');
-    if (chartContainer) {
-      chartContainer.innerHTML = this.renderTrendChart(myData, challenge.start_date, metric);
-    }
+    // Re-render Chart.js chart
+    this.renderMainChart(myData, challenge.start_date, metric);
   },
 
   // Show detailed metric view for the challenge (baseline + challenge data)
