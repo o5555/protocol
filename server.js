@@ -274,40 +274,8 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // Proxy requests to Oura API
-    if (req.url.startsWith('/api/')) {
-        const ouraPath = req.url.replace('/api', '/v2/usercollection');
-        const ouraUrl = new URL(ouraPath, OURA_API_BASE);
-
-        const options = {
-            hostname: ouraUrl.hostname,
-            path: ouraUrl.pathname + ouraUrl.search,
-            method: req.method,
-            headers: {
-                'Authorization': req.headers.authorization || '',
-                'Content-Type': 'application/json'
-            }
-        };
-
-        const proxyReq = https.request(options, (proxyRes) => {
-            res.writeHead(proxyRes.statusCode, {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            });
-            proxyRes.pipe(res);
-        });
-
-        proxyReq.on('error', (err) => {
-            console.error('Proxy error:', err.message);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: err.message }));
-        });
-
-        proxyReq.end();
-        return;
-    }
-
     // Bug report endpoint - saves to Supabase and forwards to Telegram
+    // (must be before the /api/* proxy catch-all)
     if (req.url === '/api/bug-report' && req.method === 'POST') {
         try {
             const body = await parseBody(req);
@@ -362,6 +330,39 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message }));
         }
+        return;
+    }
+
+    // Proxy requests to Oura API (catch-all for /api/*)
+    if (req.url.startsWith('/api/')) {
+        const ouraPath = req.url.replace('/api', '/v2/usercollection');
+        const ouraUrl = new URL(ouraPath, OURA_API_BASE);
+
+        const options = {
+            hostname: ouraUrl.hostname,
+            path: ouraUrl.pathname + ouraUrl.search,
+            method: req.method,
+            headers: {
+                'Authorization': req.headers.authorization || '',
+                'Content-Type': 'application/json'
+            }
+        };
+
+        const proxyReq = https.request(options, (proxyRes) => {
+            res.writeHead(proxyRes.statusCode, {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            });
+            proxyRes.pipe(res);
+        });
+
+        proxyReq.on('error', (err) => {
+            console.error('Proxy error:', err.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        });
+
+        proxyReq.end();
         return;
     }
 

@@ -23,14 +23,11 @@ const Account = {
       const displayName = profile?.display_name || currentUser.email.split('@')[0];
       const hasOuraToken = !!profile?.oura_token;
 
-      // Validate Oura token if it exists
+      // Validate Oura token if it exists (via server proxy to avoid CORS)
       let ouraStatus = hasOuraToken ? 'connected' : 'disconnected'; // connected | expired | disconnected
       if (hasOuraToken) {
         try {
-          const baseUrl = window.location.hostname === 'localhost'
-            ? 'http://localhost:3000/api'
-            : 'https://api.ouraring.com/v2/usercollection';
-          const resp = await fetch(`${baseUrl}/personal_info`, {
+          const resp = await fetch('/api/personal_info', {
             headers: { 'Authorization': `Bearer ${profile.oura_token}` }
           });
           if (!resp.ok) ouraStatus = 'expired';

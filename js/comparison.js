@@ -564,10 +564,8 @@ const SleepSync = {
       const startStr = startDate.toISOString().split('T')[0];
       const endStr = endDate.toISOString().split('T')[0];
 
-      // Fetch from Oura API (sleep sessions + daily sleep scores)
-      const baseUrl = window.location.hostname === 'localhost'
-        ? 'http://localhost:3000/api'
-        : 'https://api.ouraring.com/v2/usercollection';
+      // Fetch from Oura API via server proxy (avoids CORS issues)
+      const baseUrl = '/api';
 
       const [sleepResponse, dailySleepResponse] = await Promise.all([
         fetch(`${baseUrl}/sleep?start_date=${startStr}&end_date=${endStr}`, {
