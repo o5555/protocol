@@ -1767,7 +1767,7 @@ const Challenges = {
         ${availableFriends.length > 0 ? `
           <div class="border-t border-oura-border pt-4">
             <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-3">Or Select Friends</label>
-            <form id="invite-friends-form" class="space-y-4">
+            <form id="invite-friends-form" class="space-y-4" onsubmit="return false"
               <div class="space-y-2 max-h-48 overflow-y-auto">
                 ${availableFriends.map(f => `
                   <label class="flex items-center gap-3 p-3 bg-oura-subtle rounded-lg cursor-pointer hover:bg-oura-border">

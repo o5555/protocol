@@ -366,10 +366,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Serve static files
-    let filePath = req.url === '/' ? '/index.html' : req.url;
-
-    // Remove query strings
-    filePath = filePath.split('?')[0];
+    // Remove query strings first, then check for root
+    let filePath = req.url.split('?')[0];
+    if (filePath === '/') filePath = '/index.html';
 
     // Decode URI components and resolve to absolute path
     filePath = path.resolve(__dirname, '.' + decodeURIComponent(filePath));
