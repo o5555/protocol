@@ -244,6 +244,14 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Sending...';
+        messageEl.textContent = '';
+        messageEl.className = 'hidden';
+
+        // Clear any existing session to avoid conflicts when switching accounts
+        try {
+          const client = SupabaseClient.client;
+          if (client) await client.auth.signOut({ scope: 'local' });
+        } catch (_) { /* ignore */ }
 
         await Auth.sendMagicLink(email);
 
@@ -251,7 +259,14 @@ document.addEventListener('DOMContentLoaded', () => {
         messageEl.className = 'text-sm text-green-400 mt-2';
         emailInput.value = '';
       } catch (error) {
-        messageEl.textContent = error.message || 'Failed to send magic link';
+        let msg = 'Failed to send magic link. Please try again.';
+        if (typeof error === 'string' && error.length > 0 && error !== '{}') {
+          msg = error;
+        } else if (typeof error === 'object' && error !== null) {
+          const extracted = error.message || error.error_description || error.msg || '';
+          if (extracted && extracted !== '{}') msg = extracted;
+        }
+        messageEl.textContent = msg;
         messageEl.className = 'text-sm text-red-400 mt-2';
       } finally {
         submitBtn.disabled = false;
@@ -275,9 +290,22 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Signing in...';
 
+        // Clear any existing session to avoid conflicts when switching accounts
+        try {
+          const client = SupabaseClient.client;
+          if (client) await client.auth.signOut({ scope: 'local' });
+        } catch (_) { /* ignore */ }
+
         await Auth.signInWithPassword(emailInput.value.trim(), passwordInput.value);
       } catch (error) {
-        messageEl.textContent = error.message || 'Failed to sign in';
+        let msg = 'Failed to sign in. Please try again.';
+        if (typeof error === 'object' && error !== null) {
+          const extracted = error.message || error.error_description || error.msg || '';
+          if (extracted && extracted !== '{}') msg = extracted;
+        } else if (typeof error === 'string' && error.length > 0 && error !== '{}') {
+          msg = error;
+        }
+        messageEl.textContent = msg;
         messageEl.className = 'text-sm text-red-400 mt-2';
         messageEl.classList.remove('hidden');
       } finally {
