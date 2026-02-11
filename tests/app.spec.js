@@ -98,63 +98,79 @@ test.describe('Auth', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Onboarding flow (all 4 steps)
+// Onboarding flow (all 5 steps: name, token, challenge, friend, complete)
 // ---------------------------------------------------------------------------
 
 test.describe('Onboarding', () => {
-  test('step 0 - Connect Oura token input is visible', async ({ page }) => {
+  test('step 0 - display name input is visible', async ({ page }) => {
     await showOnboardingStep(page, 0);
+    await expect(page.locator('#onboarding-name')).toBeVisible();
+    await expect(page.getByText("What's Your Name?")).toBeVisible();
+  });
+
+  test('step 0 - name input and continue button render', async ({ page }) => {
+    await showOnboardingStep(page, 0);
+    await expect(page.locator('#onboarding-name')).toHaveAttribute('type', 'text');
+    await expect(page.getByText('Continue')).toBeVisible();
+  });
+
+  test('step 1 - Connect Oura token input is visible', async ({ page }) => {
+    await showOnboardingStep(page, 1);
     await expect(page.locator('#onboarding-token')).toBeVisible();
     await expect(page.locator('#onboarding-token-btn')).toBeVisible();
   });
 
-  test('step 0 - token input and save button render', async ({ page }) => {
-    await showOnboardingStep(page, 0);
+  test('step 1 - token input and save button render', async ({ page }) => {
+    await showOnboardingStep(page, 1);
     await expect(page.locator('#onboarding-token')).toHaveAttribute('type', 'password');
     await expect(page.locator('#onboarding-token-status')).toBeAttached();
   });
 
-  test('step 1 - pick a challenge shows protocol list', async ({ page }) => {
-    await showOnboardingStep(page, 1);
+  test('step 2 - pick a challenge shows protocol list', async ({ page }) => {
+    await showOnboardingStep(page, 2);
     await expect(page.locator('#onboarding-protocols')).toBeVisible();
   });
 
-  test('step 1 - challenge form is initially hidden', async ({ page }) => {
-    await showOnboardingStep(page, 1);
+  test('step 2 - challenge form is initially hidden', async ({ page }) => {
+    await showOnboardingStep(page, 2);
     await expect(page.locator('#onboarding-challenge-form')).toBeHidden();
   });
 
-  test('step 2 - add a friend has email input and invite button', async ({ page }) => {
-    await showOnboardingStep(page, 2);
+  test('step 3 - add a friend has email input and invite button', async ({ page }) => {
+    await showOnboardingStep(page, 3);
     await expect(page.locator('#onboarding-friend-email')).toBeVisible();
     await expect(page.locator('#onboarding-invite-btn')).toBeVisible();
   });
 
-  test('step 3 - completion screen shows Go to Dashboard', async ({ page }) => {
-    await showOnboardingStep(page, 3);
+  test('step 4 - completion screen shows Go to Dashboard', async ({ page }) => {
+    await showOnboardingStep(page, 4);
     await expect(page.getByText('Go to Dashboard')).toBeVisible();
   });
 
-  test('step 3 - shows celebration message', async ({ page }) => {
-    await showOnboardingStep(page, 3);
+  test('step 4 - shows celebration message', async ({ page }) => {
+    await showOnboardingStep(page, 4);
     await expect(page.getByText("You're All Set!")).toBeVisible();
   });
 
   test('full step sequence renders each step correctly', async ({ page }) => {
-    // Step 0
+    // Step 0 — Display Name
     await showOnboardingStep(page, 0);
+    await expect(page.locator('#onboarding-name')).toBeVisible();
+
+    // Step 1 — Connect Oura Ring
+    await page.evaluate(() => window.Onboarding.renderStep(1));
     await expect(page.locator('#onboarding-token')).toBeVisible();
 
-    // Step 1
-    await page.evaluate(() => window.Onboarding.renderStep(1));
+    // Step 2 — Pick a Challenge
+    await page.evaluate(() => window.Onboarding.renderStep(2));
     await expect(page.locator('#onboarding-protocols')).toBeVisible();
 
-    // Step 2
-    await page.evaluate(() => window.Onboarding.renderStep(2));
+    // Step 3 — Add a Friend
+    await page.evaluate(() => window.Onboarding.renderStep(3));
     await expect(page.locator('#onboarding-friend-email')).toBeVisible();
 
-    // Step 3
-    await page.evaluate(() => window.Onboarding.renderStep(3));
+    // Step 4 — Completion
+    await page.evaluate(() => window.Onboarding.renderStep(4));
     await expect(page.getByText('Go to Dashboard')).toBeVisible();
   });
 });
@@ -165,26 +181,26 @@ test.describe('Onboarding', () => {
 
 test.describe('Oura Token Connection', () => {
   test('token input accepts text', async ({ page }) => {
-    await showOnboardingStep(page, 0);
+    await showOnboardingStep(page, 1);
     const tokenInput = page.locator('#onboarding-token');
     await tokenInput.fill('test-token-12345');
     await expect(tokenInput).toHaveValue('test-token-12345');
   });
 
   test('token input is password type', async ({ page }) => {
-    await showOnboardingStep(page, 0);
+    await showOnboardingStep(page, 1);
     await expect(page.locator('#onboarding-token')).toHaveAttribute('type', 'password');
   });
 
   test('save token button exists and is clickable', async ({ page }) => {
-    await showOnboardingStep(page, 0);
+    await showOnboardingStep(page, 1);
     const btn = page.locator('#onboarding-token-btn');
     await expect(btn).toBeVisible();
     await expect(btn).toBeEnabled();
   });
 
   test('token status element exists for feedback', async ({ page }) => {
-    await showOnboardingStep(page, 0);
+    await showOnboardingStep(page, 1);
     await expect(page.locator('#onboarding-token-status')).toBeAttached();
   });
 });

@@ -136,8 +136,8 @@ test.describe('Challenges Page — Behavioral Tests', () => {
     const challengesPage = page.locator('#page-challenges');
     await expect(challengesPage).toBeVisible();
 
-    // Wait for the "Create New Challenge" button to render (it's inside challenges-container)
-    const createBtn = page.locator('button:has-text("Create New Challenge")');
+    // Wait for the "+ Start New Challenge" button to render (it's inside challenges-container)
+    const createBtn = page.locator('button:has-text("Start New Challenge")');
     await expect(createBtn).toBeVisible({ timeout: 5000 });
 
     // Verify it's actually clickable (enabled)
@@ -152,12 +152,12 @@ test.describe('Challenges Page — Behavioral Tests', () => {
     await showApp(page);
     await mockSupabase(page);
 
-    // Navigate to challenges
+    // Navigate to challenges so the page is loaded
     await page.click('button[data-page="challenges"]');
-    await page.waitForSelector('button:has-text("Create New Challenge")', { timeout: 5000 });
+    await page.waitForSelector('button:has-text("Start New Challenge")', { timeout: 5000 });
 
-    // Click "Create New Challenge"
-    await page.click('button:has-text("Create New Challenge")');
+    // Open the create-challenge modal directly (the list button now navigates to protocols)
+    await page.evaluate(() => Challenges.showCreateModal());
 
     // Verify modal appears
     const modal = page.locator('#create-challenge-modal');
@@ -187,10 +187,12 @@ test.describe('Challenges Page — Behavioral Tests', () => {
     await showApp(page);
     await mockSupabase(page);
 
-    // Navigate to challenges and open create modal
+    // Navigate to challenges so the page is loaded
     await page.click('button[data-page="challenges"]');
-    await page.waitForSelector('button:has-text("Create New Challenge")', { timeout: 5000 });
-    await page.click('button:has-text("Create New Challenge")');
+    await page.waitForSelector('button:has-text("Start New Challenge")', { timeout: 5000 });
+
+    // Open the create-challenge modal directly (the list button now navigates to protocols)
+    await page.evaluate(() => Challenges.showCreateModal());
     await page.waitForSelector('#create-challenge-modal', { timeout: 5000 });
 
     // Select the first protocol in the dropdown
