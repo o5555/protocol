@@ -717,9 +717,32 @@ const Challenges = {
       const hasNoChallengeData = myData.challengeData.length === 0;
       const participantCount = challenge.participants.filter(p => p.status === 'accepted').length;
       const isCompleted = !challenge.isActive && challenge.daysRemaining === 0;
+      const justStarted = challenge.dayNumber <= 1;
+
+      // Detect whether Oura is connected
+      let hasOuraToken = false;
+      try {
+        const profile = await Auth.getProfile();
+        hasOuraToken = !!profile?.oura_token;
+      } catch (_) {}
 
       if (hasNoChallengeData) {
-        // Celebration hero view - "You're In!"
+        // Determine the right message
+        let heroTitle, heroMessage;
+        if (isCompleted) {
+          heroTitle = 'Challenge Complete!';
+          heroMessage = 'Your 30-day challenge has ended.<br>No sleep data was recorded during this challenge.';
+        } else if (!hasOuraToken) {
+          heroTitle = 'Connect Oura Ring';
+          heroMessage = 'Connect your Oura ring in Account settings<br>to start tracking your sleep data.';
+        } else if (justStarted) {
+          heroTitle = "You're In!";
+          heroMessage = 'Your 30-day challenge has begun.<br>First results arrive tomorrow morning.';
+        } else {
+          heroTitle = 'No Sleep Data';
+          heroMessage = 'No sleep data found for this challenge period.<br>Make sure your Oura ring is syncing correctly.';
+        }
+
         container.innerHTML = `
           <!-- Navigation -->
           <div class="flex items-center justify-between mb-4">
@@ -749,10 +772,10 @@ const Challenges = {
 
           <!-- Celebration Hero Card -->
           <div class="rounded-2xl p-6 text-center mb-6" style="background: linear-gradient(135deg, #0f1a2e 0%, #1a1035 100%); border: 1px solid ${isCompleted ? 'rgba(168, 85, 247, 0.15)' : 'rgba(74, 222, 128, 0.15)'};">
-            <div class="text-5xl mb-4">${isCompleted ? '🏁' : '🚀'}</div>
-            <div class="text-2xl font-bold mb-3">${isCompleted ? 'Challenge Complete!' : "You're In!"}</div>
+            <div class="text-5xl mb-4">${isCompleted ? '🏁' : !hasOuraToken ? '⌚' : justStarted ? '🚀' : '📊'}</div>
+            <div class="text-2xl font-bold mb-3">${heroTitle}</div>
             <p class="text-sm leading-relaxed mb-6" style="color: #6b7280;">
-              ${isCompleted ? 'Your 30-day challenge has ended.<br>No sleep data was recorded during this challenge.' : 'Your 30-day challenge has begun.<br>First results arrive tomorrow morning.'}
+              ${heroMessage}
             </p>
             <div class="flex justify-center gap-10">
               <div class="text-center">
@@ -775,17 +798,25 @@ const Challenges = {
             </div>
           ` : ''}
 
+          ${!hasOuraToken && !isCompleted ? `
+          <!-- Connect Oura CTA -->
+          <button onclick="App.navigateTo('account')"
+            class="w-full py-3 min-h-[44px] bg-oura-teal text-gray-900 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity">
+            Connect Oura Ring
+          </button>
+          ` : ''}
+
           ${!isCompleted ? `
           <!-- Invite Friends -->
           <button onclick="Challenges.showInviteFriendsModal('${challengeId}')"
-            class="w-full py-3 min-h-[44px] bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
+            class="w-full py-3 min-h-[44px] ${!hasOuraToken ? 'mt-3 ' : ''}bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
             + Invite Friends
           </button>
           ` : ''}
 
           <!-- Browse Protocols -->
           <button onclick="App.navigateTo('protocols')"
-            class="w-full py-3 min-h-[44px] ${!isCompleted ? 'mt-3 ' : ''}bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
+            class="w-full py-3 min-h-[44px] mt-3 bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
             Browse Protocols
           </button>
 
