@@ -23,6 +23,22 @@ const Account = {
       const displayName = profile?.display_name || currentUser.email.split('@')[0];
       const hasOuraToken = !!profile?.oura_token;
 
+      // Validate Oura token if it exists
+      let ouraStatus = hasOuraToken ? 'connected' : 'disconnected'; // connected | expired | disconnected
+      if (hasOuraToken) {
+        try {
+          const baseUrl = window.location.hostname === 'localhost'
+            ? 'http://localhost:3000/api'
+            : 'https://api.ouraring.com/v2/usercollection';
+          const resp = await fetch(`${baseUrl}/personal_info`, {
+            headers: { 'Authorization': `Bearer ${profile.oura_token}` }
+          });
+          if (!resp.ok) ouraStatus = 'expired';
+        } catch (_) {
+          ouraStatus = 'expired';
+        }
+      }
+
       container.innerHTML = `
         <!-- Profile Section -->
         <div class="bg-oura-card rounded-2xl p-6 mb-4">
@@ -47,17 +63,17 @@ const Account = {
           <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-4">Oura Ring</h4>
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full ${hasOuraToken ? 'bg-green-500/20' : 'bg-oura-subtle'} flex items-center justify-center">
-                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="${hasOuraToken ? '#4ade80' : '#6b7280'}" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/></svg>
+              <div class="w-10 h-10 rounded-full ${ouraStatus === 'connected' ? 'bg-green-500/20' : ouraStatus === 'expired' ? 'bg-yellow-500/20' : 'bg-oura-subtle'} flex items-center justify-center">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="${ouraStatus === 'connected' ? '#4ade80' : ouraStatus === 'expired' ? '#facc15' : '#6b7280'}" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/></svg>
               </div>
               <div>
-                <p class="font-medium">${hasOuraToken ? 'Connected' : 'Not Connected'}</p>
-                <p class="text-xs text-oura-muted">${hasOuraToken ? 'Syncing sleep data' : 'Connect to track sleep'}</p>
+                <p class="font-medium">${ouraStatus === 'connected' ? 'Connected' : ouraStatus === 'expired' ? 'Token Expired' : 'Not Connected'}</p>
+                <p class="text-xs text-oura-muted">${ouraStatus === 'connected' ? 'Syncing sleep data' : ouraStatus === 'expired' ? 'Please update your Oura token' : 'Connect to track sleep'}</p>
               </div>
             </div>
             <button onclick="Account.showOuraTokenModal()"
-              class="px-4 py-2 min-h-[44px] ${hasOuraToken ? 'bg-oura-subtle' : 'bg-oura-teal text-gray-900'} rounded-lg text-sm font-medium">
-              ${hasOuraToken ? 'Update' : 'Connect'}
+              class="px-4 py-2 min-h-[44px] ${ouraStatus === 'disconnected' ? 'bg-oura-teal text-gray-900' : ouraStatus === 'expired' ? 'bg-yellow-500 text-gray-900' : 'bg-oura-subtle'} rounded-lg text-sm font-medium">
+              ${ouraStatus === 'connected' ? 'Update' : ouraStatus === 'expired' ? 'Reconnect' : 'Connect'}
             </button>
           </div>
         </div>
