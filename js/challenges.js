@@ -625,6 +625,7 @@ const Challenges = {
       container.dataset.challengeId = challengeId;
 
       // Auto-sync Oura data silently before fetching (skip on post-sync refresh)
+      let syncResult = null;
       if (!skipSync && typeof SleepSync !== 'undefined') {
         container.innerHTML = `
           <div class="nav-bar flex items-center justify-between mb-4">
@@ -636,7 +637,7 @@ const Challenges = {
           </div>
           <div class="text-center py-10 text-oura-muted text-sm">Syncing Oura data...</div>
         `;
-        await SleepSync.syncNow({ silent: true, skipRefresh: true });
+        syncResult = await SleepSync.syncNow({ silent: true, skipRefresh: true });
       }
 
       // Fetch sleep data for comparison
@@ -729,18 +730,23 @@ const Challenges = {
       if (hasNoChallengeData) {
         // Determine the right message
         let heroTitle, heroMessage;
+        const syncFailed = syncResult && !syncResult.success;
+        const syncError = syncResult?.error || '';
         if (isCompleted) {
           heroTitle = 'Challenge Complete!';
           heroMessage = 'Your 30-day challenge has ended.<br>No sleep data was recorded during this challenge.';
         } else if (!hasOuraToken) {
           heroTitle = 'Connect Oura Ring';
           heroMessage = 'Connect your Oura ring in Account settings<br>to start tracking your sleep data.';
+        } else if (syncFailed) {
+          heroTitle = 'Sync Issue';
+          heroMessage = `Could not fetch data from Oura.<br>Try reconnecting your ring in Account settings.`;
         } else if (justStarted) {
           heroTitle = "You're In!";
           heroMessage = 'Your 30-day challenge has begun.<br>First results arrive tomorrow morning.';
         } else {
           heroTitle = 'No Sleep Data';
-          heroMessage = 'No sleep data found for this challenge period.<br>Make sure your Oura ring is syncing correctly.';
+          heroMessage = 'No sleep data found for this challenge period.<br>Try pressing "Sync Sleep Data" in Account settings.';
         }
 
         container.innerHTML = `
@@ -772,7 +778,7 @@ const Challenges = {
 
           <!-- Celebration Hero Card -->
           <div class="rounded-2xl p-6 text-center mb-6" style="background: linear-gradient(135deg, #0f1a2e 0%, #1a1035 100%); border: 1px solid ${isCompleted ? 'rgba(168, 85, 247, 0.15)' : 'rgba(74, 222, 128, 0.15)'};">
-            <div class="text-5xl mb-4">${isCompleted ? '🏁' : !hasOuraToken ? '⌚' : justStarted ? '🚀' : '📊'}</div>
+            <div class="text-5xl mb-4">${isCompleted ? '🏁' : !hasOuraToken ? '⌚' : syncFailed ? '⚠️' : justStarted ? '🚀' : '📊'}</div>
             <div class="text-2xl font-bold mb-3">${heroTitle}</div>
             <p class="text-sm leading-relaxed mb-6" style="color: #6b7280;">
               ${heroMessage}
@@ -798,11 +804,11 @@ const Challenges = {
             </div>
           ` : ''}
 
-          ${!hasOuraToken && !isCompleted ? `
-          <!-- Connect Oura CTA -->
+          ${(!hasOuraToken || syncFailed) && !isCompleted ? `
+          <!-- Connect/Reconnect Oura CTA -->
           <button onclick="App.navigateTo('account')"
             class="w-full py-3 min-h-[44px] bg-oura-teal text-gray-900 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity">
-            Connect Oura Ring
+            ${!hasOuraToken ? 'Connect Oura Ring' : 'Reconnect Oura Ring'}
           </button>
           ` : ''}
 
