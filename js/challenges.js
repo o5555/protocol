@@ -905,7 +905,7 @@ const Challenges = {
         </div>
 
         <!-- Leaderboard -->
-        <div class="mb-6">
+        <div class="mb-6" id="leaderboard-container">
           <div class="text-xs text-oura-muted uppercase tracking-wider mb-3">${isCompleted ? 'FINAL STANDINGS' : 'CHALLENGE STANDINGS'}</div>
           <div class="space-y-2">
             ${leaderboard.length > 0 ? leaderboard.map(p => {
@@ -974,7 +974,7 @@ const Challenges = {
       }
 
       // Store data for metric switching
-      this._currentChallengeData = { myData, challenge, improvements };
+      this._currentChallengeData = { myData, challenge, improvements, sleepData, currentUserId: currentUser.id };
 
       // Render the main Chart.js trend chart
       if (!hasNoChallengeData) {
@@ -1276,6 +1276,77 @@ const Challenges = {
         <div class="text-center">
           <div class="text-3xl font-bold" style="color: #4ade80">${challengeAvg ?? '--'}</div>
           <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
+        </div>
+      `;
+    }
+
+    // Update leaderboard for selected metric
+    const leaderboardContainer = document.getElementById('leaderboard-container');
+    if (leaderboardContainer && this._currentChallengeData.sleepData) {
+      const { sleepData, currentUserId } = this._currentChallengeData;
+      const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes' };
+      const field = fieldMap[metric];
+      const lowerIsBetter = metric === 'hr' || metric === 'avghr';
+
+      const leaderboard = sleepData
+        .map(p => {
+          const baseVals = p.baselineData.filter(d => d[field]).map(d => d[field]);
+          const challVals = p.challengeData.filter(d => d[field]).map(d => d[field]);
+          const baseAvg = baseVals.length > 0 ? baseVals.reduce((a, b) => a + b, 0) / baseVals.length : null;
+          const challAvg = challVals.length > 0 ? challVals.reduce((a, b) => a + b, 0) / challVals.length : null;
+          let pct = null;
+          if (baseAvg && challAvg) {
+            pct = Math.round(((challAvg - baseAvg) / baseAvg) * 100);
+          }
+          // For HR metrics, negative % = improvement (lower is better)
+          const direction = lowerIsBetter
+            ? (pct < 0 ? 'up' : pct > 0 ? 'down' : 'neutral')
+            : (pct > 0 ? 'up' : pct < 0 ? 'down' : 'neutral');
+          return {
+            user: p.user,
+            baselineVal: baseAvg ? Math.round(baseAvg) : null,
+            currentVal: challAvg ? Math.round(challAvg) : null,
+            improvementPct: pct,
+            direction,
+            isMe: p.user.id === currentUserId
+          };
+        })
+        .filter(p => p.improvementPct !== null)
+        .sort((a, b) => {
+          // Sort by best improvement: for lowerIsBetter, most negative % is best
+          return lowerIsBetter ? a.improvementPct - b.improvementPct : b.improvementPct - a.improvementPct;
+        });
+
+      const rankEmojis = ['🥇', '🥈', '🥉'];
+      leaderboard.forEach((p, i) => { p.rank = i < 3 ? rankEmojis[i] : `${i + 1}`; });
+
+      const isCompleted = !challenge.isActive && challenge.daysRemaining === 0;
+      leaderboardContainer.innerHTML = `
+        <div class="text-xs text-oura-muted uppercase tracking-wider mb-3">${isCompleted ? 'FINAL STANDINGS' : 'CHALLENGE STANDINGS'}</div>
+        <div class="space-y-2">
+          ${leaderboard.length > 0 ? leaderboard.map(p => {
+            const name = p.user.display_name || p.user.email.split('@')[0];
+            const initial = escapeHtml(name.charAt(0).toUpperCase());
+            const displayPct = lowerIsBetter ? Math.abs(p.improvementPct) : p.improvementPct;
+            const pctPrefix = lowerIsBetter ? (p.improvementPct < 0 ? '-' : p.improvementPct > 0 ? '+' : '') : (p.improvementPct > 0 ? '+' : '');
+            return `
+              <div class="flex items-center p-3.5 rounded-xl" style="background: ${p.isMe ? '#1a2035' : '#0f1525'}; ${p.isMe ? 'border: 1px solid rgba(108, 99, 255, 0.2);' : ''}">
+                <span class="text-lg mr-3 w-7">${p.rank}</span>
+                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm mr-3" style="background: #1a2035">${p.isMe ? '👤' : initial}</div>
+                <div class="flex-1">
+                  <div class="text-sm font-medium">${p.isMe ? 'You' : escapeHtml(name)}</div>
+                  <div class="text-xs text-oura-muted">${p.baselineVal} → ${p.currentVal}</div>
+                </div>
+                <span class="text-lg font-semibold" style="color: ${p.direction === 'up' ? '#4ade80' : p.direction === 'down' ? '#f87171' : '#6b7280'}">
+                  ${pctPrefix}${displayPct}%
+                </span>
+              </div>
+            `;
+          }).join('') : `
+            <div class="rounded-xl p-4 text-center" style="background: #0f1525">
+              <p class="text-oura-muted text-sm">No data for this metric</p>
+            </div>
+          `}
         </div>
       `;
     }
