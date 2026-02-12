@@ -55,6 +55,23 @@ const Challenges = {
 
     if (participantError) throw participantError;
 
+    // Send email notifications to invited friends (best-effort)
+    if (friendIds.length > 0) {
+      const { data: profiles } = await client
+        .from('profiles')
+        .select('email')
+        .in('id', friendIds);
+      if (profiles) {
+        for (const p of profiles) {
+          fetch('/api/notify-invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: p.email })
+          }).catch(() => {});
+        }
+      }
+    }
+
     return challenge;
   },
 
