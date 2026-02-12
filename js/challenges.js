@@ -635,9 +635,17 @@ const Challenges = {
             <span class="text-base font-medium">${escapeHtml(challenge.name)}</span>
             <span style="width: 50px;"></span>
           </div>
-          <div class="text-center py-10 text-oura-muted text-sm">Syncing Oura data...</div>
+          <div class="text-center py-10">
+            <div class="inline-block w-8 h-8 border-2 border-oura-muted border-t-oura-teal rounded-full animate-spin mb-3"></div>
+            <p class="text-oura-muted text-sm">Syncing Oura data...</p>
+          </div>
         `;
-        syncResult = await SleepSync.syncNow({ silent: true, skipRefresh: true });
+        // Timeout sync after 12s to avoid hanging forever
+        const syncPromise = SleepSync.syncNow({ silent: true, skipRefresh: true });
+        const timeoutPromise = new Promise(resolve =>
+          setTimeout(() => resolve({ success: false, count: 0, error: 'Sync timed out' }), 12000)
+        );
+        syncResult = await Promise.race([syncPromise, timeoutPromise]);
       }
 
       // Fetch sleep data for comparison
@@ -890,11 +898,11 @@ const Challenges = {
         <!-- Metric Toggle + Chart -->
         <div class="mb-6">
           <div class="flex items-center justify-center mb-3">
-            <div class="flex gap-2" id="metric-toggle">
-              <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-4 py-1.5 text-xs rounded-md text-center" style="background: #1a2035; color: #fff" data-metric="score">SLEEP</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-4 py-1.5 text-xs rounded-md text-center text-oura-muted hover:bg-oura-card" data-metric="avghr">AVG HR</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-4 py-1.5 text-xs rounded-md text-center text-oura-muted hover:bg-oura-card" data-metric="hr">LOW HR</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-4 py-1.5 text-xs rounded-md text-center text-oura-muted hover:bg-oura-card" data-metric="deep">DEEP</button>
+            <div class="flex gap-1.5 sm:gap-2 w-full" id="metric-toggle">
+              <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[36px]" style="background: #1a2035; color: #fff" data-metric="score">SLEEP</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="avghr">AVG HR</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="hr">LOW HR</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="deep">DEEP</button>
             </div>
           </div>
           <div class="rounded-2xl p-4" style="background: #0a0a14">
@@ -1746,11 +1754,16 @@ const Challenges = {
     const currentUser = await SupabaseClient.getCurrentUser();
     if (!currentUser) throw new Error('Not authenticated');
 
+    // Prevent self-invite
+    if (email.toLowerCase() === currentUser.email?.toLowerCase()) {
+      throw new Error("You're already in this challenge");
+    }
+
     // Search for user by email
     const user = await Friends.searchByEmail(email);
 
     if (user) {
-      // User exists - add them as challenge participant
+      // User exists - add them as challenge participant (works for friends and non-friends)
       const { error } = await client
         .from('challenge_participants')
         .insert({
@@ -1764,12 +1777,17 @@ const Challenges = {
         if (error.code === '23505') {
           throw new Error('This person is already in the challenge');
         }
-        throw error;
+        if (error.code === '42501' || error.message?.includes('policy')) {
+          throw new Error('You don\'t have permission to invite to this challenge');
+        }
+        throw new Error('Could not send invite. Please try again.');
       }
 
       return { type: 'existing_user', user };
     } else {
       // User doesn't exist - create pending invite with challenge reference
+      // Use upsert-like approach: if invite already exists, update the challenge_id
+      let inviteData = null;
       const { data, error } = await client
         .from('pending_invites')
         .insert({
@@ -1782,9 +1800,23 @@ const Challenges = {
 
       if (error) {
         if (error.code === '23505') {
-          throw new Error('Invite already sent to this email');
+          // Invite already exists for this email - update it with this challenge_id
+          const { data: updated, error: updateErr } = await client
+            .from('pending_invites')
+            .update({ challenge_id: challengeId })
+            .eq('inviter_id', currentUser.id)
+            .eq('invited_email', email.toLowerCase())
+            .select()
+            .single();
+          if (updateErr) {
+            throw new Error('Invite already sent to this email');
+          }
+          inviteData = updated;
+        } else {
+          throw new Error('Could not create invite. Please try again.');
         }
-        throw error;
+      } else {
+        inviteData = data;
       }
 
       // Try to send invite email
@@ -1800,7 +1832,7 @@ const Challenges = {
         console.error('Invite email failed:', e);
       }
 
-      return { type: 'new_user', invite: data, emailSent };
+      return { type: 'new_user', invite: inviteData, emailSent };
     }
   },
 
@@ -1815,10 +1847,11 @@ const Challenges = {
 
     const modal = document.createElement('div');
     modal.id = 'invite-friends-modal';
-    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50';
     modal.innerHTML = `
-      <div class="bg-oura-card rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        <h3 class="text-xl font-bold mb-4">Invite to Challenge</h3>
+      <div class="bg-oura-card rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-md sm:mx-4 max-h-[85vh] overflow-y-auto safe-bottom">
+        <div class="w-10 h-1 bg-oura-border rounded-full mx-auto mb-4 sm:hidden"></div>
+        <h3 class="text-lg sm:text-xl font-bold mb-4">Invite to Challenge</h3>
 
         <!-- Email invite section -->
         <div class="mb-6">
@@ -1826,9 +1859,9 @@ const Challenges = {
           <p class="text-oura-muted text-xs mb-3">Invite anyone - they'll automatically become your friend when they accept.</p>
           <div class="flex gap-2">
             <input type="email" id="invite-email-input" placeholder="friend@email.com"
-              class="flex-1 px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white placeholder-neutral-600 focus:outline-none focus:border-oura-teal">
+              class="flex-1 min-w-0 px-3 sm:px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white text-sm placeholder-neutral-600 focus:outline-none focus:border-oura-teal">
             <button type="button" id="invite-email-btn"
-              class="px-4 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+              class="px-4 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90 whitespace-nowrap">
               Invite
             </button>
           </div>
@@ -1838,7 +1871,7 @@ const Challenges = {
         ${availableFriends.length > 0 ? `
           <div class="border-t border-oura-border pt-4">
             <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-3">Or Select Friends</label>
-            <form id="invite-friends-form" class="space-y-4" onsubmit="return false"
+            <form id="invite-friends-form" class="space-y-4" onsubmit="return false">
               <div class="space-y-2 max-h-48 overflow-y-auto">
                 ${availableFriends.map(f => `
                   <label class="flex items-center gap-3 p-3 bg-oura-subtle rounded-lg cursor-pointer hover:bg-oura-border">
@@ -1966,9 +1999,9 @@ const Challenges = {
 
     const modal = document.createElement('div');
     modal.id = 'create-challenge-modal';
-    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50';
     modal.innerHTML = `
-      <div class="bg-oura-card rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+      <div class="bg-oura-card rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-md sm:mx-4 max-h-[90vh] overflow-y-auto safe-bottom">
         <h3 class="text-xl font-bold mb-4">Create Challenge</h3>
         <form id="create-challenge-form" class="space-y-4">
           <div>

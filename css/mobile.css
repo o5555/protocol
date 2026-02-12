@@ -46,6 +46,11 @@ button, a, input, select, textarea, label {
   padding-bottom: var(--sab);
 }
 
+/* Safe bottom padding for modals (iPhone notch) */
+.safe-bottom {
+  padding-bottom: calc(8px + var(--sab));
+}
+
 /* Onboarding step transition animation */
 .onboarding-step-enter {
   opacity: 0;
