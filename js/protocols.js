@@ -419,13 +419,11 @@ const Protocols = {
     backBtn.classList.toggle('hidden', this._createStep === 1);
 
     // Update step indicator
-    stepIndicator.textContent = `Step ${this._createStep} of 3`;
+    stepIndicator.textContent = `Step ${this._createStep} of 2`;
 
     if (this._createStep === 1) {
       this._renderHabitsStep(content, title, nextBtn);
     } else if (this._createStep === 2) {
-      this._renderStartDateStep(content, title, nextBtn);
-    } else if (this._createStep === 3) {
       this._renderNameStep(content, title, nextBtn);
     }
   },
@@ -515,61 +513,10 @@ const Protocols = {
     `;
   },
 
-  // Step 2: Select start date
-  _renderStartDateStep(content, title, nextBtn) {
-    title.textContent = 'When do you want to start?';
-    nextBtn.textContent = 'Next';
-    nextBtn.disabled = false;
-
-    const today = DateUtils.toLocalDateStr(new Date());
-    const isStartNow = this._startDate === null;
-
-    content.innerHTML = `
-      <div class="space-y-4">
-        <button onclick="Protocols._selectStartDate(null)"
-          class="w-full text-left p-4 rounded-xl border-2 transition-all ${isStartNow ? 'border-oura-accent bg-oura-accent/10' : 'border-oura-border bg-oura-card hover:border-oura-accent/50'}">
-          <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-full bg-oura-accent/20 flex items-center justify-center">
-              <svg class="w-6 h-6 text-oura-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-              </svg>
-            </div>
-            <div>
-              <h3 class="font-semibold">Start Now</h3>
-              <p class="text-sm text-oura-muted">Begin your challenge today</p>
-            </div>
-          </div>
-        </button>
-
-        <button onclick="Protocols._selectStartDate('pick')"
-          class="w-full text-left p-4 rounded-xl border-2 transition-all ${!isStartNow ? 'border-oura-accent bg-oura-accent/10' : 'border-oura-border bg-oura-card hover:border-oura-accent/50'}">
-          <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-full bg-oura-accent/20 flex items-center justify-center">
-              <svg class="w-6 h-6 text-oura-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-              </svg>
-            </div>
-            <div>
-              <h3 class="font-semibold">Pick a Date</h3>
-              <p class="text-sm text-oura-muted">Schedule your challenge for later</p>
-            </div>
-          </div>
-        </button>
-
-        <div id="date-picker-container" class="${isStartNow ? 'hidden' : ''} mt-4">
-          <label class="block text-sm font-medium text-oura-muted mb-2">Start Date</label>
-          <input type="date" id="start-date-input" value="${this._startDate || today}" min="${today}"
-            onchange="Protocols._onDateChange(this.value)"
-            class="w-full bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white focus:border-oura-accent focus:outline-none">
-        </div>
-      </div>
-    `;
-  },
-
-  // Step 3: Name the challenge
+  // Step 2: Name the protocol
   _renderNameStep(content, title, nextBtn) {
-    title.textContent = 'Name Your Challenge';
-    nextBtn.textContent = 'Create Challenge';
+    title.textContent = 'Name Your Protocol';
+    nextBtn.textContent = 'Create Protocol';
     nextBtn.disabled = false;
 
     content.innerHTML = `
@@ -577,32 +524,24 @@ const Protocols = {
         <!-- Preview of protocol icon -->
         <div class="flex justify-center">
           <div class="protocol-icon w-20 h-20 rounded-xl flex items-center justify-center text-2xl font-semibold text-white" id="preview-icon">
-            MC
+            MP
           </div>
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-oura-muted mb-2">Challenge Name</label>
-          <input type="text" id="challenge-name" value="My Challenge" placeholder="My Challenge"
+          <label class="block text-sm font-medium text-oura-muted mb-2">Protocol Name</label>
+          <input type="text" id="challenge-name" value="My Protocol" placeholder="My Protocol"
             oninput="Protocols._onNameChange(this.value)"
             class="w-full bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white placeholder-oura-muted focus:border-oura-accent focus:outline-none text-center text-lg">
           <p class="text-xs text-oura-muted text-center mt-2">You can keep the default or customize it</p>
         </div>
 
         <div class="bg-oura-card rounded-xl p-4">
-          <h4 class="text-sm font-medium text-oura-muted mb-3">Challenge Summary</h4>
+          <h4 class="text-sm font-medium text-oura-muted mb-3">Protocol Summary</h4>
           <div class="space-y-2 text-sm">
             <div class="flex justify-between">
               <span class="text-oura-muted">Habits</span>
               <span>${this._customProtocolHabits.length} habit${this._customProtocolHabits.length !== 1 ? 's' : ''}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-oura-muted">Duration</span>
-              <span>30 days</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-oura-muted">Start</span>
-              <span>${this._startDate ? new Date(this._startDate).toLocaleDateString() : 'Today'}</span>
             </div>
           </div>
         </div>
@@ -611,22 +550,6 @@ const Protocols = {
 
     // Update preview icon with initials
     this._onNameChange(document.getElementById('challenge-name').value);
-  },
-
-  // Handle start date selection
-  _selectStartDate(option) {
-    if (option === null) {
-      this._startDate = null;
-    } else {
-      const today = DateUtils.toLocalDateStr(new Date());
-      this._startDate = this._startDate || today;
-    }
-    this._renderStep();
-  },
-
-  // Handle date input change
-  _onDateChange(value) {
-    this._startDate = value;
   },
 
   // Handle name input change (update preview icon)
@@ -647,45 +570,35 @@ const Protocols = {
 
   // Go to next step or finish
   async _nextStep() {
-    if (this._createStep < 3) {
+    if (this._createStep < 2) {
       this._createStep++;
       this._renderStep();
     } else {
-      // Final step - create protocol and challenge
+      // Final step - create the protocol (no challenge yet)
       await this._finishCreation();
     }
   },
 
-  // Finish creation - create protocol and challenge
+  // Finish creation - create protocol only
   async _finishCreation() {
-    const name = document.getElementById('challenge-name').value.trim() || 'My Challenge';
+    const name = document.getElementById('challenge-name').value.trim() || 'My Protocol';
     const nextBtn = document.getElementById('next-btn');
 
     nextBtn.disabled = true;
     nextBtn.textContent = 'Creating...';
 
     try {
-      // Create the custom protocol
       const protocol = await this.createCustomProtocol(name, this._customProtocolHabits);
-
-      // Create the challenge with this protocol
-      const challenge = await Challenges.create({
-        protocolId: protocol.id,
-        name: name,
-        friendIds: [],
-        mode: 'pro',
-        startDate: this._startDate
-      });
 
       this.closeCreateModal();
 
-      // Navigate to the new challenge
-      App.navigateTo('challenge-detail', challenge.id);
+      // Navigate to the new protocol detail page (where they can start a challenge)
+      App.navigateTo('protocol-detail', protocol.id);
     } catch (error) {
-      console.error('Error creating protocol and challenge:', error);
-      alert('Failed to create challenge: ' + error.message);
+      console.error('Error creating protocol:', error);
+      alert('Failed to create protocol: ' + error.message);
       nextBtn.disabled = false;
-      nextBtn.textContent = 'Create Challenge';
+      nextBtn.textContent = 'Create Protocol';
     }
   },
 
