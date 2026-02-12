@@ -279,6 +279,8 @@ async function mockSupabase(page) {
     }
     if (typeof Challenges !== 'undefined') {
       Challenges.getInvitations = async () => [];
+      // Override renderSmartView to always show full list (skip single-challenge auto-redirect)
+      Challenges.renderSmartView = function() { return Challenges.renderList(); };
     }
     if (typeof Cache !== 'undefined') { Cache.get = () => null; Cache.set = () => {}; Cache.clear = () => {}; }
   });

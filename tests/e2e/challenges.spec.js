@@ -77,6 +77,8 @@ async function mockSupabase(page) {
       }
       return mockQuery;
     };
+    // Override renderSmartView to always show the full list (skip single-challenge auto-redirect)
+    Challenges.renderSmartView = function() { return Challenges.renderList(); };
     Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 4 });
     if (typeof SleepSync !== 'undefined') {
       SleepSync.syncNow = async () => ({ success: true, synced: 1 });
