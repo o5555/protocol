@@ -104,10 +104,11 @@ const Challenges = {
     return challenges.filter(c => c.status === 'invited');
   },
 
-  // Get active challenges
+  // Get active and upcoming challenges
   async getActiveChallenges() {
     const challenges = await this.getMyChallenges();
-    return challenges.filter(c => c.status === 'accepted' && c.isActive);
+    // Include both active (started) and upcoming (not yet started but end date in future)
+    return challenges.filter(c => c.status === 'accepted' && (c.isActive || c.daysRemaining > 0));
   },
 
   // Get completed challenges (ended, not dismissed)
@@ -203,11 +204,14 @@ const Challenges = {
       data.protocol.habits.sort((a, b) => a.sort_order - b.sort_order);
     }
 
+    const isActive = this.isActive(data.start_date, data.end_date);
+    const dayNumber = this.getDayNumber(data.start_date);
     return {
       ...data,
       daysRemaining: this.getDaysRemaining(data.end_date),
-      dayNumber: this.getDayNumber(data.start_date),
-      isActive: this.isActive(data.start_date, data.end_date)
+      dayNumber,
+      isActive,
+      isUpcoming: !isActive && dayNumber === 0
     };
   },
 
@@ -438,9 +442,7 @@ const Challenges = {
   },
 
   // Helper: Format a Date as YYYY-MM-DD local date string
-  toLocalDateStr(d) {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  },
+  toLocalDateStr(d) { return DateUtils.toLocalDateStr(d); },
 
   // Helper: Parse YYYY-MM-DD as local midnight (not UTC)
   parseLocalDate(dateStr) {
@@ -474,6 +476,39 @@ const Challenges = {
     const start = this.parseLocalDate(startDate);
     const end = this.parseLocalDate(endDate);
     return today >= start && today <= end;
+  },
+
+  // Helper: Render participants section for challenge detail
+  renderParticipantsSection(participants, currentUserId) {
+    if (!participants || participants.length === 0) return '';
+
+    const others = participants.filter(p => p.user?.id !== currentUserId);
+    if (others.length === 0) return '';
+
+    return `
+      <div class="mt-6 mb-4">
+        <div class="text-xs text-oura-muted uppercase tracking-widest mb-3">Participants</div>
+        <div class="space-y-2">
+          ${others.map(p => {
+            const name = p.user?.display_name || p.user?.email || 'Unknown';
+            const isAccepted = p.status === 'accepted';
+            return `
+              <div class="flex items-center justify-between rounded-xl px-4 py-3" style="background: #0f1525; border: 1px solid #1a2035;">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold" style="background: ${isAccepted ? 'rgba(74, 222, 128, 0.15)' : 'rgba(250, 204, 21, 0.15)'}; color: ${isAccepted ? '#4ade80' : '#facc15'};">
+                    ${escapeHtml(name.charAt(0).toUpperCase())}
+                  </div>
+                  <span class="text-sm">${escapeHtml(name)}</span>
+                </div>
+                <span class="text-xs font-medium px-2.5 py-1 rounded-full" style="background: ${isAccepted ? 'rgba(74, 222, 128, 0.12)' : 'rgba(250, 204, 21, 0.12)'}; color: ${isAccepted ? '#4ade80' : '#facc15'};">
+                  ${isAccepted ? 'Joined' : 'Invited'}
+                </span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
   },
 
   // Render challenges list page
@@ -571,6 +606,9 @@ const Challenges = {
           <div class="space-y-3 mb-6">
             ${activeChallenges.map(challenge => {
               const initials = Protocols.getInitials(challenge.protocol.name);
+              const dayNum = this.getDayNumber(challenge.start_date);
+              const isUpcoming = dayNum === 0;
+              const daysUntilStart = isUpcoming ? Math.ceil((this.parseLocalDate(challenge.start_date) - new Date(new Date().setHours(0,0,0,0))) / (1000*60*60*24)) : 0;
               return `
               <div onclick="App.navigateTo('challenge-detail', '${challenge.id}')"
                 class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors">
@@ -583,8 +621,13 @@ const Challenges = {
                     <p class="text-oura-muted text-sm mt-1">${escapeHtml(challenge.protocol.name)}</p>
                   </div>
                   <div class="text-right flex-shrink-0">
-                    <p class="text-oura-teal font-semibold text-sm">${challenge.daysRemaining}d left</p>
-                    <p class="text-xs text-oura-muted mt-0.5">Day ${this.getDayNumber(challenge.start_date)}/30</p>
+                    ${isUpcoming ? `
+                      <p class="text-yellow-400 font-semibold text-sm">Upcoming</p>
+                      <p class="text-xs text-oura-muted mt-0.5">Starts ${daysUntilStart === 1 ? 'tomorrow' : `in ${daysUntilStart}d`}</p>
+                    ` : `
+                      <p class="text-oura-teal font-semibold text-sm">${challenge.daysRemaining}d left</p>
+                      <p class="text-xs text-oura-muted mt-0.5">Day ${dayNum}/30</p>
+                    `}
                   </div>
                   <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -744,6 +787,10 @@ const Challenges = {
         if (isCompleted) {
           heroTitle = 'Challenge Complete!';
           heroMessage = 'Your 30-day challenge has ended.<br>No sleep data was recorded during this challenge.';
+        } else if (challenge.isUpcoming) {
+          const daysUntil = Math.ceil((this.parseLocalDate(challenge.start_date) - new Date(new Date().setHours(0,0,0,0))) / (1000*60*60*24));
+          heroTitle = "You're In!";
+          heroMessage = `Challenge starts ${daysUntil === 1 ? 'tomorrow' : `in ${daysUntil} days`}.<br>Get ready for 30 days of better sleep!`;
         } else if (!hasOuraToken) {
           heroTitle = 'Connect Oura Ring';
           heroMessage = 'Connect your Oura ring in Account settings<br>to start tracking your sleep data.';
@@ -776,6 +823,11 @@ const Challenges = {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Challenge Complete
+            </div>
+            ` : challenge.isUpcoming ? `
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium" style="border: 1px solid rgba(250, 204, 21, 0.3); color: #facc15;">
+              <span class="w-2 h-2 rounded-full inline-block" style="background: #facc15;"></span>
+              Upcoming
             </div>
             ` : `
             <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium" style="border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80;">
@@ -812,6 +864,9 @@ const Challenges = {
               <span class="text-lg font-bold">${Math.round(myBaseline.score)}</span>
             </div>
           ` : ''}
+
+          <!-- Participants -->
+          ${this.renderParticipantsSection(challenge.participants, currentUser.id)}
 
           ${(!hasOuraToken || syncFailed) && !isCompleted ? `
           <!-- Connect/Reconnect Oura CTA -->
@@ -954,6 +1009,9 @@ const Challenges = {
           class="w-full text-center py-4 text-oura-accent text-sm font-medium hover:text-white transition-colors">
           View detailed metrics & habits →
         </button>
+
+        <!-- Participants -->
+        ${this.renderParticipantsSection(challenge.participants, currentUser.id)}
 
         ${!isCompleted ? `
         <!-- Invite Friends -->
@@ -2058,7 +2116,7 @@ const Challenges = {
             </div>
             <input type="date" id="challenge-start-date"
               class="hidden w-full mt-2 px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white"
-              min="${new Date().toISOString().split('T')[0]}">
+              min="${DateUtils.toLocalDateStr(new Date())}">
           </div>
 
           <div>

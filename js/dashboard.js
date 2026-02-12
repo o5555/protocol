@@ -221,7 +221,7 @@ const Dashboard = {
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const startStr = thirtyDaysAgo.toISOString().split('T')[0];
+    const startStr = DateUtils.toLocalDateStr(thirtyDaysAgo);
 
     const { data, error } = await client
       .from('sleep_data')
@@ -366,7 +366,7 @@ const Dashboard = {
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const startStr = thirtyDaysAgo.toISOString().split('T')[0];
+    const startStr = DateUtils.toLocalDateStr(thirtyDaysAgo);
 
     const { data, error } = await client
       .from('sleep_data')

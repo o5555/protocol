@@ -50,7 +50,8 @@ const Comparison = {
       const challengeData = data.filter(d => d.date >= challenge.start_date);
 
       // Calculate how many days are in the challenge so far
-      const today = new Date();
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const endDate = Challenges.parseLocalDate(challenge.end_date);
       const effectiveEnd = today < endDate ? today : endDate;
       const challengeDays = Math.max(0, Math.floor((effectiveEnd - challengeStart) / 86400000) + 1);
@@ -561,8 +562,8 @@ const SleepSync = {
         console.warn('[SleepSync] Could not check active challenges for baseline range:', e);
       }
 
-      const startStr = startDate.toISOString().split('T')[0];
-      const endStr = endDate.toISOString().split('T')[0];
+      const startStr = DateUtils.toLocalDateStr(startDate);
+      const endStr = DateUtils.toLocalDateStr(endDate);
 
       // Fetch from Oura API via server proxy (avoids CORS issues)
       const baseUrl = '/api';

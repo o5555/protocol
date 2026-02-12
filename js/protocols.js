@@ -521,7 +521,7 @@ const Protocols = {
     nextBtn.textContent = 'Next';
     nextBtn.disabled = false;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = DateUtils.toLocalDateStr(new Date());
     const isStartNow = this._startDate === null;
 
     content.innerHTML = `
@@ -618,7 +618,7 @@ const Protocols = {
     if (option === null) {
       this._startDate = null;
     } else {
-      const today = new Date().toISOString().split('T')[0];
+      const today = DateUtils.toLocalDateStr(new Date());
       this._startDate = this._startDate || today;
     }
     this._renderStep();

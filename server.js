@@ -10,6 +10,12 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fhsbkcvepvlqbygpmdpc.s
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 
+function toLocalDateStr(d) {
+    return d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0');
+}
+
 const MIME_TYPES = {
     '.html': 'text/html',
     '.js': 'application/javascript',
@@ -77,8 +83,8 @@ const server = http.createServer(async (req, res) => {
             }
 
             // Fetch last 7 days of sleep data from Oura
-            const endDate = new Date().toISOString().split('T')[0];
-            const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const endDate = toLocalDateStr(new Date());
+            const startDate = toLocalDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
 
             const ouraPath = `/v2/usercollection/sleep?start_date=${startDate}&end_date=${endDate}`;
             const ouraDailyPath = `/v2/usercollection/daily_sleep?start_date=${startDate}&end_date=${endDate}`;
