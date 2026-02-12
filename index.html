@@ -237,7 +237,7 @@
                                 <circle cx="12" cy="10" r="2.5" stroke-linecap="round" stroke-linejoin="round" />
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 18.5a5 5 0 0 1 9 0" />
                             </svg>
-                            <span id="challenges-badge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+                            <span id="challenges-badge" class="hidden absolute -top-1.5 -right-2 min-w-[18px] h-[18px] bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1"></span>
                         </div>
                         <span class="text-[11px] mt-0.5 font-medium">Challenge</span>
                     </button>
@@ -362,6 +362,7 @@
                     const challengesBadge = document.getElementById('challenges-badge');
                     if (challengesBadge) {
                         if (challengeInvites.length > 0) {
+                            challengesBadge.textContent = challengeInvites.length;
                             challengesBadge.classList.remove('hidden');
                         } else {
                             challengesBadge.classList.add('hidden');

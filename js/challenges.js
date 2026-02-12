@@ -530,27 +530,28 @@ const Challenges = {
 
         <!-- Invitations -->
         ${invitations.length > 0 ? `
-          <div class="bg-yellow-900/20 border border-yellow-600 rounded-lg p-6 mb-6">
-            <h3 class="text-lg font-semibold mb-4 text-yellow-400">Challenge Invitations (${invitations.length})</h3>
+          <div class="rounded-2xl p-5 mb-6" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(249, 115, 22, 0.08) 100%); border: 1px solid rgba(239, 68, 68, 0.3);">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+              <h3 class="text-base font-semibold text-red-400">${invitations.length === 1 ? 'You have an invitation!' : `You have ${invitations.length} invitations!`}</h3>
+            </div>
             <div class="space-y-3">
               ${invitations.map(inv => `
-                <div class="bg-oura-card rounded-2xl p-4">
-                  <div class="flex items-start justify-between">
-                    <div>
-                      <p class="font-semibold">${escapeHtml(inv.name)} ${Protocols.renderModeBadge(inv.mode || 'pro')}</p>
-                      <p class="text-sm text-oura-muted">${escapeHtml(inv.protocol.name)}</p>
-                      <p class="text-sm text-oura-muted">From: ${escapeHtml(inv.creator.display_name || inv.creator.email)}</p>
-                    </div>
-                    <div class="flex gap-2">
-                      <button onclick="Challenges.handleAcceptInvite('${inv.participantId}')"
-                        class="px-4 py-2 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-medium">
-                        Join
-                      </button>
-                      <button onclick="Challenges.handleDeclineInvite('${inv.participantId}')"
-                        class="px-4 py-2 min-h-[44px] bg-oura-border text-white rounded-lg text-sm font-medium">
-                        Decline
-                      </button>
-                    </div>
+                <div class="bg-oura-bg/60 rounded-xl p-4">
+                  <div class="mb-3">
+                    <p class="font-semibold">${escapeHtml(inv.name)} ${Protocols.renderModeBadge(inv.mode || 'pro')}</p>
+                    <p class="text-sm text-oura-muted mt-0.5">${escapeHtml(inv.protocol.name)}</p>
+                    <p class="text-xs text-oura-muted mt-1">Invited by ${escapeHtml(inv.creator.display_name || inv.creator.email)}</p>
+                  </div>
+                  <div class="flex gap-2">
+                    <button onclick="Challenges.handleAcceptInvite('${inv.participantId}')"
+                      class="flex-1 py-2.5 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-semibold">
+                      Join Challenge
+                    </button>
+                    <button onclick="Challenges.handleDeclineInvite('${inv.participantId}')"
+                      class="px-4 py-2.5 min-h-[44px] bg-oura-border text-oura-muted rounded-lg text-sm font-medium">
+                      Decline
+                    </button>
                   </div>
                 </div>
               `).join('')}
@@ -1744,6 +1745,23 @@ const Challenges = {
       }
       throw error;
     }
+
+    // Send email notifications to invited friends (best-effort)
+    try {
+      const { data: profiles } = await client
+        .from('profiles')
+        .select('email')
+        .in('id', friendIds);
+      if (profiles) {
+        for (const p of profiles) {
+          fetch('/api/notify-invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: p.email })
+          }).catch(() => {});
+        }
+      }
+    } catch (_) { /* best-effort */ }
   },
 
   // Invite someone by email to a challenge (even if not a friend yet)
@@ -1782,6 +1800,15 @@ const Challenges = {
         }
         throw new Error('Could not send invite. Please try again.');
       }
+
+      // Send magic link as email notification so they know they've been invited
+      try {
+        await fetch('/api/notify-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.toLowerCase() })
+        });
+      } catch (_) { /* best-effort */ }
 
       return { type: 'existing_user', user };
     } else {

@@ -278,6 +278,70 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Send magic link to an existing user (serves as challenge invite notification)
+    if (req.url === '/api/notify-invite' && req.method === 'POST') {
+        try {
+            const body = await parseBody(req);
+            const { email } = body;
+
+            if (!email) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Missing email' }));
+                return;
+            }
+
+            if (!SUPABASE_SERVICE_ROLE_KEY) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }));
+                return;
+            }
+
+            console.log(`[notify-invite] Sending magic link to ${email}`);
+
+            const otpData = JSON.stringify({ email });
+            const url = new URL('/auth/v1/otp', SUPABASE_URL);
+
+            const otpRes = await new Promise((resolve, reject) => {
+                const options = {
+                    hostname: url.hostname,
+                    path: url.pathname,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                        'Content-Length': Buffer.byteLength(otpData)
+                    }
+                };
+
+                const r = https.request(options, (response) => {
+                    let data = '';
+                    response.on('data', chunk => data += chunk);
+                    response.on('end', () => resolve({ status: response.statusCode, data }));
+                });
+
+                r.on('error', reject);
+                r.write(otpData);
+                r.end();
+            });
+
+            if (otpRes.status >= 200 && otpRes.status < 300) {
+                console.log(`[notify-invite] Magic link sent to ${email}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } else {
+                console.error(`[notify-invite] Failed for ${email}: status=${otpRes.status} body=${otpRes.data}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, details: otpRes.data }));
+            }
+        } catch (error) {
+            console.error(`[notify-invite] Exception:`, error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+    }
+
     // Health check endpoint
     if (req.url === '/health' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
