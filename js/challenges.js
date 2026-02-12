@@ -495,6 +495,26 @@ const Challenges = {
     return today >= start && today <= end;
   },
 
+  // Helper: Render protocol habits section for challenge detail
+  renderProtocolHabitsSection(challenge) {
+    const habits = Protocols.getHabitsForMode(challenge.protocol, challenge.mode || 'pro');
+    if (!habits || habits.length === 0) return '';
+
+    return `
+      <div class="mt-6 mb-4">
+        <div class="text-xs text-oura-muted uppercase tracking-widest mb-3">Protocol Habits</div>
+        <div class="space-y-2">
+          ${habits.map(habit => `
+            <div class="rounded-xl px-4 py-3" style="background: #0f1525; border: 1px solid #1a2035;">
+              <p class="text-sm font-medium">${escapeHtml(habit.title)}</p>
+              ${habit.description ? `<p class="text-xs mt-1" style="color: #6b7280;">${escapeHtml(habit.description)}</p>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  },
+
   // Helper: Render participants section for challenge detail
   renderParticipantsSection(participants, currentUserId) {
     if (!participants || participants.length === 0) return '';
@@ -882,6 +902,9 @@ const Challenges = {
             </div>
           ` : ''}
 
+          <!-- Protocol Habits -->
+          ${this.renderProtocolHabitsSection(challenge)}
+
           <!-- Participants -->
           ${this.renderParticipantsSection(challenge.participants, currentUser.id)}
 
@@ -900,12 +923,6 @@ const Challenges = {
             + Invite Friends
           </button>
           ` : ''}
-
-          <!-- Browse Protocols -->
-          <button onclick="App.navigateTo('protocols')"
-            class="w-full py-3 min-h-[44px] mt-3 bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
-            Browse Protocols
-          </button>
 
           <!-- Settings cogwheel -->
           <div class="flex justify-center mt-6">
@@ -1027,6 +1044,9 @@ const Challenges = {
           View detailed metrics & habits →
         </button>
 
+        <!-- Protocol Habits -->
+        ${this.renderProtocolHabitsSection(challenge)}
+
         <!-- Participants -->
         ${this.renderParticipantsSection(challenge.participants, currentUser.id)}
 
@@ -1037,12 +1057,6 @@ const Challenges = {
           + Invite Friends
         </button>
         ` : ''}
-
-        <!-- Browse Protocols -->
-        <button onclick="App.navigateTo('protocols')"
-          class="w-full py-3 min-h-[44px] ${!isCompleted ? 'mt-3 ' : ''}bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
-          Browse Protocols
-        </button>
 
         <!-- Settings cogwheel -->
         <div class="flex justify-center mt-6">
