@@ -131,12 +131,23 @@ const server = http.createServer(async (req, res) => {
 
             // Transform sleep data for Supabase
             // Oura can return multiple sessions per day (naps + main sleep),
-            // so deduplicate by date, keeping the longest session
+            // so deduplicate by date, preferring long_sleep over rest/naps,
+            // then keeping the longest session as tiebreaker
             const byDate = {};
             for (const sleep of ouraData.data) {
-                const dur = sleep.total_sleep_duration || 0;
-                if (!byDate[sleep.day] || dur > byDate[sleep.day].total_sleep_duration) {
+                const existing = byDate[sleep.day];
+                if (!existing) {
                     byDate[sleep.day] = sleep;
+                    continue;
+                }
+                const isLong = sleep.type === 'long_sleep';
+                const existingIsLong = existing.type === 'long_sleep';
+                if (isLong && !existingIsLong) {
+                    byDate[sleep.day] = sleep;
+                } else if (isLong === existingIsLong) {
+                    if ((sleep.total_sleep_duration || 0) > (existing.total_sleep_duration || 0)) {
+                        byDate[sleep.day] = sleep;
+                    }
                 }
             }
             const sleepRecords = Object.values(byDate).map(sleep => ({
