@@ -816,10 +816,14 @@ const Challenges = {
         hasOuraToken = !!profile?.oura_token;
       } catch (_) {}
 
-      if (hasNoChallengeData) {
+      // On day 1 with Oura connected, skip the hero and show the normal view
+      // so users see their baseline data and chart instead of a blocking "come back tomorrow" message
+      const syncFailed = syncResult && !syncResult.success;
+      const showHeroInstead = hasNoChallengeData && !(justStarted && hasOuraToken && !syncFailed);
+
+      if (showHeroInstead) {
         // Determine the right message
         let heroTitle, heroMessage;
-        const syncFailed = syncResult && !syncResult.success;
         const syncError = syncResult?.error || '';
         if (isCompleted) {
           heroTitle = 'Challenge Complete!';
@@ -834,9 +838,6 @@ const Challenges = {
         } else if (syncFailed) {
           heroTitle = 'Sync Issue';
           heroMessage = `Could not fetch data from Oura.<br>Try reconnecting your ring in Account settings.`;
-        } else if (justStarted) {
-          heroTitle = "You're In!";
-          heroMessage = 'Your 30-day challenge has begun.<br>First results arrive tomorrow morning.';
         } else {
           heroTitle = 'No Sleep Data';
           heroMessage = 'No sleep data found for this challenge period.<br>Try pressing "Sync Sleep Data" in Account settings.';

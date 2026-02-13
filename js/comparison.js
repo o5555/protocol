@@ -29,7 +29,14 @@ const Comparison = {
     const baselineStart = new Date(challengeStart);
     baselineStart.setDate(baselineStart.getDate() - 30);
     const baselineStartStr = Challenges.toLocalDateStr(baselineStart);
-    const baselineEndStr = Challenges.toLocalDateStr(new Date(challengeStart.getTime() - 86400000)); // day before start
+
+    // Include the night before start date in challenge data.
+    // Sleep from the night of (start-1 → start) is the first challenge data point,
+    // but Oura may record it with day = start-1 (bedtime date). Including this
+    // day ensures Day 1 data shows regardless of timezone or bedtime.
+    const dayBeforeStart = new Date(challengeStart);
+    dayBeforeStart.setDate(dayBeforeStart.getDate() - 1);
+    const challengeDataStartStr = Challenges.toLocalDateStr(dayBeforeStart);
 
     const sleepDataPromises = participants.map(async (participant) => {
       const { data, error } = await client
@@ -45,9 +52,10 @@ const Comparison = {
         return { user: participant.user, data: [], baselineData: [], challengeData: [], baselineDays: 30, challengeDays: 0 };
       }
 
-      // Split data into baseline (exactly 30 days before) and challenge period
-      const baselineData = data.filter(d => d.date >= baselineStartStr && d.date < challenge.start_date);
-      const challengeData = data.filter(d => d.date >= challenge.start_date);
+      // Split data into baseline and challenge period
+      // Baseline ends before the night-before boundary to avoid overlap
+      const baselineData = data.filter(d => d.date >= baselineStartStr && d.date < challengeDataStartStr);
+      const challengeData = data.filter(d => d.date >= challengeDataStartStr);
 
       // Calculate how many days are in the challenge so far
       const now = new Date();
