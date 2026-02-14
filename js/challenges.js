@@ -96,6 +96,8 @@ const Challenges = {
           start_date,
           end_date,
           created_at,
+          fresh_start_used,
+          fresh_start_at,
           protocol:protocols(id, name, icon),
           creator:profiles!challenges_creator_id_fkey(id, email, display_name)
         )
@@ -196,6 +198,8 @@ const Challenges = {
         start_date,
         end_date,
         created_at,
+        fresh_start_used,
+        fresh_start_at,
         protocol:protocols(
           id,
           name,
@@ -346,6 +350,85 @@ const Challenges = {
     } catch (error) {
       console.error('Error deleting challenge:', error);
       alert('Failed to delete challenge: ' + error.message);
+    }
+  },
+
+  // Fresh Start: reset challenge timeline (creator-only, days 1-3, one-time)
+  async freshStartChallenge(challengeId, newStartDate) {
+    const client = SupabaseClient.client;
+    if (!client) throw new Error('Supabase not initialized');
+
+    const currentUser = await SupabaseClient.getCurrentUser();
+    if (!currentUser) throw new Error('Not authenticated');
+
+    const challenge = await this.getChallenge(challengeId);
+    if (challenge.creator.id !== currentUser.id) {
+      throw new Error('Only the challenge creator can use Fresh Start');
+    }
+    if (challenge.fresh_start_used) {
+      throw new Error('Fresh Start has already been used for this challenge');
+    }
+    if (challenge.dayNumber > 3) {
+      throw new Error('Fresh Start is only available during the first 3 days');
+    }
+
+    const newStart = this.parseLocalDate(newStartDate);
+    const newEnd = new Date(newStart);
+    newEnd.setDate(newEnd.getDate() + 30);
+
+    // Wipe all habit completions for this challenge
+    const { error: deleteError } = await client
+      .from('habit_completions')
+      .delete()
+      .eq('challenge_id', challengeId);
+
+    if (deleteError) throw deleteError;
+
+    // Update challenge dates and mark fresh start used
+    const { error: updateError } = await client
+      .from('challenges')
+      .update({
+        start_date: this.toLocalDateStr(newStart),
+        end_date: this.toLocalDateStr(newEnd),
+        fresh_start_used: true,
+        fresh_start_at: new Date().toISOString()
+      })
+      .eq('id', challengeId);
+
+    if (updateError) throw updateError;
+  },
+
+  // Handle Fresh Start with UI feedback
+  async handleFreshStart(challengeId) {
+    const dateInput = document.getElementById('fresh-start-date');
+    if (!dateInput || !dateInput.value) {
+      alert('Please pick a start date');
+      return;
+    }
+
+    const btn = document.getElementById('fresh-start-confirm-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-gray-900 border-t-transparent rounded-full animate-spin mr-2"></span>Resetting...';
+    }
+
+    try {
+      await this.freshStartChallenge(challengeId, dateInput.value);
+      this.closeFreshStartModal();
+
+      if (typeof Cache !== 'undefined') {
+        Cache.clear('dashboard');
+      }
+
+      await this.renderDetail(challengeId);
+    } catch (error) {
+      console.error('Error with Fresh Start:', error);
+      alert('Failed to restart challenge: ' + error.message);
+
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '\u{1F680} Let\'s Go!';
+      }
     }
   },
 
@@ -729,6 +812,23 @@ const Challenges = {
         syncResult = await Promise.race([syncPromise, timeoutPromise]);
       }
 
+      // Fresh Start notification banner for participants
+      const freshStartBanner = challenge.fresh_start_at && challenge.creator.id !== currentUser.id && !localStorage.getItem('fresh_start_dismissed_' + challengeId) ? `
+        <div class="rounded-xl p-4 mb-5 flex items-start gap-3" style="background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), rgba(59, 130, 246, 0.08)); border: 1px solid rgba(74, 222, 128, 0.2);">
+          <span class="text-2xl flex-shrink-0">\u{1F305}</span>
+          <div class="flex-1">
+            <div class="text-sm font-semibold text-white mb-0.5">Fresh Start!</div>
+            <div class="text-xs text-oura-muted">The challenge was restarted. New Day 1 is ${new Date(challenge.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}. A clean slate for everyone!</div>
+          </div>
+          <button onclick="localStorage.setItem('fresh_start_dismissed_${challengeId}', '1'); this.closest('.rounded-xl').remove();"
+            class="text-oura-muted hover:text-white flex-shrink-0 p-1">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      ` : '';
+
       // Fetch sleep data for comparison
       const { sleepData } = await Comparison.getChallengeSleepData(challengeId);
 
@@ -875,6 +975,8 @@ const Challenges = {
             `}
           </div>
 
+          ${freshStartBanner}
+
           <!-- Celebration Hero Card -->
           <div class="rounded-2xl p-6 text-center mb-6" style="background: linear-gradient(135deg, #0f1a2e 0%, #1a1035 100%); border: 1px solid ${isCompleted ? 'rgba(168, 85, 247, 0.15)' : 'rgba(74, 222, 128, 0.15)'};">
             <div class="text-5xl mb-4">${isCompleted ? '🏁' : !hasOuraToken ? '⌚' : syncFailed ? '⚠️' : justStarted ? '🚀' : '📊'}</div>
@@ -927,7 +1029,7 @@ const Challenges = {
 
           <!-- Settings cogwheel -->
           <div class="flex justify-center mt-6">
-            <button onclick="Challenges.showSettingsMenu('${challengeId}', ${challenge.creator.id === currentUser.id})"
+            <button onclick="Challenges.showSettingsMenu('${challengeId}', ${challenge.creator.id === currentUser.id}, ${challenge.dayNumber}, ${!!challenge.fresh_start_used})"
               class="p-3 text-oura-muted hover:text-white transition-colors">
               <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
@@ -956,6 +1058,8 @@ const Challenges = {
           </div>
         </div>
         ` : ''}
+
+        ${freshStartBanner}
 
         <!-- Hero Stat -->
         <div id="hero-stat-container" class="text-center py-6 mb-4">
@@ -1061,7 +1165,7 @@ const Challenges = {
 
         <!-- Settings cogwheel -->
         <div class="flex justify-center mt-6">
-          <button onclick="Challenges.showSettingsMenu('${challengeId}', ${challenge.creator.id === currentUser.id})"
+          <button onclick="Challenges.showSettingsMenu('${challengeId}', ${challenge.creator.id === currentUser.id}, ${challenge.dayNumber}, ${!!challenge.fresh_start_used})"
             class="p-3 text-oura-muted hover:text-white transition-colors">
             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
@@ -1731,8 +1835,9 @@ const Challenges = {
     if (modal) modal.remove();
   },
 
-  // Show settings menu (sync, delete)
-  showSettingsMenu(challengeId, isCreator) {
+  // Show settings menu (sync, fresh start, delete)
+  showSettingsMenu(challengeId, isCreator, dayNumber, freshStartUsed) {
+    const showFreshStart = isCreator && dayNumber >= 1 && dayNumber <= 3 && !freshStartUsed;
     const modal = document.createElement('div');
     modal.id = 'settings-menu-modal';
     modal.className = 'fixed inset-0 bg-black/50 z-50 flex items-end justify-center';
@@ -1747,6 +1852,17 @@ const Challenges = {
           </svg>
           <span class="text-white font-medium">Sync Sleep Data</span>
         </button>
+
+        ${showFreshStart ? `
+        <button onclick="Challenges.closeSettingsMenu(); Challenges.showFreshStartModal('${challengeId}');"
+          class="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-oura-subtle transition-colors mt-1">
+          <span class="text-xl w-5 text-center">\u{1F504}</span>
+          <div class="flex-1 text-left">
+            <span class="text-white font-medium">Fresh Start</span>
+            <span class="block text-xs text-oura-muted">Restart the challenge timeline</span>
+          </div>
+        </button>
+        ` : ''}
 
         ${isCreator ? `
         <button onclick="Challenges.closeSettingsMenu(); Challenges.handleDeleteChallenge('${challengeId}');"
@@ -1771,6 +1887,82 @@ const Challenges = {
   // Close settings menu
   closeSettingsMenu() {
     const modal = document.getElementById('settings-menu-modal');
+    if (modal) modal.remove();
+  },
+
+  // Show Fresh Start modal (playful Duolingo-style)
+  showFreshStartModal(challengeId) {
+    const modal = document.createElement('div');
+    modal.id = 'fresh-start-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center';
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const defaultDate = DateUtils.toLocalDateStr(tomorrow);
+
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 7);
+    const maxDateStr = DateUtils.toLocalDateStr(maxDate);
+
+    const minDate = DateUtils.toLocalDateStr(new Date());
+
+    modal.innerHTML = `
+      <div class="bg-oura-card rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 pb-8">
+        <div class="w-10 h-1 bg-oura-border rounded-full mx-auto mb-6"></div>
+
+        <div class="text-center mb-4">
+          <div class="text-6xl mb-3">\u{1F305}</div>
+          <h3 class="text-xl font-bold text-white mb-1">Plot twist!</h3>
+          <p class="text-sm text-oura-muted leading-relaxed">
+            Sometimes the best move is a do-over.<br>
+            This resets the clock for <strong class="text-white">everyone</strong> in the challenge.
+          </p>
+        </div>
+
+        <div class="rounded-xl p-4 mb-5" style="background: rgba(15, 21, 37, 0.8); border: 1px solid rgba(26, 32, 53, 0.8);">
+          <div class="text-xs text-oura-muted uppercase tracking-wider mb-3">What happens</div>
+          <div class="space-y-2 text-sm">
+            <div class="flex items-start gap-2">
+              <span class="text-green-400 mt-0.5">\u2713</span>
+              <span class="text-oura-muted">New Day 1 starts on the date you pick</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-green-400 mt-0.5">\u2713</span>
+              <span class="text-oura-muted">All habit check-offs get wiped clean</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-green-400 mt-0.5">\u2713</span>
+              <span class="text-oura-muted">Everyone gets a fresh 30 days</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-white mb-2">New start date</label>
+          <input type="date" id="fresh-start-date"
+            value="${defaultDate}" min="${minDate}" max="${maxDateStr}"
+            class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white">
+        </div>
+
+        <button id="fresh-start-confirm-btn"
+          onclick="Challenges.handleFreshStart('${challengeId}')"
+          class="w-full py-3.5 min-h-[44px] rounded-xl text-sm font-bold transition-all"
+          style="background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%); color: #0a0a14;">
+          \u{1F680} Let's Go!
+        </button>
+        <button onclick="Challenges.closeFreshStartModal()"
+          class="w-full py-3 min-h-[44px] mt-2 rounded-xl text-sm font-medium text-oura-muted hover:text-white transition-colors">
+          Never mind
+        </button>
+      </div>
+    `;
+    modal.addEventListener('click', (e) => { if (e.target === modal) this.closeFreshStartModal(); });
+    document.body.appendChild(modal);
+  },
+
+  // Close Fresh Start modal
+  closeFreshStartModal() {
+    const modal = document.getElementById('fresh-start-modal');
     if (modal) modal.remove();
   },
 
