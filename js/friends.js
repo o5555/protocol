@@ -399,7 +399,7 @@ const Friends = {
       console.error('Error rendering friends:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load friends: ${escapeHtml(error.message)}</p>
+          <p class="text-red-400">Failed to load friends. Please try again.</p>
         </div>
       `;
     }

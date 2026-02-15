@@ -20,7 +20,7 @@ const Account = {
 
       // Get user profile
       const profile = await this.getProfile(currentUser.id);
-      const displayName = profile?.display_name || currentUser.email.split('@')[0];
+      const displayName = profile?.display_name || (currentUser.email ? currentUser.email.split('@')[0] : 'User');
       const hasOuraToken = !!profile?.oura_token;
 
       // Validate Oura token if it exists (via server proxy to avoid CORS)
@@ -118,7 +118,7 @@ const Account = {
       console.error('Error rendering account:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load account: ${escapeHtml(error.message)}</p>
+          <p class="text-red-400">Failed to load account. Please try again.</p>
         </div>
       `;
     }
@@ -318,7 +318,7 @@ const Account = {
   // Show bug report modal
   async showBugReportModal() {
     // Capture current screen before opening modal
-    const currentScreen = document.querySelector('.page:not([style*="display: none"])')?.id?.replace('page-', '') || 'unknown';
+    const currentScreen = document.querySelector('.page:not(.hidden)')?.id?.replace('page-', '') || 'unknown';
 
     const modal = document.createElement('div');
     modal.id = 'bug-report-modal';

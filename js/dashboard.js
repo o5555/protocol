@@ -51,7 +51,7 @@ const Dashboard = {
       if (!cachedData) {
         container.innerHTML = `
           <div class="bg-red-900/20 border border-red-500 rounded-2xl p-4">
-            <p class="text-red-400">Failed to load dashboard: ${escapeHtml(error.message)}</p>
+            <p class="text-red-400">Failed to load dashboard. Please try again.</p>
           </div>
         `;
       }
@@ -189,7 +189,7 @@ const Dashboard = {
       console.error('Error rendering dashboard:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-2xl p-4">
-          <p class="text-red-400">Failed to load dashboard: ${escapeHtml(error.message)}</p>
+          <p class="text-red-400">Failed to load dashboard. Please try again.</p>
         </div>
       `;
     }
@@ -241,36 +241,36 @@ const Dashboard = {
 
   // Calculate average HR from recent sleep data
   calcAvgHR(sleepData) {
-    const hrs = sleepData.filter(d => d.avg_hr).map(d => d.avg_hr);
+    const hrs = sleepData.filter(d => d.avg_hr != null).map(d => d.avg_hr);
     if (hrs.length === 0) return null;
     return Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length);
   },
 
   calcAvgPreSleepHR(sleepData) {
-    const vals = sleepData.filter(d => d.pre_sleep_hr).map(d => d.pre_sleep_hr);
+    const vals = sleepData.filter(d => d.pre_sleep_hr != null).map(d => d.pre_sleep_hr);
     if (vals.length === 0) return null;
     return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
   },
 
   calcAvgDeepSleep(sleepData) {
-    const vals = sleepData.filter(d => d.deep_sleep_minutes).map(d => d.deep_sleep_minutes);
+    const vals = sleepData.filter(d => d.deep_sleep_minutes != null).map(d => d.deep_sleep_minutes);
     if (vals.length === 0) return null;
     return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
   },
 
   calcAvgSleepScore(sleepData) {
-    const vals = sleepData.filter(d => d.sleep_score).map(d => d.sleep_score);
+    const vals = sleepData.filter(d => d.sleep_score != null).map(d => d.sleep_score);
     if (vals.length === 0) return null;
     return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
   },
 
   getMinHR(sleepData) {
-    const hrs = sleepData.filter(d => d.avg_hr).map(d => d.avg_hr);
+    const hrs = sleepData.filter(d => d.avg_hr != null).map(d => d.avg_hr);
     return hrs.length > 0 ? Math.min(...hrs) : '--';
   },
 
   getMaxHR(sleepData) {
-    const hrs = sleepData.filter(d => d.avg_hr).map(d => d.avg_hr);
+    const hrs = sleepData.filter(d => d.avg_hr != null).map(d => d.avg_hr);
     return hrs.length > 0 ? Math.max(...hrs) : '--';
   },
 

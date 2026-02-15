@@ -30,18 +30,18 @@
       "use": "@vercel/static"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/webhook/(.*)",
-      "dest": "/server.js"
+      "source": "/webhook/(.*)",
+      "destination": "/server.js"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/server.js"
+      "source": "/api/(.*)",
+      "destination": "/server.js"
     },
     {
-      "src": "/health",
-      "dest": "/server.js"
+      "source": "/health",
+      "destination": "/server.js"
     }
   ],
   "headers": [

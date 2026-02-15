@@ -658,7 +658,7 @@ const Challenges = {
       console.error('Error in smart view:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load: ${escapeHtml(error.message)}</p>
+          <p class="text-red-400">Failed to load. Please try again.</p>
         </div>
       `;
     }
@@ -768,7 +768,7 @@ const Challenges = {
       console.error('Error rendering challenges:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load challenges: ${escapeHtml(error.message)}</p>
+          <p class="text-red-400">Failed to load challenges. Please try again.</p>
         </div>
       `;
     }
@@ -1188,7 +1188,7 @@ const Challenges = {
       console.error('Error rendering challenge detail:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load challenge: ${escapeHtml(error.message)}</p>
+          <p class="text-red-400">Failed to load challenge. Please try again.</p>
         </div>
       `;
     }
@@ -2415,7 +2415,7 @@ const Challenges = {
 
       const protocolSelect = document.getElementById('challenge-protocol');
       const protocolId = protocolSelect.value;
-      const protocolName = protocolSelect.options[protocolSelect.selectedIndex].text.replace(/^[^\s]+\s/, ''); // Remove emoji
+      const protocolName = protocolSelect.options[protocolSelect.selectedIndex].text;
       const name = `${protocolName} Challenge`;
       const friendCheckboxes = document.querySelectorAll('input[name="friends"]:checked');
       const friendIds = Array.from(friendCheckboxes).map(cb => cb.value);

@@ -436,7 +436,7 @@ const Onboarding = {
       }
 
       // Kick off background sync (silent mode)
-      SleepSync.syncNow({ silent: true }).catch(err => {
+      (typeof SleepSync !== 'undefined' ? SleepSync.syncNow({ silent: true }) : Promise.resolve()).catch(err => {
         console.error('Background sync error:', err);
       });
 

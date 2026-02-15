@@ -232,7 +232,7 @@ const Comparison = {
               <div>
                 <p class="text-lg font-bold" style="color: ${color}">${displayHours || '--'}</p>
                 <p class="text-[10px] text-oura-muted">Hours</p>
-                ${hasBaseline && hasCurrent ? this.formatChange(parseFloat(baseline.hours), parseFloat(current.hours), false) : ''}
+                ${hasBaseline && hasCurrent && baseline.hours != null && current.hours != null ? this.formatChange(parseFloat(baseline.hours), parseFloat(current.hours), false) : ''}
               </div>
             </div>
           </div>
@@ -337,7 +337,7 @@ const Comparison = {
     } catch (error) {
       console.error('Error rendering comparison charts:', error);
       container.innerHTML = `
-        <p class="text-red-400 text-sm">Failed to load comparison data: ${escapeHtml(error.message)}</p>
+        <p class="text-red-400 text-sm">Failed to load comparison data. Please try again.</p>
       `;
     }
   },

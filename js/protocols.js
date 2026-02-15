@@ -253,7 +253,7 @@ const Protocols = {
       console.error('Error rendering protocols:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load protocols: ${escapeHtml(error.message)}</p>
+          <p class="text-red-400">Failed to load protocols. Please try again.</p>
         </div>
       `;
     }
@@ -330,7 +330,7 @@ const Protocols = {
       console.error('Error rendering protocol detail:', error);
       container.innerHTML = `
         <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load protocol: ${escapeHtml(error.message)}</p>
+          <p class="text-red-400">Failed to load protocol. Please try again.</p>
         </div>
       `;
     }
