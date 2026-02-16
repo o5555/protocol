@@ -1003,11 +1003,28 @@ const Challenges = {
 
           <!-- Baseline Section -->
           ${myBaseline.score ? `
-            <div class="rounded-2xl p-5 mb-6 text-center" style="background: #0f1525; border: 1px solid #1a2035;">
-              <div class="text-xs text-oura-muted uppercase tracking-widest mb-2">This Is Your Baseline</div>
-              <div class="text-5xl font-bold mb-1" style="color: #4ade80;">${Math.round(myBaseline.score)}</div>
-              <div class="text-sm text-oura-muted mb-3">30-day average sleep score</div>
-              <div class="text-xs leading-relaxed" style="color: #6b7280;">This is where you're starting from. Let's see how much you can improve over the next 30 days.</div>
+            <div class="text-xs text-oura-muted uppercase tracking-widest text-center mb-3">This Is Your Baseline</div>
+            <div id="baseline-hero-card" class="rounded-2xl p-5 mb-4 text-center" style="background: #0f1525; border: 1px solid #1a2035;">
+              <div id="baseline-hero-value" class="text-4xl font-bold mb-1" style="color: #4ade80;">${Math.round(myBaseline.score)}</div>
+              <div id="baseline-hero-label" class="text-sm text-oura-muted">30-day avg sleep score</div>
+            </div>
+            <div class="text-xs text-center leading-relaxed mb-5" style="color: #6b7280;">This is where you're starting from. Let's see how much you can improve over the next 30 days.</div>
+
+            <!-- Metric Toggle + Baseline Chart -->
+            <div class="mb-6">
+              <div class="flex items-center justify-center mb-3">
+                <div class="flex gap-1.5 sm:gap-2 w-full" id="metric-toggle">
+                  <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[36px]" style="background: #1a2035; color: #fff" data-metric="score">SLEEP</button>
+                  <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="avghr">AVG HR</button>
+                  <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="hr">LOW HR</button>
+                  <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="deep">DEEP</button>
+                </div>
+              </div>
+              <div class="rounded-2xl p-4" style="background: #0a0a14">
+                <div id="trend-chart-container" class="h-48">
+                  <canvas id="main-trend-chart"></canvas>
+                </div>
+              </div>
             </div>
           ` : ''}
 
@@ -1185,8 +1202,8 @@ const Challenges = {
       // Store data for metric switching
       this._currentChallengeData = { myData, challenge, improvements, sleepData, currentUserId: currentUser.id };
 
-      // Render the main Chart.js trend chart
-      if (!hasNoChallengeData) {
+      // Render the main Chart.js trend chart (also for hero view with baseline-only data)
+      if (!hasNoChallengeData || (showHeroInstead && myBaseline.score)) {
         this.renderMainChart(myData, challenge.start_date, 'score');
       }
 
@@ -1558,6 +1575,20 @@ const Challenges = {
           `}
         </div>
       `;
+    }
+
+    // Update baseline hero card (Day 0 view)
+    const baselineHeroValue = document.getElementById('baseline-hero-value');
+    const baselineHeroLabel = document.getElementById('baseline-hero-label');
+    if (baselineHeroValue && baselineHeroLabel) {
+      const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes' };
+      const field = fieldMap[metric];
+      const baselineVals = myData.baselineData.filter(d => d[field]).map(d => d[field]);
+      const baselineAvg = baselineVals.length > 0 ? Math.round(baselineVals.reduce((a, b) => a + b, 0) / baselineVals.length) : null;
+      const labels = { score: '30-day avg sleep score', hr: '30-day avg lowest HR', avghr: '30-day avg HR (sleep)', deep: '30-day avg deep sleep' };
+      const units = { score: '', hr: ' bpm', avghr: ' bpm', deep: ' min' };
+      baselineHeroValue.textContent = baselineAvg !== null ? baselineAvg + (units[metric] || '') : '--';
+      baselineHeroLabel.textContent = labels[metric] || '';
     }
 
     // Re-render Chart.js chart
