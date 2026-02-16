@@ -918,8 +918,9 @@ const Challenges = {
 
       // On day 1 with Oura connected, skip the hero and show the normal view
       // so users see their baseline data and chart instead of a blocking "come back tomorrow" message
+      // But always show the hero for upcoming challenges (Day 0) so they see baseline + motivating message
       const syncFailed = syncResult && !syncResult.success;
-      const showHeroInstead = hasNoChallengeData && !(justStarted && hasOuraToken && !syncFailed);
+      const showHeroInstead = hasNoChallengeData && (challenge.isUpcoming || !(justStarted && hasOuraToken && !syncFailed));
 
       if (showHeroInstead) {
         // Determine the right message
@@ -930,8 +931,12 @@ const Challenges = {
           heroMessage = 'Your 30-day challenge has ended.<br>No sleep data was recorded during this challenge.';
         } else if (challenge.isUpcoming) {
           const daysUntil = Math.ceil((this.parseLocalDate(challenge.start_date) - new Date(new Date().setHours(0,0,0,0))) / (1000*60*60*24));
-          heroTitle = "You're In!";
-          heroMessage = `Challenge starts ${daysUntil === 1 ? 'tomorrow' : `in ${daysUntil} days`}.<br>Get ready for 30 days of better sleep!`;
+          heroTitle = "You're All Set!";
+          if (daysUntil <= 1) {
+            heroMessage = `Your challenge starts with tonight's sleep.<br>Rest up — tomorrow is Day 1.`;
+          } else {
+            heroMessage = `Challenge starts in ${daysUntil} days.<br>Get ready for 30 days of better sleep!`;
+          }
         } else if (!hasOuraToken) {
           heroTitle = 'Connect Oura Ring';
           heroMessage = 'Connect your Oura ring in Account settings<br>to start tracking your sleep data.';
@@ -998,10 +1003,11 @@ const Challenges = {
 
           <!-- Baseline Section -->
           ${myBaseline.score ? `
-            <div class="text-xs text-oura-muted uppercase tracking-widest text-center mb-3">Your Baseline</div>
-            <div class="flex items-center justify-between rounded-xl px-4 py-3.5 mb-6" style="background: #0f1525; border: 1px solid #1a2035;">
-              <span class="text-sm" style="color: #6b7280;">30-day average sleep score</span>
-              <span class="text-lg font-bold">${Math.round(myBaseline.score)}</span>
+            <div class="rounded-2xl p-5 mb-6 text-center" style="background: #0f1525; border: 1px solid #1a2035;">
+              <div class="text-xs text-oura-muted uppercase tracking-widest mb-2">This Is Your Baseline</div>
+              <div class="text-5xl font-bold mb-1" style="color: #4ade80;">${Math.round(myBaseline.score)}</div>
+              <div class="text-sm text-oura-muted mb-3">30-day average sleep score</div>
+              <div class="text-xs leading-relaxed" style="color: #6b7280;">This is where you're starting from. Let's see how much you can improve over the next 30 days.</div>
             </div>
           ` : ''}
 
