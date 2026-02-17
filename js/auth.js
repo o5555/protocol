@@ -180,10 +180,12 @@ const Auth = {
     SupabaseClient.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN') {
         if (typeof Cache !== 'undefined') Cache.clearAll();
+        localStorage.removeItem('app_nav_state');
         await this.migrateLocalToken();
         this.updateUI(session?.user);
       } else if (event === 'SIGNED_OUT') {
         if (typeof Cache !== 'undefined') Cache.clearAll();
+        localStorage.removeItem('app_nav_state');
         this.updateUI(null);
       }
     });
@@ -222,6 +224,10 @@ const Auth = {
         if (appContent) appContent.classList.remove('hidden');
         const bottomNav = document.querySelector('.bottom-nav');
         if (bottomNav) bottomNav.classList.remove('hidden');
+        // Always start on dashboard after sign-in
+        if (typeof App !== 'undefined' && App.navigateTo) {
+          App.navigateTo('dashboard');
+        }
       }
     } catch (error) {
       console.error('Error checking onboarding:', error);

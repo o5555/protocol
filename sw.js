@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pc-v6';
+const CACHE_NAME = 'pc-v7';
 
 const APP_SHELL = [
   '/',
@@ -14,6 +14,7 @@ const APP_SHELL = [
   '/js/protocols.js',
   '/js/comparison.js',
   '/js/account.js',
+  '/js/notifications.js',
   '/js/friends.js',
   '/js/challenges.js',
   '/manifest.json',
@@ -79,5 +80,50 @@ self.addEventListener('fetch', (event) => {
         return caches.match('/index.html');
       }
     })
+  );
+});
+
+// Web Push notification handler
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let data;
+  try {
+    data = event.data.json();
+  } catch (e) {
+    data = { title: 'Protocol Circle', body: event.data.text() };
+  }
+
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { url: data.url || '/' },
+    vibrate: [100, 50, 100]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Protocol Circle', options)
+  );
+});
+
+// Open app when notification is clicked
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clients) => {
+        // Focus existing window if found
+        for (const client of clients) {
+          if (client.url.includes(self.location.origin) && 'focus' in client) {
+            return client.focus();
+          }
+        }
+        // Otherwise open new window
+        return self.clients.openWindow(targetUrl);
+      })
   );
 });
