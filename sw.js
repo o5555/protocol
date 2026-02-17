@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pc-v10';
+const CACHE_NAME = 'pc-v11';
 
 const APP_SHELL = [
   '/',
@@ -140,8 +140,9 @@ self.addEventListener('notificationclick', (event) => {
         }
         // Open new window with query params so the app knows where to go
         let url = '/';
-        if (navData.page && navData.challengeId) {
-          url = '/?nav=' + navData.page + '&id=' + navData.challengeId;
+        if (navData.page) {
+          url = '/?nav=' + navData.page;
+          if (navData.challengeId) url += '&id=' + navData.challengeId;
         }
         return self.clients.openWindow(url);
       })

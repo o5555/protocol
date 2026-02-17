@@ -411,24 +411,34 @@
                 // Restore saved navigation state, or default to dashboard
                 let startPage = 'dashboard';
                 let startDetailId = null;
-                try {
-                    const saved = JSON.parse(localStorage.getItem('app_nav_state'));
-                    if (saved && saved.page) {
-                        if (saved.page === 'protocol-detail' || saved.page === 'challenge-detail') {
-                            if (saved.detailId) {
-                                startPage = saved.page;
-                                startDetailId = saved.detailId;
-                            } else {
-                                startPage = saved.page === 'protocol-detail' ? 'protocols' : 'challenges';
-                            }
-                        } else {
-                            startPage = saved.page;
-                        }
-                    }
-                } catch (e) { /* ignore */ }
 
-                // Set initial history state
-                history.replaceState({ page: startPage, detailId: startDetailId }, '');
+                // Deep-link from push notification takes priority (app opened fresh via /?nav=...&id=...)
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('nav')) {
+                    startPage = params.get('nav');
+                    startDetailId = params.get('id') || null;
+                    // Clean URL
+                    history.replaceState({ page: startPage, detailId: startDetailId }, '', '/');
+                } else {
+                    try {
+                        const saved = JSON.parse(localStorage.getItem('app_nav_state'));
+                        if (saved && saved.page) {
+                            if (saved.page === 'protocol-detail' || saved.page === 'challenge-detail') {
+                                if (saved.detailId) {
+                                    startPage = saved.page;
+                                    startDetailId = saved.detailId;
+                                } else {
+                                    startPage = saved.page === 'protocol-detail' ? 'protocols' : 'challenges';
+                                }
+                            } else {
+                                startPage = saved.page;
+                            }
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    // Set initial history state
+                    history.replaceState({ page: startPage, detailId: startDetailId }, '');
+                }
 
                 this.navigateTo(startPage, startDetailId);
 
@@ -449,15 +459,6 @@
                         }
                     }
                 });
-
-                // Handle deep-link from push notification (app opened fresh)
-                const params = new URLSearchParams(window.location.search);
-                if (params.get('nav') && params.get('id')) {
-                    startPage = params.get('nav');
-                    startDetailId = params.get('id');
-                    // Clean URL
-                    history.replaceState({ page: startPage, detailId: startDetailId }, '', '/');
-                }
 
                 // Handle navigation from push notification (app already open)
                 navigator.serviceWorker?.addEventListener('message', (event) => {
