@@ -61,10 +61,10 @@ const server = http.createServer(async (req, res) => {
         try {
             const url = new URL(req.url, `http://${req.headers.host}`);
             const date = url.searchParams.get('date') || toLocalDateStr(new Date());
-            const ouraToken = (req.headers.authorization || '').replace('Bearer ', '');
+            const ouraToken = url.searchParams.get('token') || (req.headers.authorization || '').replace('Bearer ', '');
             if (!ouraToken) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Pass Oura token as Authorization: Bearer <token>' }));
+                res.end(JSON.stringify({ error: 'Pass token as ?token=YOUR_TOKEN or Authorization header' }));
                 return;
             }
             // Fetch raw sleep sessions for +/- 1 day around the target date
