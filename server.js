@@ -95,20 +95,30 @@ const server = http.createServer(async (req, res) => {
 
             // Filter to target date and summarize
             const sessionsForDate = (sleepData.data || []).filter(s => s.day === date);
-            const summary = sessionsForDate.map(s => ({
-                day: s.day, type: s.type,
-                total_min: Math.round((s.total_sleep_duration || 0) / 60),
-                deep_min: Math.round((s.deep_sleep_duration || 0) / 60),
-                rem_min: Math.round((s.rem_sleep_duration || 0) / 60),
-                light_min: Math.round((s.light_sleep_duration || 0) / 60),
-                deep_raw_seconds: s.deep_sleep_duration,
-                avg_hr: s.average_heart_rate,
-                lowest_hr: s.lowest_heart_rate,
-                bedtime_start: s.bedtime_start,
-                bedtime_end: s.bedtime_end,
-            }));
+            const summary = sessionsForDate.map(s => {
+                // Calculate deep sleep from hypnogram if available
+                // Oura hypnogram: '1'=deep, '2'=light, '3'=REM, '4'=awake
+                const hypnogram = s.hypnogram_5min || '';
+                const deepFrom5min = hypnogram.split('').filter(c => c === '1').length * 5;
+                return {
+                    day: s.day, type: s.type,
+                    total_min: Math.round((s.total_sleep_duration || 0) / 60),
+                    deep_min_from_summary: Math.round((s.deep_sleep_duration || 0) / 60),
+                    deep_min_from_hypnogram: deepFrom5min,
+                    rem_min: Math.round((s.rem_sleep_duration || 0) / 60),
+                    light_min: Math.round((s.light_sleep_duration || 0) / 60),
+                    deep_raw_seconds: s.deep_sleep_duration,
+                    hypnogram_length: hypnogram.length,
+                    hypnogram_5min: hypnogram,
+                    avg_hr: s.average_heart_rate,
+                    lowest_hr: s.lowest_heart_rate,
+                    bedtime_start: s.bedtime_start,
+                    bedtime_end: s.bedtime_end,
+                };
+            });
             const summed = {
-                deep_min_total: summary.reduce((sum, s) => sum + s.deep_min, 0),
+                deep_min_summary_total: summary.reduce((sum, s) => sum + s.deep_min_from_summary, 0),
+                deep_min_hypnogram_total: summary.reduce((sum, s) => sum + s.deep_min_from_hypnogram, 0),
                 rem_min_total: summary.reduce((sum, s) => sum + s.rem_min, 0),
                 light_min_total: summary.reduce((sum, s) => sum + s.light_min, 0),
                 total_min_total: summary.reduce((sum, s) => sum + s.total_min, 0),
