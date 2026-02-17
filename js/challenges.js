@@ -675,11 +675,11 @@ const Challenges = {
     container.innerHTML = '<div class="text-center py-10 text-oura-muted text-sm">Loading...</div>';
 
     try {
-      const [invitations, activeChallenges, completedChallenges] = await Promise.all([
-        this.getInvitations(),
-        this.getActiveChallenges(),
-        this.getCompletedChallenges()
-      ]);
+      const allChallenges = await this.getMyChallenges();
+      const dismissed = this._getDismissedSummaries();
+      const invitations = allChallenges.filter(c => c.status === 'invited');
+      const activeChallenges = allChallenges.filter(c => c.status === 'accepted' && (c.isActive || c.daysRemaining > 0));
+      const completedChallenges = allChallenges.filter(c => c.status === 'accepted' && !c.isActive && c.daysRemaining === 0 && !dismissed.includes(c.id));
 
       // Single active challenge, no invitations, no completed → go straight to detail
       if (activeChallenges.length === 1 && invitations.length === 0 && completedChallenges.length === 0) {
@@ -834,17 +834,77 @@ const Challenges = {
             <span class="text-base font-medium">${escapeHtml(challenge.name)}</span>
             <span style="width: 50px;"></span>
           </div>
-          <div class="text-center py-10">
-            <div class="inline-block w-8 h-8 border-2 border-oura-muted border-t-oura-teal rounded-full animate-spin mb-3"></div>
-            <p class="text-oura-muted text-sm">Syncing Oura data...</p>
+          <div class="sync-screen">
+            <div class="sync-ring-container">
+              <svg class="sync-ring-svg" width="100" height="100" viewBox="0 0 100 100">
+                <defs>
+                  <linearGradient id="sync-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00c8a0"/>
+                    <stop offset="100%" stop-color="#6c63ff"/>
+                  </linearGradient>
+                </defs>
+                <circle class="sync-ring-bg" cx="50" cy="50" r="40"/>
+                <circle class="sync-ring-progress" cx="50" cy="50" r="40"/>
+              </svg>
+              <div class="sync-moon">\u{1F319}</div>
+            </div>
+            <div class="sync-message entering" id="sync-msg">Reading your rings...</div>
+            <div class="sync-submessage" id="sync-sub">This only takes a moment</div>
+            <div class="sync-stages" id="sync-stages">
+              <div class="sync-stage-dot active" data-stage="0"></div>
+              <div class="sync-stage-bar" data-bar="0"></div>
+              <div class="sync-stage-dot" data-stage="1"></div>
+              <div class="sync-stage-bar" data-bar="1"></div>
+              <div class="sync-stage-dot" data-stage="2"></div>
+            </div>
           </div>
         `;
+
+        // Animate sync messages (Duolingo-style rotating encouragement)
+        const syncMessages = [
+          { msg: 'Reading your rings...', sub: 'This only takes a moment' },
+          { msg: 'Crunching sleep scores...', sub: 'Every minute of rest counts' },
+          { msg: 'Almost there...', sub: 'Preparing your challenge view' },
+        ];
+        let syncMsgIdx = 0;
+        const syncMsgEl = document.getElementById('sync-msg');
+        const syncSubEl = document.getElementById('sync-sub');
+        const syncStages = document.getElementById('sync-stages');
+        const advanceSyncStage = (idx) => {
+          if (!syncStages) return;
+          const dots = syncStages.querySelectorAll('.sync-stage-dot');
+          const bars = syncStages.querySelectorAll('.sync-stage-bar');
+          dots.forEach((d, i) => {
+            d.classList.toggle('done', i < idx);
+            d.classList.toggle('active', i === idx);
+          });
+          bars.forEach((b, i) => {
+            b.classList.toggle('filled', i < idx);
+          });
+        };
+        const syncMsgTimer = setInterval(() => {
+          syncMsgIdx++;
+          if (syncMsgIdx >= syncMessages.length) { clearInterval(syncMsgTimer); return; }
+          if (syncMsgEl) {
+            syncMsgEl.classList.remove('entering');
+            syncMsgEl.classList.add('exiting');
+            setTimeout(() => {
+              syncMsgEl.textContent = syncMessages[syncMsgIdx].msg;
+              syncSubEl.textContent = syncMessages[syncMsgIdx].sub;
+              syncMsgEl.classList.remove('exiting');
+              syncMsgEl.classList.add('entering');
+              advanceSyncStage(syncMsgIdx);
+            }, 260);
+          }
+        }, 3000);
+
         // Timeout sync after 12s to avoid hanging forever
         const syncPromise = SleepSync.syncNow({ silent: true, skipRefresh: true });
         const timeoutPromise = new Promise(resolve =>
           setTimeout(() => resolve({ success: false, count: 0, error: 'Sync timed out' }), 12000)
         );
         syncResult = await Promise.race([syncPromise, timeoutPromise]);
+        clearInterval(syncMsgTimer);
       }
 
       // Fresh Start notification banner for participants
