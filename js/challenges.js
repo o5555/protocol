@@ -1914,7 +1914,7 @@ const Challenges = {
     modal.id = 'settings-menu-modal';
     modal.className = 'fixed inset-0 bg-black/50 z-50 flex items-end justify-center';
     modal.innerHTML = `
-      <div class="bg-oura-card rounded-t-2xl w-full max-w-md p-4 pb-8">
+      <div class="bg-oura-card rounded-t-2xl w-full max-w-md p-4 pb-8 max-h-[80vh] overflow-y-auto">
         <div class="w-10 h-1 bg-oura-border rounded-full mx-auto mb-4"></div>
 
         <button onclick="SleepSync.syncNow(); Challenges.closeSettingsMenu();"

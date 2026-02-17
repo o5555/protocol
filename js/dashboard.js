@@ -89,8 +89,6 @@ const Dashboard = {
       const avgDeepSleep = this.calcAvgDeepSleep(recentSleep);
       const avgSleepScore = this.calcAvgSleepScore(recentSleep);
       const avgBedtime = this.calcAvgBedtime(recentSleep);
-      const challenge = activeChallenges[0] || null;
-
       // Chronological order for sparklines
       const chronologicalSleep = [...recentSleep].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -158,32 +156,34 @@ const Dashboard = {
         </div>
       `;
 
-      // Active challenge card
-      if (challenge) {
-        const dayNum = Challenges.getDayNumber(challenge.start_date);
-        const progress = Math.min(100, Math.round((dayNum / 30) * 100));
-        html += `
-          <div onclick="App.navigateTo('challenge-detail', '${challenge.id}')"
-            class="bg-oura-card rounded-2xl p-6 mb-4 cursor-pointer hover:bg-oura-subtle transition-colors">
-            <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">Active Challenge</div>
-            <div class="flex items-center gap-4 mb-4">
-              <div class="protocol-icon w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">${Protocols.getInitials(challenge.protocol?.name || 'CH')}</div>
-              <div>
-                <h3 class="font-semibold text-lg">${escapeHtml(challenge.name)}</h3>
-                <p class="text-oura-muted text-sm">${escapeHtml(challenge.protocol?.name || 'Protocol')}</p>
+      // Active challenge cards
+      if (activeChallenges.length > 0) {
+        html += `<div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3 mt-2">Active Challenges</div>`;
+        for (const ch of activeChallenges) {
+          const dayNum = Challenges.getDayNumber(ch.start_date);
+          const progress = Math.min(100, Math.round((dayNum / 30) * 100));
+          html += `
+            <div onclick="App.navigateTo('challenge-detail', '${ch.id}')"
+              class="bg-oura-card rounded-2xl p-6 mb-3 cursor-pointer hover:bg-oura-subtle transition-colors">
+              <div class="flex items-center gap-4 mb-4">
+                <div class="protocol-icon w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">${Protocols.getInitials(ch.protocol?.name || 'CH')}</div>
+                <div>
+                  <h3 class="font-semibold text-lg">${escapeHtml(ch.name)}</h3>
+                  <p class="text-oura-muted text-sm">${escapeHtml(ch.protocol?.name || 'Protocol')}</p>
+                </div>
+              </div>
+              <div class="mb-2">
+                <div class="flex justify-between text-sm mb-1.5">
+                  <span class="text-oura-muted">Day ${dayNum} of 30</span>
+                  <span class="text-oura-accent font-medium">${progress}%</span>
+                </div>
+                <div class="w-full bg-oura-border rounded-full h-2">
+                  <div class="bg-oura-accent h-2 rounded-full transition-all" style="width: ${progress}%"></div>
+                </div>
               </div>
             </div>
-            <div class="mb-2">
-              <div class="flex justify-between text-sm mb-1.5">
-                <span class="text-oura-muted">Day ${dayNum} of 30</span>
-                <span class="text-oura-accent font-medium">${progress}%</span>
-              </div>
-              <div class="w-full bg-oura-border rounded-full h-2">
-                <div class="bg-oura-accent h-2 rounded-full transition-all" style="width: ${progress}%"></div>
-              </div>
-            </div>
-          </div>
-        `;
+          `;
+        }
       }
 
       container.innerHTML = html;
