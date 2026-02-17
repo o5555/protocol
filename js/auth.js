@@ -179,9 +179,11 @@ const Auth = {
     // Set up auth state change listener
     SupabaseClient.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN') {
+        if (typeof Cache !== 'undefined') Cache.clearAll();
         await this.migrateLocalToken();
         this.updateUI(session?.user);
       } else if (event === 'SIGNED_OUT') {
+        if (typeof Cache !== 'undefined') Cache.clearAll();
         this.updateUI(null);
       }
     });
