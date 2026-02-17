@@ -182,7 +182,7 @@ const Auth = {
         if (typeof Cache !== 'undefined') Cache.clearAll();
         localStorage.removeItem('app_nav_state');
         await this.migrateLocalToken();
-        this.updateUI(session?.user);
+        this.updateUI(session?.user, true);
       } else if (event === 'SIGNED_OUT') {
         if (typeof Cache !== 'undefined') Cache.clearAll();
         localStorage.removeItem('app_nav_state');
@@ -190,19 +190,21 @@ const Auth = {
       }
     });
 
-    // Initial UI update
+    // Initial UI update — don't navigate, let App.init() handle initial routing
     const user = await SupabaseClient.getCurrentUser();
-    this.updateUI(user);
+    this.updateUI(user, false);
   },
 
   // Update UI based on auth state
-  updateUI(user) {
+  // navigate=true means force-navigate to dashboard (used on SIGNED_IN)
+  // navigate=false means just show app content, let App.init() handle routing
+  updateUI(user, navigate = true) {
     const authSection = document.getElementById('auth-section');
     const appContent = document.getElementById('app-content');
 
     if (user) {
       if (authSection) authSection.classList.add('hidden');
-      this.checkOnboarding(user);
+      this.checkOnboarding(user, navigate);
       window.dispatchEvent(new CustomEvent('userLoggedIn', { detail: { user } }));
     } else {
       if (authSection) authSection.classList.remove('hidden');
@@ -214,7 +216,9 @@ const Auth = {
   },
 
   // Check onboarding state and route accordingly
-  async checkOnboarding(user) {
+  // navigate=true: force-navigate to dashboard (after sign-in)
+  // navigate=false: just show app content (initial load — App.init() handles routing)
+  async checkOnboarding(user, navigate = true) {
     try {
       const profile = await this.getProfile();
       if (!profile || profile.onboarding_step < 5) {
@@ -224,8 +228,7 @@ const Auth = {
         if (appContent) appContent.classList.remove('hidden');
         const bottomNav = document.querySelector('.bottom-nav');
         if (bottomNav) bottomNav.classList.remove('hidden');
-        // Always start on dashboard after sign-in
-        if (typeof App !== 'undefined' && App.navigateTo) {
+        if (navigate && typeof App !== 'undefined' && App.navigateTo) {
           App.navigateTo('dashboard');
         }
       }
