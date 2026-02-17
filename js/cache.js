@@ -1,7 +1,7 @@
 // Cache Module - localStorage cache for instant loading
 const Cache = {
   PREFIX: 'protocol_cache_',
-  TTL: 5 * 60 * 1000, // 5 minutes cache validity
+  TTL: 24 * 60 * 60 * 1000, // 24 hours cache validity
 
   // Get cached data (returns null if expired)
   get(key) {
@@ -53,6 +53,18 @@ const Cache = {
     Object.keys(localStorage)
       .filter(k => k.startsWith(this.PREFIX))
       .forEach(k => localStorage.removeItem(k));
+  },
+
+  // Check if Oura sync has happened today
+  isSyncedToday() {
+    const last = localStorage.getItem(this.PREFIX + 'last_sync_date');
+    const today = new Date().toISOString().slice(0, 10);
+    return last === today;
+  },
+
+  // Mark that sync happened today
+  markSyncedToday() {
+    localStorage.setItem(this.PREFIX + 'last_sync_date', new Date().toISOString().slice(0, 10));
   }
 };
 

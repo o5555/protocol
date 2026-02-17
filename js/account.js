@@ -1,15 +1,32 @@
 // Account Module
 
 const Account = {
+  // Render generation counter to prevent stale async callbacks from overwriting fresher renders
+  _renderGeneration: 0,
+
   // Render account page
   async render() {
     const container = document.getElementById('account-container');
     if (!container) return;
 
+    const generation = ++this._renderGeneration;
+
+    // Try to render instantly from cache (but always refresh in background)
+    const cachedData = Cache.get('account');
+    if (cachedData) {
+      this._renderContent(container, cachedData);
+    } else {
+      container.innerHTML = `
+        <div class="text-center py-10 text-oura-muted text-sm">Loading account...</div>
+      `;
+    }
+
+    // Fetch fresh data (in background if we have cache)
     try {
       const currentUser = await SupabaseClient.getCurrentUser();
 
       if (!currentUser) {
+        if (generation !== this._renderGeneration) return;
         container.innerHTML = `
           <div class="bg-oura-card rounded-2xl p-6 text-center">
             <p class="text-oura-muted">Please sign in to view your account.</p>
@@ -36,92 +53,109 @@ const Account = {
         }
       }
 
-      container.innerHTML = `
-        <!-- Profile Section -->
-        <div class="bg-oura-card rounded-2xl p-6 mb-4">
-          <div class="flex items-center gap-4 mb-6">
-            <div class="w-16 h-16 rounded-full bg-oura-subtle flex items-center justify-center text-2xl">
-              ${displayName.charAt(0).toUpperCase()}
+      // Only update DOM if this is still the most recent render call
+      if (generation !== this._renderGeneration) return;
+
+      const data = { currentUser, displayName, ouraStatus };
+
+      // Cache the data
+      Cache.set('account', data);
+
+      // Re-render with fresh data
+      this._renderContent(container, data);
+    } catch (error) {
+      console.error('Error rendering account:', error);
+      if (generation !== this._renderGeneration) return;
+      if (!cachedData) {
+        container.innerHTML = `
+          <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
+            <p class="text-red-400">Failed to load account. Please try again.</p>
+          </div>
+        `;
+      }
+    }
+  },
+
+  // Render account content (separated for caching)
+  _renderContent(container, { currentUser, displayName, ouraStatus }) {
+    container.innerHTML = `
+      <!-- Profile Section -->
+      <div class="bg-oura-card rounded-2xl p-6 mb-4">
+        <div class="flex items-center gap-4 mb-6">
+          <div class="w-16 h-16 rounded-full bg-oura-subtle flex items-center justify-center text-2xl">
+            ${displayName.charAt(0).toUpperCase()}
+          </div>
+          <div class="flex-1">
+            <h3 class="text-lg font-semibold">${escapeHtml(displayName)}</h3>
+            <p class="text-sm text-oura-muted">${escapeHtml(currentUser.email)}</p>
+          </div>
+        </div>
+
+        <button onclick="Account.showEditProfileModal()"
+          class="w-full py-3 min-h-[44px] bg-oura-subtle text-white rounded-lg text-sm font-medium hover:bg-oura-border transition-colors">
+          Edit Profile
+        </button>
+      </div>
+
+      <!-- Oura Connection -->
+      <div class="bg-oura-card rounded-2xl p-6 mb-4">
+        <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-4">Oura Ring</h4>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full ${ouraStatus === 'connected' ? 'bg-green-500/20' : ouraStatus === 'expired' ? 'bg-yellow-500/20' : 'bg-oura-subtle'} flex items-center justify-center">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="${ouraStatus === 'connected' ? '#4ade80' : ouraStatus === 'expired' ? '#facc15' : '#6b7280'}" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/></svg>
             </div>
-            <div class="flex-1">
-              <h3 class="text-lg font-semibold">${escapeHtml(displayName)}</h3>
-              <p class="text-sm text-oura-muted">${escapeHtml(currentUser.email)}</p>
+            <div>
+              <p class="font-medium">${ouraStatus === 'connected' ? 'Connected' : ouraStatus === 'expired' ? 'Token Expired' : 'Not Connected'}</p>
+              <p class="text-xs text-oura-muted">${ouraStatus === 'connected' ? 'Syncing sleep data' : ouraStatus === 'expired' ? 'Please update your Oura token' : 'Connect to track sleep'}</p>
             </div>
           </div>
-
-          <button onclick="Account.showEditProfileModal()"
-            class="w-full py-3 min-h-[44px] bg-oura-subtle text-white rounded-lg text-sm font-medium hover:bg-oura-border transition-colors">
-            Edit Profile
+          <button onclick="Account.showOuraTokenModal()"
+            class="px-4 py-2 min-h-[44px] ${ouraStatus === 'disconnected' ? 'bg-oura-teal text-gray-900' : ouraStatus === 'expired' ? 'bg-yellow-500 text-gray-900' : 'bg-oura-subtle'} rounded-lg text-sm font-medium">
+            ${ouraStatus === 'connected' ? 'Update' : ouraStatus === 'expired' ? 'Reconnect' : 'Connect'}
           </button>
         </div>
+      </div>
 
-        <!-- Oura Connection -->
-        <div class="bg-oura-card rounded-2xl p-6 mb-4">
-          <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-4">Oura Ring</h4>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full ${ouraStatus === 'connected' ? 'bg-green-500/20' : ouraStatus === 'expired' ? 'bg-yellow-500/20' : 'bg-oura-subtle'} flex items-center justify-center">
-                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="${ouraStatus === 'connected' ? '#4ade80' : ouraStatus === 'expired' ? '#facc15' : '#6b7280'}" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/></svg>
-              </div>
-              <div>
-                <p class="font-medium">${ouraStatus === 'connected' ? 'Connected' : ouraStatus === 'expired' ? 'Token Expired' : 'Not Connected'}</p>
-                <p class="text-xs text-oura-muted">${ouraStatus === 'connected' ? 'Syncing sleep data' : ouraStatus === 'expired' ? 'Please update your Oura token' : 'Connect to track sleep'}</p>
-              </div>
-            </div>
-            <button onclick="Account.showOuraTokenModal()"
-              class="px-4 py-2 min-h-[44px] ${ouraStatus === 'disconnected' ? 'bg-oura-teal text-gray-900' : ouraStatus === 'expired' ? 'bg-yellow-500 text-gray-900' : 'bg-oura-subtle'} rounded-lg text-sm font-medium">
-              ${ouraStatus === 'connected' ? 'Update' : ouraStatus === 'expired' ? 'Reconnect' : 'Connect'}
-            </button>
-          </div>
-        </div>
-
-        <!-- Settings -->
-        <div class="bg-oura-card rounded-2xl p-6 mb-4">
-          <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-4">Settings</h4>
-          <div class="space-y-3">
-            <button onclick="App.navigateTo('friends')"
-              class="w-full flex items-center justify-between p-3 bg-oura-subtle rounded-lg hover:bg-oura-border transition-colors">
-              <span class="text-sm font-medium">Friends</span>
-              <svg class="w-5 h-5 text-oura-muted" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
-              </svg>
-            </button>
-            <button onclick="SleepSync.syncNow()"
-              class="w-full flex items-center justify-between p-3 bg-oura-subtle rounded-lg hover:bg-oura-border transition-colors">
-              <span class="text-sm font-medium">Sync Sleep Data</span>
-              <svg class="w-5 h-5 text-oura-muted" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <!-- Feedback -->
-        <div class="bg-oura-card rounded-2xl p-6 mb-4">
-          <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-4">Help</h4>
-          <button onclick="Account.showBugReportModal()"
+      <!-- Settings -->
+      <div class="bg-oura-card rounded-2xl p-6 mb-4">
+        <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-4">Settings</h4>
+        <div class="space-y-3">
+          <button onclick="App.navigateTo('friends')"
             class="w-full flex items-center justify-between p-3 bg-oura-subtle rounded-lg hover:bg-oura-border transition-colors">
-            <span class="text-sm font-medium">Report a Bug</span>
+            <span class="text-sm font-medium">Friends</span>
             <svg class="w-5 h-5 text-oura-muted" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 12.75c1.148 0 2.278.08 3.383.237 1.037.146 1.866.966 1.866 2.013 0 3.728-2.35 6.75-5.25 6.75S6.75 18.728 6.75 15c0-1.046.83-1.867 1.866-2.013A24.204 24.204 0 0 1 12 12.75ZM12 12.75c2.883 0 5.647.508 8.207 1.44a23.91 23.91 0 0 1-1.152-6.135c-.22-2.057-1.907-3.555-3.966-3.555h-6.178c-2.06 0-3.746 1.498-3.966 3.555a23.91 23.91 0 0 1-1.152 6.135A24.142 24.142 0 0 1 12 12.75ZM9.75 8.625a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+            </svg>
+          </button>
+          <button onclick="SleepSync.syncNow()"
+            class="w-full flex items-center justify-between p-3 bg-oura-subtle rounded-lg hover:bg-oura-border transition-colors">
+            <span class="text-sm font-medium">Sync Sleep Data</span>
+            <svg class="w-5 h-5 text-oura-muted" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
             </svg>
           </button>
         </div>
+      </div>
 
-        <!-- Sign Out -->
-        <button onclick="Account.signOut()"
-          class="w-full py-3 min-h-[44px] bg-red-500/10 text-red-400 rounded-xl text-sm font-medium hover:bg-red-500/20 transition-colors">
-          Sign Out
+      <!-- Feedback -->
+      <div class="bg-oura-card rounded-2xl p-6 mb-4">
+        <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-4">Help</h4>
+        <button onclick="Account.showBugReportModal()"
+          class="w-full flex items-center justify-between p-3 bg-oura-subtle rounded-lg hover:bg-oura-border transition-colors">
+          <span class="text-sm font-medium">Report a Bug</span>
+          <svg class="w-5 h-5 text-oura-muted" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 12.75c1.148 0 2.278.08 3.383.237 1.037.146 1.866.966 1.866 2.013 0 3.728-2.35 6.75-5.25 6.75S6.75 18.728 6.75 15c0-1.046.83-1.867 1.866-2.013A24.204 24.204 0 0 1 12 12.75ZM12 12.75c2.883 0 5.647.508 8.207 1.44a23.91 23.91 0 0 1-1.152-6.135c-.22-2.057-1.907-3.555-3.966-3.555h-6.178c-2.06 0-3.746 1.498-3.966 3.555a23.91 23.91 0 0 1-1.152 6.135A24.142 24.142 0 0 1 12 12.75ZM9.75 8.625a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+          </svg>
         </button>
-      `;
-    } catch (error) {
-      console.error('Error rendering account:', error);
-      container.innerHTML = `
-        <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load account. Please try again.</p>
-        </div>
-      `;
-    }
+      </div>
+
+      <!-- Sign Out -->
+      <button onclick="Account.signOut()"
+        class="w-full py-3 min-h-[44px] bg-red-500/10 text-red-400 rounded-xl text-sm font-medium hover:bg-red-500/20 transition-colors">
+        Sign Out
+      </button>
+    `;
   },
 
   // Get user profile
@@ -185,6 +219,7 @@ const Account = {
 
       try {
         await this.updateProfile({ display_name: newDisplayName || null });
+        Cache.clear('account');
         this.closeEditProfileModal();
         this.render();
       } catch (error) {
@@ -288,6 +323,7 @@ const Account = {
         statusEl.classList.remove('hidden');
 
         await this.updateProfile({ oura_token: token });
+        Cache.clear('account');
 
         statusEl.className = 'text-xs text-green-400';
         statusEl.textContent = 'Token saved successfully!';

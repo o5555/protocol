@@ -116,3 +116,65 @@ button, a, input, select, textarea, label {
   transform: translateY(0);
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
+
+/* ── Pull-to-Refresh ── */
+
+#ptr-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  background: #0d0d1a;
+  transform: translateY(0);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  /* Offset upward so it's hidden above the viewport */
+  margin-top: -48px;
+  padding-top: var(--sat);
+}
+
+#ptr-label {
+  font-size: 13px;
+  color: #6b7280;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.ptr-ready #ptr-label {
+  color: #00c8a0;
+}
+
+#ptr-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #2a2a4e;
+  border-top-color: #00c8a0;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.ptr-ready #ptr-spinner,
+.ptr-active #ptr-spinner {
+  opacity: 1;
+}
+
+@keyframes ptr-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ptr-spinning {
+  animation: ptr-spin 0.7s linear infinite;
+}
+
+/* Ensure main content has will-change for smooth pull transform */
+.app-main {
+  will-change: transform;
+}

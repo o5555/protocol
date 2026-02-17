@@ -1,6 +1,9 @@
 // Friends Management Module
 
 const Friends = {
+  // Render generation counter to prevent stale async callbacks from overwriting fresher renders
+  _renderGeneration: 0,
+
   // Search for user by email
   async searchByEmail(email) {
     const client = SupabaseClient.client;
@@ -278,6 +281,19 @@ const Friends = {
     const container = document.getElementById('friends-container');
     if (!container) return;
 
+    const generation = ++this._renderGeneration;
+
+    // Try to render instantly from cache (but always refresh in background)
+    const cachedData = Cache.get('friends');
+    if (cachedData) {
+      this._renderContent(container, cachedData);
+    } else {
+      container.innerHTML = `
+        <div class="text-center py-10 text-oura-muted text-sm">Loading friends...</div>
+      `;
+    }
+
+    // Fetch fresh data (in background if we have cache)
     try {
       const [friends, pendingRequests, sentRequests, pendingInvites] = await Promise.all([
         this.getFriends(),
@@ -286,122 +302,139 @@ const Friends = {
         this.getPendingInvites()
       ]);
 
-      container.innerHTML = `
-        <!-- Invite Friend -->
-        <div class="bg-oura-card rounded-2xl p-6 mb-6">
-          <h3 class="text-lg font-semibold mb-4">Add Friend</h3>
-          <form id="invite-friend-form" class="flex flex-col sm:flex-row gap-2">
-            <input type="email" id="friend-email" placeholder="friend@email.com"
-              class="flex-1 px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white placeholder-neutral-600 focus:outline-none focus:border-oura-teal">
-            <button type="submit" class="w-full sm:w-auto px-6 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
-              Send Invite
-            </button>
-          </form>
-          <p id="invite-message" class="text-sm mt-2 hidden"></p>
-        </div>
+      // Only update DOM if this is still the most recent render call
+      if (generation !== this._renderGeneration) return;
 
-        <!-- Pending Requests -->
-        ${pendingRequests.length > 0 ? `
-          <div class="bg-oura-card rounded-2xl p-6 mb-6">
-            <h3 class="text-lg font-semibold mb-4">Friend Requests (${pendingRequests.length})</h3>
-            <div class="space-y-3">
-              ${pendingRequests.map(req => `
-                <div class="flex items-center justify-between p-3 bg-oura-subtle rounded-lg">
-                  <div>
-                    <p class="font-medium">${escapeHtml(req.displayName || req.email)}</p>
-                    <p class="text-sm text-oura-muted">${escapeHtml(req.email)}</p>
-                  </div>
-                  <div class="flex gap-2">
-                    <button onclick="Friends.handleAccept('${req.friendshipId}')"
-                      class="px-4 py-2 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-medium hover:bg-oura-teal/90">
-                      Accept
-                    </button>
-                    <button onclick="Friends.handleDecline('${req.friendshipId}')"
-                      class="px-4 py-2 min-h-[44px] bg-oura-border text-white rounded-lg text-sm font-medium hover:bg-oura-subtle">
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
+      const data = { friends, pendingRequests, sentRequests, pendingInvites };
 
-        <!-- Sent Requests -->
-        ${sentRequests.length > 0 ? `
-          <div class="bg-oura-card rounded-2xl p-6 mb-6">
-            <h3 class="text-lg font-semibold mb-4 text-oura-muted">Sent Requests (${sentRequests.length})</h3>
-            <div class="space-y-3">
-              ${sentRequests.map(req => `
-                <div class="flex items-center justify-between p-3 bg-oura-subtle/50 rounded-lg">
-                  <div>
-                    <p class="font-medium text-neutral-300">${escapeHtml(req.displayName || req.email)}</p>
-                    <p class="text-sm text-oura-muted">${escapeHtml(req.email)}</p>
-                  </div>
-                  <span class="text-sm text-oura-muted">Pending</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
+      // Cache the data
+      Cache.set('friends', data);
 
-        <!-- Pending Invite Links -->
-        ${pendingInvites.length > 0 ? `
-          <div class="bg-oura-card rounded-2xl p-6 mb-6">
-            <h3 class="text-lg font-semibold mb-4 text-oura-muted">Invite Links Sent (${pendingInvites.length})</h3>
-            <div class="space-y-3">
-              ${pendingInvites.map(inv => `
-                <div class="flex items-center justify-between p-3 bg-oura-subtle/50 rounded-lg">
-                  <div>
-                    <p class="font-medium text-neutral-300">${escapeHtml(inv.invited_email)}</p>
-                    <p class="text-xs text-oura-muted">Auto-connects when they sign up</p>
-                  </div>
-                  <button onclick="Friends.handleCancelInvite('${inv.id}')"
-                    class="text-sm text-oura-muted hover:text-red-400">
-                    Cancel
-                  </button>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Friends List -->
-        <div class="bg-oura-card rounded-2xl p-6">
-          <h3 class="text-lg font-semibold mb-4">Friends (${friends.length})</h3>
-          ${friends.length > 0 ? `
-            <div class="space-y-3">
-              ${friends.map(friend => `
-                <div class="flex items-center justify-between p-3 bg-oura-subtle rounded-lg">
-                  <div>
-                    <p class="font-medium">${escapeHtml(friend.displayName || friend.email)}</p>
-                    <p class="text-sm text-oura-muted">${escapeHtml(friend.email)}</p>
-                  </div>
-                  <button onclick="Friends.handleRemove('${friend.friendshipId}')"
-                    class="text-sm text-oura-muted hover:text-red-400">
-                    Remove
-                  </button>
-                </div>
-              `).join('')}
-            </div>
-          ` : `
-            <p class="text-oura-muted">No friends yet. Invite someone to get started!</p>
-          `}
-        </div>
-      `;
-
-      // Set up invite form handler
-      const inviteForm = document.getElementById('invite-friend-form');
-      if (inviteForm) {
-        inviteForm.addEventListener('submit', this.handleInvite.bind(this));
-      }
+      // Re-render with fresh data
+      this._renderContent(container, data);
     } catch (error) {
       console.error('Error rendering friends:', error);
-      container.innerHTML = `
-        <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load friends. Please try again.</p>
+      if (generation !== this._renderGeneration) return;
+      if (!cachedData) {
+        container.innerHTML = `
+          <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
+            <p class="text-red-400">Failed to load friends. Please try again.</p>
+          </div>
+        `;
+      }
+    }
+  },
+
+  // Render friends content (separated for caching)
+  _renderContent(container, { friends, pendingRequests, sentRequests, pendingInvites }) {
+    container.innerHTML = `
+      <!-- Invite Friend -->
+      <div class="bg-oura-card rounded-2xl p-6 mb-6">
+        <h3 class="text-lg font-semibold mb-4">Add Friend</h3>
+        <form id="invite-friend-form" class="flex flex-col sm:flex-row gap-2">
+          <input type="email" id="friend-email" placeholder="friend@email.com"
+            class="flex-1 px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white placeholder-neutral-600 focus:outline-none focus:border-oura-teal">
+          <button type="submit" class="w-full sm:w-auto px-6 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+            Send Invite
+          </button>
+        </form>
+        <p id="invite-message" class="text-sm mt-2 hidden"></p>
+      </div>
+
+      <!-- Pending Requests -->
+      ${pendingRequests.length > 0 ? `
+        <div class="bg-oura-card rounded-2xl p-6 mb-6">
+          <h3 class="text-lg font-semibold mb-4">Friend Requests (${pendingRequests.length})</h3>
+          <div class="space-y-3">
+            ${pendingRequests.map(req => `
+              <div class="flex items-center justify-between p-3 bg-oura-subtle rounded-lg">
+                <div>
+                  <p class="font-medium">${escapeHtml(req.displayName || req.email)}</p>
+                  <p class="text-sm text-oura-muted">${escapeHtml(req.email)}</p>
+                </div>
+                <div class="flex gap-2">
+                  <button onclick="Friends.handleAccept('${req.friendshipId}')"
+                    class="px-4 py-2 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-medium hover:bg-oura-teal/90">
+                    Accept
+                  </button>
+                  <button onclick="Friends.handleDecline('${req.friendshipId}')"
+                    class="px-4 py-2 min-h-[44px] bg-oura-border text-white rounded-lg text-sm font-medium hover:bg-oura-subtle">
+                    Decline
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
         </div>
-      `;
+      ` : ''}
+
+      <!-- Sent Requests -->
+      ${sentRequests.length > 0 ? `
+        <div class="bg-oura-card rounded-2xl p-6 mb-6">
+          <h3 class="text-lg font-semibold mb-4 text-oura-muted">Sent Requests (${sentRequests.length})</h3>
+          <div class="space-y-3">
+            ${sentRequests.map(req => `
+              <div class="flex items-center justify-between p-3 bg-oura-subtle/50 rounded-lg">
+                <div>
+                  <p class="font-medium text-neutral-300">${escapeHtml(req.displayName || req.email)}</p>
+                  <p class="text-sm text-oura-muted">${escapeHtml(req.email)}</p>
+                </div>
+                <span class="text-sm text-oura-muted">Pending</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Pending Invite Links -->
+      ${pendingInvites.length > 0 ? `
+        <div class="bg-oura-card rounded-2xl p-6 mb-6">
+          <h3 class="text-lg font-semibold mb-4 text-oura-muted">Invite Links Sent (${pendingInvites.length})</h3>
+          <div class="space-y-3">
+            ${pendingInvites.map(inv => `
+              <div class="flex items-center justify-between p-3 bg-oura-subtle/50 rounded-lg">
+                <div>
+                  <p class="font-medium text-neutral-300">${escapeHtml(inv.invited_email)}</p>
+                  <p class="text-xs text-oura-muted">Auto-connects when they sign up</p>
+                </div>
+                <button onclick="Friends.handleCancelInvite('${inv.id}')"
+                  class="text-sm text-oura-muted hover:text-red-400">
+                  Cancel
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Friends List -->
+      <div class="bg-oura-card rounded-2xl p-6">
+        <h3 class="text-lg font-semibold mb-4">Friends (${friends.length})</h3>
+        ${friends.length > 0 ? `
+          <div class="space-y-3">
+            ${friends.map(friend => `
+              <div class="flex items-center justify-between p-3 bg-oura-subtle rounded-lg">
+                <div>
+                  <p class="font-medium">${escapeHtml(friend.displayName || friend.email)}</p>
+                  <p class="text-sm text-oura-muted">${escapeHtml(friend.email)}</p>
+                </div>
+                <button onclick="Friends.handleRemove('${friend.friendshipId}')"
+                  class="text-sm text-oura-muted hover:text-red-400">
+                  Remove
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        ` : `
+          <p class="text-oura-muted">No friends yet. Invite someone to get started!</p>
+        `}
+      </div>
+    `;
+
+    // Set up invite form handler
+    const inviteForm = document.getElementById('invite-friend-form');
+    if (inviteForm) {
+      inviteForm.addEventListener('submit', this.handleInvite.bind(this));
     }
   },
 
@@ -432,6 +465,7 @@ const Friends = {
       }
 
       await this.sendRequest(user.id);
+      Cache.clear('friends');
 
       messageEl.className = 'text-sm mt-2 text-green-400';
       messageEl.textContent = 'Friend request sent!';
@@ -449,6 +483,7 @@ const Friends = {
   async handleAccept(friendshipId) {
     try {
       await this.acceptRequest(friendshipId);
+      Cache.clear('friends');
       await this.render();
     } catch (error) {
       console.error('Error accepting request:', error);
@@ -460,6 +495,7 @@ const Friends = {
   async handleDecline(friendshipId) {
     try {
       await this.declineRequest(friendshipId);
+      Cache.clear('friends');
       await this.render();
     } catch (error) {
       console.error('Error declining request:', error);
@@ -497,6 +533,7 @@ const Friends = {
       }
       emailInput.value = '';
 
+      Cache.clear('friends');
       await this.render();
     } catch (error) {
       messageEl.className = 'text-sm mt-2 text-red-400';
@@ -508,6 +545,7 @@ const Friends = {
   async handleCancelInvite(inviteId) {
     try {
       await this.cancelInvite(inviteId);
+      Cache.clear('friends');
       await this.render();
     } catch (error) {
       console.error('Error cancelling invite:', error);
@@ -521,6 +559,7 @@ const Friends = {
 
     try {
       await this.removeFriend(friendshipId);
+      Cache.clear('friends');
       await this.render();
     } catch (error) {
       console.error('Error removing friend:', error);

@@ -349,6 +349,8 @@ const Challenges = {
       if (typeof Cache !== 'undefined') {
         Cache.clear('dashboard');
         Cache.clear('challenges_list');
+        Cache.clear('challenge_detail_' + challengeId);
+        Cache.clear('comparison_' + challengeId);
       }
       App.navigateTo('challenges');
     } catch (error) {
@@ -385,6 +387,8 @@ const Challenges = {
       if (typeof Cache !== 'undefined') {
         Cache.clear('dashboard');
         Cache.clear('challenges_list');
+        Cache.clear('challenge_detail_' + challengeId);
+        Cache.clear('comparison_' + challengeId);
       }
       App.navigateTo('challenges');
     } catch (error) {
@@ -459,6 +463,8 @@ const Challenges = {
       if (typeof Cache !== 'undefined') {
         Cache.clear('dashboard');
         Cache.clear('challenges_list');
+        Cache.clear('challenge_detail_' + challengeId);
+        Cache.clear('comparison_' + challengeId);
       }
 
       await this.renderDetail(challengeId);
@@ -859,9 +865,21 @@ const Challenges = {
       // Store challengeId for sync refresh
       container.dataset.challengeId = challengeId;
 
-      // Auto-sync Oura data silently before fetching (skip on post-sync refresh)
+      // SWR caching: skip sync + loading screen on repeat visits the same day
+      const cacheKey = 'challenge_detail_' + challengeId;
+      const cachedData = typeof Cache !== 'undefined' ? Cache.get(cacheKey) : null;
+      const syncedToday = typeof Cache !== 'undefined' && typeof Cache.isSyncedToday === 'function' ? Cache.isSyncedToday() : false;
+      const needsSync = !skipSync && typeof SleepSync !== 'undefined' && !syncedToday;
+
       let syncResult = null;
-      if (!skipSync && typeof SleepSync !== 'undefined') {
+      var sleepData;
+
+      if (cachedData && !needsSync) {
+        // FAST PATH: Use cached data, no sync, no loading screen
+        sleepData = cachedData.sleepData;
+        syncResult = cachedData.syncResult;
+      } else if (!skipSync && typeof SleepSync !== 'undefined' && !syncedToday) {
+        // SYNC PATH: Show loading screen, sync + fetch in parallel
         container.innerHTML = `
           <div class="nav-bar flex items-center justify-between mb-4">
             <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
@@ -896,19 +914,31 @@ const Challenges = {
         const [syncRes, initialData] = await Promise.all([syncWithTimeout, dataFetch]);
         syncResult = syncRes;
 
-        // If sync got new data, re-fetch to include it; otherwise use initial data
-        var sleepData;
+        // If sync got new data, invalidate comparison cache and re-fetch; otherwise use initial data
         if (syncResult?.count > 0) {
+          if (typeof Cache !== 'undefined') Cache.clear('comparison_' + challengeId);
           const refreshed = await Comparison.getChallengeSleepData(challengeId);
           sleepData = refreshed.sleepData;
         } else {
           sleepData = initialData.sleepData;
         }
+
+        // Cache the result and mark sync done for today
+        if (typeof Cache !== 'undefined') {
+          Cache.set(cacheKey, { sleepData, syncResult });
+          if (typeof Cache.markSyncedToday === 'function') {
+            Cache.markSyncedToday();
+          }
+        }
       } else {
-        // No sync needed - just fetch data directly
-        var sleepData;
+        // NO SYNC PATH: Just fetch data directly
         const result = await Comparison.getChallengeSleepData(challengeId);
         sleepData = result.sleepData;
+
+        // Cache the result
+        if (typeof Cache !== 'undefined') {
+          Cache.set(cacheKey, { sleepData, syncResult: null });
+        }
       }
 
       // Fresh Start notification banner for participants
@@ -2111,6 +2141,10 @@ const Challenges = {
   async handleToggleHabit(challengeId, habitId, date) {
     try {
       await this.toggleHabit(challengeId, habitId, date);
+      // Invalidate challenge detail cache so habit state is fresh on next visit
+      if (typeof Cache !== 'undefined') {
+        Cache.clear('challenge_detail_' + challengeId);
+      }
     } catch (error) {
       console.error('Error toggling habit:', error);
       alert('Failed to update habit: ' + error.message);

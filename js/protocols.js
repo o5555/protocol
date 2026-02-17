@@ -1,6 +1,10 @@
 // Protocols Module
 
 const Protocols = {
+  // Render generation counters to prevent stale async callbacks from overwriting fresher renders
+  _listGeneration: 0,
+  _detailGeneration: 0,
+
   // Light mode habit mapping: protocol ID → sort_order values for "core 5" habits
   LIGHT_MODE_HABITS: {
     // Huberman: Morning sunlight, No caffeine after 2pm, Cool bedroom, No screens, Consistent wake time
@@ -218,45 +222,72 @@ const Protocols = {
     const container = document.getElementById('protocols-container');
     if (!container) return;
 
-    try {
-      const protocols = await this.getAll();
-      const user = await SupabaseClient.getCurrentUser();
+    const generation = ++this._listGeneration;
 
+    // Try to render instantly from cache (but always refresh in background)
+    const cachedData = Cache.get('protocols_list');
+    if (cachedData) {
+      this._renderListContent(container, cachedData);
+    } else {
       container.innerHTML = `
-        <button onclick="Protocols.showCreateModal()"
-          class="w-full mb-4 py-4 min-h-[48px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2">
-          + Create Your Own Protocol
-        </button>
-        <div class="space-y-3">
-          ${protocols.map(protocol => {
-            const initials = this.getInitials(protocol.name);
-            return `
-            <div onclick="App.navigateTo('protocol-detail', '${protocol.id}')"
-              class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors">
-              <div class="flex items-center gap-4">
-                <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-lg font-semibold text-white flex-shrink-0">
-                  ${initials}
-                </div>
-                <div class="flex-1 min-w-0">
-                  <h3 class="text-lg font-semibold">${escapeHtml(protocol.name)}</h3>
-                  <p class="text-oura-muted text-sm mt-1 line-clamp-3">${escapeHtml(protocol.description || '')}</p>
-                </div>
-                <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-          `}).join('')}
-        </div>
-      `;
-    } catch (error) {
-      console.error('Error rendering protocols:', error);
-      container.innerHTML = `
-        <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load protocols. Please try again.</p>
-        </div>
+        <div class="text-center py-10 text-oura-muted text-sm">Loading protocols...</div>
       `;
     }
+
+    // Fetch fresh data (in background if we have cache)
+    try {
+      const protocols = await this.getAll();
+
+      // Only update DOM if this is still the most recent render call
+      if (generation !== this._listGeneration) return;
+
+      // Cache the data
+      Cache.set('protocols_list', protocols);
+
+      // Re-render with fresh data
+      this._renderListContent(container, protocols);
+    } catch (error) {
+      console.error('Error rendering protocols:', error);
+      if (generation !== this._listGeneration) return;
+      if (!cachedData) {
+        container.innerHTML = `
+          <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
+            <p class="text-red-400">Failed to load protocols. Please try again.</p>
+          </div>
+        `;
+      }
+    }
+  },
+
+  // Render protocols list content (separated for caching)
+  _renderListContent(container, protocols) {
+    container.innerHTML = `
+      <button onclick="Protocols.showCreateModal()"
+        class="w-full mb-4 py-4 min-h-[48px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2">
+        + Create Your Own Protocol
+      </button>
+      <div class="space-y-3">
+        ${protocols.map(protocol => {
+          const initials = this.getInitials(protocol.name);
+          return `
+          <div onclick="App.navigateTo('protocol-detail', '${protocol.id}')"
+            class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors">
+            <div class="flex items-center gap-4">
+              <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-lg font-semibold text-white flex-shrink-0">
+                ${initials}
+              </div>
+              <div class="flex-1 min-w-0">
+                <h3 class="text-lg font-semibold">${escapeHtml(protocol.name)}</h3>
+                <p class="text-oura-muted text-sm mt-1 line-clamp-3">${escapeHtml(protocol.description || '')}</p>
+              </div>
+              <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        `}).join('')}
+      </div>
+    `;
   },
 
   // Render protocol detail page
@@ -264,76 +295,108 @@ const Protocols = {
     const container = document.getElementById('protocol-detail-container');
     if (!container) return;
 
-    try {
-      const protocol = await this.getById(protocolId);
-      const user = await SupabaseClient.getCurrentUser();
-      const isCustom = protocol.user_id && protocol.user_id === user?.id;
+    const generation = ++this._detailGeneration;
+    const cacheKey = 'protocol_detail_' + protocolId;
 
-      const initials = this.getInitials(protocol.name);
+    // Try to render instantly from cache (but always refresh in background)
+    const cachedData = Cache.get(cacheKey);
+    if (cachedData) {
+      this._renderDetailContent(container, cachedData);
+    } else {
       container.innerHTML = `
-        <div class="bg-oura-card rounded-2xl p-6 mb-6">
-          <button onclick="App.navigateTo('protocols')" class="min-h-[44px] inline-flex items-center text-oura-muted hover:text-white mb-4">
-            &larr; Back
-          </button>
-          <div class="flex items-start gap-4">
-            <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-xl font-semibold text-white flex-shrink-0">
-              ${initials}
-            </div>
-            <div class="flex-1">
-              <div class="flex items-center gap-2">
-                <h2 class="text-2xl font-bold">${escapeHtml(protocol.name)}</h2>
-                ${isCustom ? `<span class="px-2 py-0.5 text-[0.65rem] font-medium bg-purple-500/15 text-purple-400 rounded-full">Custom</span>` : ''}
-              </div>
-              <p class="text-oura-muted mt-2">${escapeHtml(protocol.description || '')}</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-oura-card rounded-2xl p-6 mb-6">
-          <h3 class="text-lg font-semibold mb-4">Daily Habits (${protocol.habits?.length || 0})</h3>
-          <div class="space-y-3">
-            ${protocol.habits?.map((habit, index) => `
-              <div class="flex items-start gap-4 p-4 bg-oura-subtle rounded-lg">
-                <span class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-oura-border rounded-full text-sm font-medium">
-                  ${index + 1}
-                </span>
-                <div>
-                  <p class="font-medium">${escapeHtml(habit.title)}</p>
-                  ${habit.description ? `<p class="text-sm text-oura-muted mt-1">${escapeHtml(habit.description)}</p>` : ''}
-                </div>
-              </div>
-            `).join('') || '<p class="text-oura-muted">No habits defined for this protocol.</p>'}
-          </div>
-        </div>
-
-        <div class="bg-oura-card rounded-2xl p-6 ${isCustom ? 'mb-6' : ''}">
-          <h3 class="text-lg font-semibold mb-4">Start a Challenge</h3>
-          <p class="text-oura-muted mb-4">Ready to commit to this protocol? Create a 30-day challenge and invite friends to join you.</p>
-          <button onclick="Challenges.showCreateModal('${protocol.id}')"
-            class="w-full py-3 min-h-[48px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
-            Create Challenge with This Protocol
-          </button>
-        </div>
-
-        ${isCustom ? `
-          <div class="bg-oura-card rounded-2xl p-6">
-            <h3 class="text-lg font-semibold mb-4 text-red-400">Danger Zone</h3>
-            <p class="text-oura-muted mb-4">Delete this custom protocol. This cannot be undone.</p>
-            <button onclick="Protocols.confirmDeleteProtocol('${protocol.id}')"
-              class="w-full py-3 min-h-[48px] bg-red-500/20 text-red-400 font-semibold rounded-lg hover:bg-red-500/30 border border-red-500/30">
-              Delete Protocol
-            </button>
-          </div>
-        ` : ''}
-      `;
-    } catch (error) {
-      console.error('Error rendering protocol detail:', error);
-      container.innerHTML = `
-        <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load protocol. Please try again.</p>
-        </div>
+        <div class="text-center py-10 text-oura-muted text-sm">Loading protocol...</div>
       `;
     }
+
+    // Fetch fresh data (in background if we have cache)
+    try {
+      const [protocol, user] = await Promise.all([
+        this.getById(protocolId),
+        SupabaseClient.getCurrentUser()
+      ]);
+
+      // Only update DOM if this is still the most recent render call
+      if (generation !== this._detailGeneration) return;
+
+      const isCustom = protocol.user_id && protocol.user_id === user?.id;
+
+      // Cache the data
+      Cache.set(cacheKey, { protocol, isCustom });
+
+      // Re-render with fresh data
+      this._renderDetailContent(container, { protocol, isCustom });
+    } catch (error) {
+      console.error('Error rendering protocol detail:', error);
+      if (generation !== this._detailGeneration) return;
+      if (!cachedData) {
+        container.innerHTML = `
+          <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
+            <p class="text-red-400">Failed to load protocol. Please try again.</p>
+          </div>
+        `;
+      }
+    }
+  },
+
+  // Render protocol detail content (separated for caching)
+  _renderDetailContent(container, { protocol, isCustom }) {
+    const initials = this.getInitials(protocol.name);
+    container.innerHTML = `
+      <div class="bg-oura-card rounded-2xl p-6 mb-6">
+        <button onclick="App.navigateTo('protocols')" class="min-h-[44px] inline-flex items-center text-oura-muted hover:text-white mb-4">
+          &larr; Back
+        </button>
+        <div class="flex items-start gap-4">
+          <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-xl font-semibold text-white flex-shrink-0">
+            ${initials}
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <h2 class="text-2xl font-bold">${escapeHtml(protocol.name)}</h2>
+              ${isCustom ? `<span class="px-2 py-0.5 text-[0.65rem] font-medium bg-purple-500/15 text-purple-400 rounded-full">Custom</span>` : ''}
+            </div>
+            <p class="text-oura-muted mt-2">${escapeHtml(protocol.description || '')}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-oura-card rounded-2xl p-6 mb-6">
+        <h3 class="text-lg font-semibold mb-4">Daily Habits (${protocol.habits?.length || 0})</h3>
+        <div class="space-y-3">
+          ${protocol.habits?.map((habit, index) => `
+            <div class="flex items-start gap-4 p-4 bg-oura-subtle rounded-lg">
+              <span class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-oura-border rounded-full text-sm font-medium">
+                ${index + 1}
+              </span>
+              <div>
+                <p class="font-medium">${escapeHtml(habit.title)}</p>
+                ${habit.description ? `<p class="text-sm text-oura-muted mt-1">${escapeHtml(habit.description)}</p>` : ''}
+              </div>
+            </div>
+          `).join('') || '<p class="text-oura-muted">No habits defined for this protocol.</p>'}
+        </div>
+      </div>
+
+      <div class="bg-oura-card rounded-2xl p-6 ${isCustom ? 'mb-6' : ''}">
+        <h3 class="text-lg font-semibold mb-4">Start a Challenge</h3>
+        <p class="text-oura-muted mb-4">Ready to commit to this protocol? Create a 30-day challenge and invite friends to join you.</p>
+        <button onclick="Challenges.showCreateModal('${protocol.id}')"
+          class="w-full py-3 min-h-[48px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+          Create Challenge with This Protocol
+        </button>
+      </div>
+
+      ${isCustom ? `
+        <div class="bg-oura-card rounded-2xl p-6">
+          <h3 class="text-lg font-semibold mb-4 text-red-400">Danger Zone</h3>
+          <p class="text-oura-muted mb-4">Delete this custom protocol. This cannot be undone.</p>
+          <button onclick="Protocols.confirmDeleteProtocol('${protocol.id}')"
+            class="w-full py-3 min-h-[48px] bg-red-500/20 text-red-400 font-semibold rounded-lg hover:bg-red-500/30 border border-red-500/30">
+            Delete Protocol
+          </button>
+        </div>
+      ` : ''}
+    `;
   },
 
   // Confirm and delete a custom protocol
@@ -344,6 +407,9 @@ const Protocols = {
 
     try {
       await this.deleteCustomProtocol(protocolId);
+      // Invalidate caches since we deleted a protocol
+      Cache.clear('protocols_list');
+      Cache.clear('protocol_detail_' + protocolId);
       App.navigateTo('protocols');
     } catch (error) {
       console.error('Error deleting protocol:', error);
@@ -589,6 +655,9 @@ const Protocols = {
 
     try {
       const protocol = await this.createCustomProtocol(name, this._customProtocolHabits);
+
+      // Invalidate protocols list cache since we added a new protocol
+      Cache.clear('protocols_list');
 
       this.closeCreateModal();
 

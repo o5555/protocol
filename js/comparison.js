@@ -19,6 +19,13 @@ const Comparison = {
   // Get sleep data for challenge participants (includes baseline before start)
   // Looks back 90 days and takes the most recent 30 data points as baseline
   async getChallengeSleepData(challengeId) {
+    // Return cached result if available
+    const compCacheKey = 'comparison_' + challengeId;
+    if (typeof Cache !== 'undefined') {
+      const cached = Cache.get(compCacheKey);
+      if (cached) return cached;
+    }
+
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
 
@@ -77,7 +84,14 @@ const Comparison = {
     });
 
     const sleepData = await Promise.all(sleepDataPromises);
-    return { challenge, sleepData };
+    const result = { challenge, sleepData };
+
+    // Cache the result for subsequent visits
+    if (typeof Cache !== 'undefined') {
+      Cache.set(compCacheKey, result);
+    }
+
+    return result;
   },
 
   // Calculate median of an array
@@ -666,6 +680,11 @@ const SleepSync = {
         if (challengeContainer) {
           const challengeId = challengeContainer.dataset.challengeId;
           if (challengeId) {
+            // Clear caches so re-render picks up fresh data
+            if (typeof Cache !== 'undefined') {
+              Cache.clear('challenge_detail_' + challengeId);
+              Cache.clear('comparison_' + challengeId);
+            }
             await Challenges.renderDetail(challengeId, { skipSync: true });
           }
         }
