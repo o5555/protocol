@@ -1150,7 +1150,7 @@ const Challenges = {
                   <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="deep">DEEP</button>
                 </div>
               </div>
-              <div class="rounded-2xl p-4" style="background: #0a0a14">
+              <div class="rounded-2xl p-4 cursor-pointer" style="background: #0a0a14" onclick="Challenges.showMetricDetailModal('${challengeId}')">
                 <div id="trend-chart-container" class="h-48">
                   <canvas id="main-trend-chart"></canvas>
                 </div>
@@ -1195,7 +1195,7 @@ const Challenges = {
       container.innerHTML = `
         <!-- Navigation - minimal -->
         <div class="mb-4">
-          <button onclick="App.navigateTo('protocols')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+          <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
             &larr; Back
           </button>
         </div>
@@ -1253,7 +1253,7 @@ const Challenges = {
               <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="deep">DEEP</button>
             </div>
           </div>
-          <div class="rounded-2xl p-4" style="background: #0a0a14">
+          <div class="rounded-2xl p-4 cursor-pointer" style="background: #0a0a14" onclick="Challenges.showMetricDetailModal('${challengeId}')">
             <div id="trend-chart-container" class="h-48">
               <canvas id="main-trend-chart"></canvas>
             </div>
@@ -1295,12 +1295,6 @@ const Challenges = {
             : `<span class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.name)} · Day <strong class="text-white">${challenge.dayNumber}</strong> of 30</span>`
           }
         </div>
-
-        <!-- Details Link -->
-        <button onclick="Challenges.showDetailsModal('${challengeId}')"
-          class="w-full text-center py-4 text-oura-accent text-sm font-medium hover:text-white transition-colors">
-          View detailed metrics & habits →
-        </button>
 
         <!-- Protocol Habits -->
         ${this.renderProtocolHabitsSection(challenge)}
