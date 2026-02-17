@@ -93,53 +93,50 @@
                 <p class="text-oura-muted">Track habits, compete with friends, improve your sleep</p>
             </div>
             <div class="bg-oura-card rounded-2xl p-6">
-                <!-- Tab switcher -->
-                <div class="flex gap-1 mb-5 bg-oura-bg rounded-lg p-1">
-                    <button id="tab-magic" onclick="Auth.switchAuthTab('magic')"
-                        class="flex-1 py-2 text-sm font-medium rounded-md bg-oura-border text-white transition-colors">
-                        Magic Link
-                    </button>
-                    <button id="tab-password" onclick="Auth.switchAuthTab('password')"
-                        class="flex-1 py-2 text-sm font-medium rounded-md text-oura-muted transition-colors">
-                        Password
-                    </button>
+                <!-- Step 1: Enter email -->
+                <div id="auth-step-email">
+                    <form id="otp-email-form">
+                        <div class="mb-4">
+                            <label class="block text-sm text-oura-muted mb-2">Email Address</label>
+                            <input type="email" id="auth-email" required
+                                placeholder="you@example.com"
+                                class="w-full px-4 py-3 bg-oura-bg border border-oura-border rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
+                        </div>
+                        <button type="submit" id="auth-submit"
+                            class="w-full py-3 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all">
+                            Continue
+                        </button>
+                        <p id="auth-message" class="hidden"></p>
+                    </form>
                 </div>
 
-                <!-- Magic Link Form -->
-                <form id="magic-link-form">
-                    <div class="mb-4">
-                        <label class="block text-sm text-oura-muted mb-2">Email Address</label>
-                        <input type="email" id="auth-email" required
-                            placeholder="you@example.com"
-                            class="w-full px-4 py-3 bg-oura-bg border border-oura-border rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
-                    </div>
-                    <button type="submit" id="auth-submit"
-                        class="w-full py-3 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all">
-                        Send Magic Link
+                <!-- Step 2: Enter 6-digit code -->
+                <div id="auth-step-code" class="hidden">
+                    <button onclick="Auth.showEmailStep()" class="text-oura-muted text-sm mb-4 flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                        Back
                     </button>
-                    <p id="auth-message" class="hidden"></p>
-                </form>
-
-                <!-- Password Form -->
-                <form id="password-form" class="hidden">
-                    <div class="mb-4">
-                        <label class="block text-sm text-oura-muted mb-2">Email Address</label>
-                        <input type="email" id="auth-email-pw" required
-                            placeholder="you@example.com"
-                            class="w-full px-4 py-3 bg-oura-bg border border-oura-border rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm text-oura-muted mb-2">Password</label>
-                        <input type="password" id="auth-password" required
-                            placeholder="Enter password"
-                            class="w-full px-4 py-3 bg-oura-bg border border-oura-border rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
-                    </div>
-                    <button type="submit" id="auth-submit-pw"
-                        class="w-full py-3 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all">
-                        Sign In
+                    <p class="text-sm text-oura-muted mb-1">Enter the 6-digit code sent to</p>
+                    <p id="auth-code-email" class="text-white font-medium mb-4"></p>
+                    <form id="otp-code-form">
+                        <div class="flex gap-2 mb-4 justify-center" id="otp-inputs">
+                            <input type="text" inputmode="numeric" maxlength="1" class="otp-digit w-12 h-14 text-center text-xl font-bold bg-oura-bg border border-oura-border rounded-xl text-white focus:outline-none focus:border-oura-accent" autocomplete="one-time-code">
+                            <input type="text" inputmode="numeric" maxlength="1" class="otp-digit w-12 h-14 text-center text-xl font-bold bg-oura-bg border border-oura-border rounded-xl text-white focus:outline-none focus:border-oura-accent">
+                            <input type="text" inputmode="numeric" maxlength="1" class="otp-digit w-12 h-14 text-center text-xl font-bold bg-oura-bg border border-oura-border rounded-xl text-white focus:outline-none focus:border-oura-accent">
+                            <input type="text" inputmode="numeric" maxlength="1" class="otp-digit w-12 h-14 text-center text-xl font-bold bg-oura-bg border border-oura-border rounded-xl text-white focus:outline-none focus:border-oura-accent">
+                            <input type="text" inputmode="numeric" maxlength="1" class="otp-digit w-12 h-14 text-center text-xl font-bold bg-oura-bg border border-oura-border rounded-xl text-white focus:outline-none focus:border-oura-accent">
+                            <input type="text" inputmode="numeric" maxlength="1" class="otp-digit w-12 h-14 text-center text-xl font-bold bg-oura-bg border border-oura-border rounded-xl text-white focus:outline-none focus:border-oura-accent">
+                        </div>
+                        <button type="submit" id="auth-verify-btn"
+                            class="w-full py-3 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all">
+                            Verify
+                        </button>
+                        <p id="auth-code-message" class="hidden"></p>
+                    </form>
+                    <button onclick="Auth.resendCode()" id="auth-resend-btn" class="w-full text-center text-sm text-oura-muted mt-3 py-2">
+                        Resend code
                     </button>
-                    <p id="auth-message-pw" class="hidden"></p>
-                </form>
+                </div>
             </div>
         </div>
     </div>

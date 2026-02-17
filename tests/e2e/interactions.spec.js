@@ -795,8 +795,8 @@ test.describe('Onboarding Step Interactions', () => {
     await nameInput.fill('Alice');
     await expect(nameInput).toHaveValue('Alice');
 
-    // Continue button should be visible
-    const continueBtn = page.locator('button:has-text("Continue")');
+    // Continue button should be visible (scope to onboarding section to avoid auth button)
+    const continueBtn = page.locator('#onboarding-section button:has-text("Continue")');
     await expect(continueBtn).toBeVisible();
 
     const unexpected = unexpectedErrors(errors);
@@ -900,8 +900,8 @@ test.describe('Onboarding Step Interactions', () => {
     const nameInput = page.locator('#onboarding-name');
     await nameInput.fill('TestUser');
 
-    // Click Continue
-    await page.click('button:has-text("Continue")');
+    // Click Continue (scope to onboarding section to avoid auth button)
+    await page.click('#onboarding-section button:has-text("Continue")');
 
     // Verify step advanced (to step 1)
     await page.waitForFunction(() => window._advancedToStep === 1, { timeout: 5000 });

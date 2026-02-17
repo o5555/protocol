@@ -65,35 +65,45 @@ test('health endpoint returns ok', async ({ request }) => {
 // ---------------------------------------------------------------------------
 
 test.describe('Auth', () => {
-  test('shows auth section with magic link and password tabs', async ({ page }) => {
+  test('shows auth section with OTP email form', async ({ page }) => {
     await page.goto('/');
     const authSection = page.locator('#auth-section');
     await expect(authSection).toBeVisible();
-    await expect(page.locator('#tab-magic')).toBeVisible();
-    await expect(page.locator('#tab-password')).toBeVisible();
+    await expect(page.locator('#auth-step-email')).toBeVisible();
+    await expect(page.locator('#auth-step-code')).toBeHidden();
   });
 
-  test('magic link form has email input and submit button', async ({ page }) => {
+  test('OTP email form has email input and continue button', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#magic-link-form')).toBeVisible();
+    await expect(page.locator('#otp-email-form')).toBeVisible();
     await expect(page.locator('#auth-email')).toBeVisible();
     await expect(page.locator('#auth-submit')).toBeVisible();
   });
 
-  test('can switch to password tab', async ({ page }) => {
+  test('email form shows code step after OTP send', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#tab-password').click();
-    await expect(page.locator('#password-form')).toBeVisible();
-    await expect(page.locator('#auth-email-pw')).toBeVisible();
-    await expect(page.locator('#auth-password')).toBeVisible();
-    await expect(page.locator('#auth-submit-pw')).toBeVisible();
+    // Mock signInWithOtp to succeed
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
+    });
+    await page.fill('#auth-email', 'test@example.com');
+    await page.locator('#auth-submit').click();
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#auth-step-email')).toBeHidden();
   });
 
-  test('can switch back to magic link tab', async ({ page }) => {
+  test('code step has back button to return to email step', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#tab-password').click();
-    await page.locator('#tab-magic').click();
-    await expect(page.locator('#magic-link-form')).toBeVisible();
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
+    });
+    await page.fill('#auth-email', 'test@example.com');
+    await page.locator('#auth-submit').click();
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 5000 });
+    // Click Back button
+    await page.locator('#auth-step-code button:has-text("Back")').click();
+    await expect(page.locator('#auth-step-email')).toBeVisible();
+    await expect(page.locator('#auth-step-code')).toBeHidden();
   });
 });
 
@@ -111,7 +121,7 @@ test.describe('Onboarding', () => {
   test('step 0 - name input and continue button render', async ({ page }) => {
     await showOnboardingStep(page, 0);
     await expect(page.locator('#onboarding-name')).toHaveAttribute('type', 'text');
-    await expect(page.getByText('Continue')).toBeVisible();
+    await expect(page.locator('#onboarding-section button:has-text("Continue")')).toBeVisible();
   });
 
   test('step 1 - Connect Oura token input is visible', async ({ page }) => {

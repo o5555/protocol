@@ -79,10 +79,10 @@ function unexpectedErrors(errors) {
   );
 }
 
-// ─── Test 1: Auth page loads and tab switching works ────────────────────────
+// ─── Test 1: Auth page loads with OTP email form ────────────────────────────
 
-test.describe('Auth page loads and tab switching works', () => {
-  test('auth section visible, tab clicks toggle between magic link and password forms', async ({ page }) => {
+test.describe('Auth page loads with OTP email form', () => {
+  test('auth section visible, email step shown, code step hidden', async ({ page }) => {
     const errors = collectErrors(page);
 
     await page.goto('/');
@@ -91,98 +91,92 @@ test.describe('Auth page loads and tab switching works', () => {
     // Auth section should be visible on load
     await expect(page.locator('#auth-section')).toBeVisible();
 
-    // Default state: magic link form visible, password form hidden
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await expect(page.locator('#password-form')).toBeHidden();
+    // Email step visible, code step hidden
+    await expect(page.locator('#auth-step-email')).toBeVisible();
+    await expect(page.locator('#auth-step-code')).toBeHidden();
 
-    // Click the password tab
-    await page.click('#tab-password');
-    await expect(page.locator('#password-form')).toBeVisible();
-    await expect(page.locator('#magic-link-form')).toBeHidden();
-
-    // Click magic link tab back
-    await page.click('#tab-magic');
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await expect(page.locator('#password-form')).toBeHidden();
+    // Email input and submit button present
+    await expect(page.locator('#auth-email')).toBeVisible();
+    await expect(page.locator('#auth-submit')).toBeVisible();
 
     // No unexpected console errors
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 });
 
-// ─── Test 2: Password sign-in flow ─────────────────────────────────────────
+// ─── Test 2: OTP send and code step ─────────────────────────────────────────
 
-test.describe('Password sign-in flow', () => {
-  test('fill form, submit, verify signing-in state and error for bad creds', async ({ page }) => {
+test.describe('OTP send and code step', () => {
+  test('fill email, submit, shows sending state, then code step appears', async ({ page }) => {
     const errors = collectErrors(page);
 
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Switch to password tab
-    await page.click('#tab-password');
-    await expect(page.locator('#password-form')).toBeVisible();
-
-    // Fill in email and password
-    await page.fill('#auth-email-pw', 'baduser@test.com');
-    await page.fill('#auth-password', 'wrong-password-123');
-
-    // Click submit
-    const submitBtn = page.locator('#auth-submit-pw');
-    await submitBtn.click();
-
-    // Button should change to "Signing in..." while request is in flight
-    await expect(submitBtn).toHaveText('Signing in...', { timeout: 2000 }).catch(() => {
-      // May revert quickly if the request fails fast
+    // Mock signInWithOtp to succeed
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
     });
 
-    // Wait for the button to revert back to "Sign In"
-    await expect(submitBtn).toHaveText('Sign In', { timeout: 10000 });
-
-    // Error message should appear for invalid credentials
-    const messageEl = page.locator('#auth-message-pw');
-    await expect(messageEl).toBeVisible({ timeout: 10000 });
-    const messageText = await messageEl.textContent();
-    expect(messageText.length).toBeGreaterThan(0);
-
-    // No unexpected console errors
-    expect(unexpectedErrors(errors)).toEqual([]);
-  });
-});
-
-// ─── Test 3: Magic link flow ────────────────────────────────────────────────
-
-test.describe('Magic link flow', () => {
-  test('fill email, submit, verify sending state, then message appears', async ({ page }) => {
-    const errors = collectErrors(page);
-
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
-    // Should already be on magic link tab
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-
-    // Fill email
     await page.fill('#auth-email', 'testuser@example.com');
 
-    // Click submit
     const submitBtn = page.locator('#auth-submit');
     await submitBtn.click();
 
-    // Button should change to "Sending..." while request is in flight
-    await expect(submitBtn).toHaveText('Sending...', { timeout: 2000 }).catch(() => {
-      // May revert quickly
+    // Button should change to "Sending code..." while request is in flight
+    await expect(submitBtn).toHaveText('Sending code...', { timeout: 2000 }).catch(() => {});
+
+    // Code step should appear after successful OTP send
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#auth-step-email')).toBeHidden();
+
+    // Email should be displayed in the code step
+    await expect(page.locator('#auth-code-email')).toHaveText('testuser@example.com');
+
+    // No unexpected console errors
+    expect(unexpectedErrors(errors)).toEqual([]);
+  });
+});
+
+// ─── Test 3: OTP code verification ──────────────────────────────────────────
+
+test.describe('OTP code verification', () => {
+  test('fill email, get to code step, enter code, verify', async ({ page }) => {
+    const errors = collectErrors(page);
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Mock OTP send
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
     });
 
-    // Wait for the button to revert back to "Send Magic Link"
-    // The Supabase magic link API call may take a while in test environments
-    await expect(submitBtn).toHaveText('Send Magic Link', { timeout: 25000 });
+    await page.fill('#auth-email', 'testuser@example.com');
+    await page.locator('#auth-submit').click();
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 10000 });
 
-    // A message should appear (success or error depending on Supabase availability)
-    const messageEl = page.locator('#auth-message');
+    // Mock verifyOtp to fail (invalid code)
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.verifyOtp = async () => {
+        throw new Error('Invalid OTP code');
+      };
+    });
+
+    // Enter 6-digit code
+    const digits = page.locator('#otp-inputs .otp-digit');
+    for (let i = 0; i < 6; i++) {
+      await digits.nth(i).fill(String(i + 1));
+    }
+
+    // Auto-submit should trigger, or click verify
+    await page.waitForTimeout(500);
+
+    // Error message should appear
+    const messageEl = page.locator('#auth-code-message');
     await expect(messageEl).toBeVisible({ timeout: 10000 });
-    const messageText = await messageEl.textContent();
-    expect(messageText.length).toBeGreaterThan(0);
+    const text = await messageEl.textContent();
+    expect(text.length).toBeGreaterThan(0);
 
     // No unexpected console errors
     expect(unexpectedErrors(errors)).toEqual([]);

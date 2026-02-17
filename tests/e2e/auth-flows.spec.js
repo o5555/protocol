@@ -69,52 +69,24 @@ function unexpectedErrors(errors) {
   );
 }
 
-// ─── 1. Sign Up via Magic Link ──────────────────────────────────────────────
+// ─── 1. OTP Email Step ──────────────────────────────────────────────────────
 
-test.describe('Sign Up via Magic Link', () => {
-  test('new user enters email, clicks Send Magic Link, shows Sending... state', async ({ page }) => {
+test.describe('OTP Email Step', () => {
+  test('email step visible on load with email input and continue button', async ({ page }) => {
     const errors = collectErrors(page);
     await waitForAuthInit(page);
 
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await page.fill('#auth-email', 'newuser@example.com');
-
-    const submitBtn = page.locator('#auth-submit');
-    await submitBtn.click();
-
-    // Button should show "Sending..." while request is in flight
-    await expect(submitBtn).toHaveText('Sending...', { timeout: 2000 }).catch(() => {
-      // May revert quickly if the request fails fast
-    });
-
-    // Eventually button reverts to original text
-    await expect(submitBtn).toHaveText('Send Magic Link', { timeout: 25000 });
+    await expect(page.locator('#auth-step-email')).toBeVisible();
+    await expect(page.locator('#auth-step-code')).toBeHidden();
+    await expect(page.locator('#auth-email')).toBeVisible();
+    await expect(page.locator('#auth-submit')).toBeVisible();
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 
-  test('after submission, message element becomes visible', async ({ page }) => {
+  test('mock successful OTP sends user to code step', async ({ page }) => {
     const errors = collectErrors(page);
     await waitForAuthInit(page);
 
-    await page.fill('#auth-email', 'newuser@example.com');
-    await page.locator('#auth-submit').click();
-
-    // Wait for button to finish loading
-    await expect(page.locator('#auth-submit')).toHaveText('Send Magic Link', { timeout: 25000 });
-
-    // Message should become visible (success or error depending on Supabase availability)
-    const messageEl = page.locator('#auth-message');
-    await expect(messageEl).toBeVisible({ timeout: 10000 });
-    const text = await messageEl.textContent();
-    expect(text.length).toBeGreaterThan(0);
-    expect(unexpectedErrors(errors)).toEqual([]);
-  });
-
-  test('mock successful OTP sends success message with check/email/link', async ({ page }) => {
-    const errors = collectErrors(page);
-    await waitForAuthInit(page);
-
-    // Mock signInWithOtp to succeed
     await page.evaluate(() => {
       SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
     });
@@ -122,17 +94,10 @@ test.describe('Sign Up via Magic Link', () => {
     await page.fill('#auth-email', 'newuser@example.com');
     await page.locator('#auth-submit').click();
 
-    await expect(page.locator('#auth-submit')).toHaveText('Send Magic Link', { timeout: 10000 });
-
-    const messageEl = page.locator('#auth-message');
-    await expect(messageEl).toBeVisible({ timeout: 5000 });
-    const text = (await messageEl.textContent()).toLowerCase();
-    const hasExpectedWord = text.includes('check') || text.includes('email') || text.includes('link');
-    expect(hasExpectedWord).toBe(true);
-
-    // Success message should have green styling (not red)
-    const classes = await messageEl.getAttribute('class');
-    expect(classes).toContain('green');
+    // Code step should appear
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#auth-step-email')).toBeHidden();
+    await expect(page.locator('#auth-code-email')).toHaveText('newuser@example.com');
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 
@@ -140,7 +105,6 @@ test.describe('Sign Up via Magic Link', () => {
     const errors = collectErrors(page);
     await waitForAuthInit(page);
 
-    // Mock signInWithOtp to fail
     await page.evaluate(() => {
       SupabaseClient.client.auth.signInWithOtp = async () => {
         throw new Error('Rate limit exceeded');
@@ -150,14 +114,13 @@ test.describe('Sign Up via Magic Link', () => {
     await page.fill('#auth-email', 'newuser@example.com');
     await page.locator('#auth-submit').click();
 
-    await expect(page.locator('#auth-submit')).toHaveText('Send Magic Link', { timeout: 10000 });
+    await expect(page.locator('#auth-submit')).toHaveText('Continue', { timeout: 10000 });
 
     const messageEl = page.locator('#auth-message');
     await expect(messageEl).toBeVisible({ timeout: 5000 });
     const text = await messageEl.textContent();
     expect(text.length).toBeGreaterThan(0);
 
-    // Error message should have red styling
     const classes = await messageEl.getAttribute('class');
     expect(classes).toContain('red');
     expect(unexpectedErrors(errors)).toEqual([]);
@@ -166,16 +129,13 @@ test.describe('Sign Up via Magic Link', () => {
   test('empty email submission blocked by HTML5 validation', async ({ page }) => {
     await waitForAuthInit(page);
 
-    // Leave email empty and try to submit
     const emailInput = page.locator('#auth-email');
     await emailInput.fill('');
     await page.locator('#auth-submit').click();
 
-    // HTML5 validation should block submission — message should stay hidden
     const messageEl = page.locator('#auth-message');
     await expect(messageEl).toBeHidden();
 
-    // Verify the email input has the :invalid pseudo-class via validity check
     const isInvalid = await emailInput.evaluate(el => !el.validity.valid);
     expect(isInvalid).toBe(true);
   });
@@ -186,153 +146,116 @@ test.describe('Sign Up via Magic Link', () => {
     await page.fill('#auth-email', 'notanemail');
     await page.locator('#auth-submit').click();
 
-    // HTML5 validation should block submission — message should stay hidden
     const messageEl = page.locator('#auth-message');
     await expect(messageEl).toBeHidden();
 
-    // Input should be invalid due to type="email" constraint
     const isInvalid = await page.locator('#auth-email').evaluate(el => !el.validity.valid);
     expect(isInvalid).toBe(true);
   });
 });
 
-// ─── 2. Sign In with Password ──────────────────────────────────────────────
+// ─── 2. OTP Code Step ───────────────────────────────────────────────────────
 
-test.describe('Sign In with Password', () => {
-  test('switch to password tab, fill form, submit, shows Signing in... state', async ({ page }) => {
-    const errors = collectErrors(page);
+test.describe('OTP Code Step', () => {
+  async function goToCodeStep(page) {
     await waitForAuthInit(page);
-
-    await page.click('#tab-password');
-    await expect(page.locator('#password-form')).toBeVisible();
-
-    await page.fill('#auth-email-pw', 'user@example.com');
-    await page.fill('#auth-password', 'testpassword123');
-
-    const submitBtn = page.locator('#auth-submit-pw');
-    await submitBtn.click();
-
-    // Button should show "Signing in..." while request is in flight
-    await expect(submitBtn).toHaveText('Signing in...', { timeout: 2000 }).catch(() => {
-      // May revert quickly if the request fails fast
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
     });
+    await page.fill('#auth-email', 'user@example.com');
+    await page.locator('#auth-submit').click();
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 10000 });
+  }
 
-    // Eventually reverts
-    await expect(submitBtn).toHaveText('Sign In', { timeout: 15000 });
+  test('code step shows 6 digit inputs and verify button', async ({ page }) => {
+    const errors = collectErrors(page);
+    await goToCodeStep(page);
+
+    const digits = page.locator('#otp-inputs .otp-digit');
+    await expect(digits).toHaveCount(6);
+    await expect(page.locator('#auth-verify-btn')).toBeVisible();
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 
-  test('bad credentials show visible error message with text content', async ({ page }) => {
+  test('back button returns to email step', async ({ page }) => {
+    await goToCodeStep(page);
+
+    await page.locator('#auth-step-code button:has-text("Back")').click();
+    await expect(page.locator('#auth-step-email')).toBeVisible();
+    await expect(page.locator('#auth-step-code')).toBeHidden();
+  });
+
+  test('invalid code shows error message', async ({ page }) => {
     const errors = collectErrors(page);
-    await waitForAuthInit(page);
+    await goToCodeStep(page);
 
-    await page.click('#tab-password');
-    await page.fill('#auth-email-pw', 'baduser@test.com');
-    await page.fill('#auth-password', 'wrong-password-123');
-    await page.locator('#auth-submit-pw').click();
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.verifyOtp = async () => {
+        throw new Error('Invalid OTP');
+      };
+    });
 
-    // Wait for button to revert (request completed)
-    await expect(page.locator('#auth-submit-pw')).toHaveText('Sign In', { timeout: 15000 });
+    const digits = page.locator('#otp-inputs .otp-digit');
+    for (let i = 0; i < 6; i++) {
+      await digits.nth(i).fill(String(i + 1));
+    }
 
-    // Error message should be visible with content
-    const messageEl = page.locator('#auth-message-pw');
+    // Wait for auto-submit and error
+    const messageEl = page.locator('#auth-code-message');
     await expect(messageEl).toBeVisible({ timeout: 10000 });
     const text = await messageEl.textContent();
     expect(text.length).toBeGreaterThan(0);
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 
-  test('button reverts to Sign In after failed attempt', async ({ page }) => {
-    await waitForAuthInit(page);
-
-    await page.click('#tab-password');
-    await page.fill('#auth-email-pw', 'fail@test.com');
-    await page.fill('#auth-password', 'wrong');
-
-    const submitBtn = page.locator('#auth-submit-pw');
-    await submitBtn.click();
-
-    // Wait for it to finish processing
-    await expect(submitBtn).toHaveText('Sign In', { timeout: 15000 });
-
-    // Verify the button is not disabled after failure
-    const isDisabled = await submitBtn.isDisabled();
-    expect(isDisabled).toBe(false);
-  });
-
-  test('empty email field prevents submission via HTML5 validation', async ({ page }) => {
-    await waitForAuthInit(page);
-
-    await page.click('#tab-password');
-    await expect(page.locator('#password-form')).toBeVisible();
-
-    // Leave email empty, fill password
-    await page.fill('#auth-email-pw', '');
-    await page.fill('#auth-password', 'somepassword');
-    await page.locator('#auth-submit-pw').click();
-
-    // Message should stay hidden — form not submitted
-    const messageEl = page.locator('#auth-message-pw');
-    await expect(messageEl).toBeHidden();
-
-    const isInvalid = await page.locator('#auth-email-pw').evaluate(el => !el.validity.valid);
-    expect(isInvalid).toBe(true);
-  });
-
-  test('empty password field prevents submission via HTML5 validation', async ({ page }) => {
-    await waitForAuthInit(page);
-
-    await page.click('#tab-password');
-    await expect(page.locator('#password-form')).toBeVisible();
-
-    // Fill email, leave password empty
-    await page.fill('#auth-email-pw', 'user@example.com');
-    await page.fill('#auth-password', '');
-    await page.locator('#auth-submit-pw').click();
-
-    // Message should stay hidden — form not submitted
-    const messageEl = page.locator('#auth-message-pw');
-    await expect(messageEl).toBeHidden();
-
-    const isInvalid = await page.locator('#auth-password').evaluate(el => !el.validity.valid);
-    expect(isInvalid).toBe(true);
-  });
-
-  test('mock successful sign in hides auth-section', async ({ page }) => {
+  test('mock successful verify hides auth-section', async ({ page }) => {
     const errors = collectErrors(page);
-    await waitForAuthInit(page);
+    await goToCodeStep(page);
 
-    // Mock signInWithPassword to succeed and trigger auth state change
+    // Mock verifyOtp to succeed AND trigger updateUI (since the Supabase auth listener won't fire in test)
     await page.evaluate(() => {
-      SupabaseClient.client.auth.signInWithPassword = async () => ({
-        data: { user: { id: 'test-id', email: 'user@example.com' }, session: {} },
-        error: null,
-      });
-      // Mock the auth state change to update UI
-      Auth.updateUI = (user) => {
-        if (user) {
+      SupabaseClient.client.auth.verifyOtp = async () => {
+        const result = {
+          data: { user: { id: 'test-id', email: 'user@example.com' }, session: {} },
+          error: null,
+        };
+        // Simulate the auth state change that would normally happen
+        setTimeout(() => {
           document.getElementById('auth-section').classList.add('hidden');
           document.getElementById('app-content').classList.remove('hidden');
-        }
-      };
-      // Make signInWithPassword call updateUI on success
-      const origSignIn = Auth.signInWithPassword.bind(Auth);
-      Auth.signInWithPassword = async (email, password) => {
-        const result = await SupabaseClient.client.auth.signInWithPassword({ email, password });
-        if (!result.error) {
-          Auth.updateUI(result.data.user);
-        }
-        return result.data;
+        }, 100);
+        return result;
       };
     });
 
-    await page.click('#tab-password');
-    await page.fill('#auth-email-pw', 'user@example.com');
-    await page.fill('#auth-password', 'correctpassword');
-    await page.locator('#auth-submit-pw').click();
+    const digits = page.locator('#otp-inputs .otp-digit');
+    for (let i = 0; i < 6; i++) {
+      await digits.nth(i).fill(String(i + 1));
+    }
 
-    // Auth section should become hidden after successful sign in
+    // Auth section should become hidden after successful verify
     await expect(page.locator('#auth-section')).toBeHidden({ timeout: 10000 });
+    expect(unexpectedErrors(errors)).toEqual([]);
+  });
+
+  test('resend code button works', async ({ page }) => {
+    const errors = collectErrors(page);
+    await goToCodeStep(page);
+
+    let otpCalled = false;
+    await page.evaluate(() => {
+      window._otpResendCount = 0;
+      SupabaseClient.client.auth.signInWithOtp = async () => {
+        window._otpResendCount++;
+        return { data: {}, error: null };
+      };
+    });
+
+    await page.locator('#auth-resend-btn').click();
+    await page.waitForTimeout(1000);
+
+    const resendCount = await page.evaluate(() => window._otpResendCount);
+    expect(resendCount).toBeGreaterThanOrEqual(1);
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 });
@@ -478,107 +401,58 @@ test.describe('Sign Out', () => {
   });
 });
 
-// ─── 4. Auth Tab Switching ──────────────────────────────────────────────────
+// ─── 4. OTP Step Navigation ─────────────────────────────────────────────────
 
-test.describe('Auth Tab Switching', () => {
-  test('default state shows magic link form', async ({ page }) => {
+test.describe('OTP Step Navigation', () => {
+  test('default state shows email step', async ({ page }) => {
     await waitForAuthInit(page);
 
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await expect(page.locator('#password-form')).toBeHidden();
+    await expect(page.locator('#auth-step-email')).toBeVisible();
+    await expect(page.locator('#auth-step-code')).toBeHidden();
   });
 
-  test('click password tab shows password form, hides magic link', async ({ page }) => {
+  test('navigating to code step and back preserves email', async ({ page }) => {
     await waitForAuthInit(page);
 
-    await page.click('#tab-password');
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
+    });
 
-    await expect(page.locator('#password-form')).toBeVisible();
-    await expect(page.locator('#magic-link-form')).toBeHidden();
+    await page.fill('#auth-email', 'persist@example.com');
+    await page.locator('#auth-submit').click();
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 10000 });
+
+    // Go back
+    await page.locator('#auth-step-code button:has-text("Back")').click();
+    await expect(page.locator('#auth-step-email')).toBeVisible();
+
+    // Email should still be filled
+    const email = await page.locator('#auth-email').inputValue();
+    expect(email).toBe('persist@example.com');
   });
 
-  test('click magic link tab shows magic link form, hides password', async ({ page }) => {
+  test('OTP digit inputs accept values', async ({ page }) => {
     await waitForAuthInit(page);
 
-    // Switch to password first
-    await page.click('#tab-password');
-    await expect(page.locator('#password-form')).toBeVisible();
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
+    });
 
-    // Switch back to magic link
-    await page.click('#tab-magic');
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await expect(page.locator('#password-form')).toBeHidden();
-  });
+    await page.fill('#auth-email', 'user@example.com');
+    await page.locator('#auth-submit').click();
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 10000 });
 
-  test('rapid tab switching 10 times does not break UI', async ({ page }) => {
-    const errors = collectErrors(page);
-    await waitForAuthInit(page);
-
-    for (let i = 0; i < 10; i++) {
-      await page.click('#tab-password');
-      await page.click('#tab-magic');
+    // Fill first 5 digits (not 6th to avoid auto-submit clearing them)
+    const digits = page.locator('#otp-inputs .otp-digit');
+    for (let i = 0; i < 5; i++) {
+      await digits.nth(i).fill(String(i + 1));
     }
 
-    // After all switches, should be back on magic link
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await expect(page.locator('#password-form')).toBeHidden();
-
-    // Both forms should still exist in DOM
-    const magicExists = await page.locator('#magic-link-form').count();
-    const passwordExists = await page.locator('#password-form').count();
-    expect(magicExists).toBe(1);
-    expect(passwordExists).toBe(1);
-    expect(unexpectedErrors(errors)).toEqual([]);
-  });
-
-  test('tab active styling updates correctly', async ({ page }) => {
-    await waitForAuthInit(page);
-
-    // Default: magic tab has active styling
-    const magicTab = page.locator('#tab-magic');
-    const passwordTab = page.locator('#tab-password');
-
-    await expect(magicTab).toHaveClass(/bg-oura-border/);
-    await expect(magicTab).toHaveClass(/text-white/);
-    await expect(passwordTab).toHaveClass(/text-oura-muted/);
-
-    // Switch to password tab
-    await page.click('#tab-password');
-
-    await expect(passwordTab).toHaveClass(/bg-oura-border/);
-    await expect(passwordTab).toHaveClass(/text-white/);
-    await expect(magicTab).toHaveClass(/text-oura-muted/);
-
-    // Switch back to magic
-    await page.click('#tab-magic');
-
-    await expect(magicTab).toHaveClass(/bg-oura-border/);
-    await expect(magicTab).toHaveClass(/text-white/);
-    await expect(passwordTab).toHaveClass(/text-oura-muted/);
-  });
-
-  test('form inputs persist when switching tabs', async ({ page }) => {
-    await waitForAuthInit(page);
-
-    // Fill magic link email
-    await page.fill('#auth-email', 'persist@example.com');
-
-    // Switch to password, fill fields
-    await page.click('#tab-password');
-    await page.fill('#auth-email-pw', 'pw-persist@example.com');
-    await page.fill('#auth-password', 'mypassword');
-
-    // Switch back to magic link — value should persist
-    await page.click('#tab-magic');
-    const magicEmail = await page.locator('#auth-email').inputValue();
-    expect(magicEmail).toBe('persist@example.com');
-
-    // Switch to password — values should persist
-    await page.click('#tab-password');
-    const pwEmail = await page.locator('#auth-email-pw').inputValue();
-    const pwPassword = await page.locator('#auth-password').inputValue();
-    expect(pwEmail).toBe('pw-persist@example.com');
-    expect(pwPassword).toBe('mypassword');
+    // First 5 digits should have their values
+    for (let i = 0; i < 5; i++) {
+      const val = await digits.nth(i).inputValue();
+      expect(val).toBe(String(i + 1));
+    }
   });
 });
 

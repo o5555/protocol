@@ -363,56 +363,52 @@ test.describe('Click all bottom nav buttons', () => {
 // 2. Click all auth tab buttons
 // =============================================================================
 
-test.describe('Click all auth tab buttons', () => {
-  test('click magic link tab, then password tab, then back', async ({ page }) => {
+test.describe('Click all auth elements', () => {
+  test('OTP email form visible, submit with email sends to code step', async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Default: magic link form visible
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await expect(page.locator('#password-form')).toBeHidden();
+    // Email step visible
+    await expect(page.locator('#auth-step-email')).toBeVisible();
+    await expect(page.locator('#auth-step-code')).toBeHidden();
 
-    // Click password tab
-    await page.locator('#tab-password').click();
-    await expect(page.locator('#password-form')).toBeVisible();
-    await expect(page.locator('#magic-link-form')).toBeHidden();
-
-    // Click magic link tab
-    await page.locator('#tab-magic').click();
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await expect(page.locator('#password-form')).toBeHidden();
-
-    // Click password tab again
-    await page.locator('#tab-password').click();
-    await expect(page.locator('#password-form')).toBeVisible();
-
-    // Verify all interactive elements on auth page
-    await expect(page.locator('#auth-email-pw')).toBeVisible();
-    await expect(page.locator('#auth-password')).toBeVisible();
-    await expect(page.locator('#auth-submit-pw')).toBeVisible();
-
-    // Switch back to magic link and verify its elements
-    await page.locator('#tab-magic').click();
+    // Verify interactive elements
     await expect(page.locator('#auth-email')).toBeVisible();
     await expect(page.locator('#auth-submit')).toBeVisible();
+
+    // Mock OTP and submit
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
+    });
+    await page.fill('#auth-email', 'test@example.com');
+    await page.locator('#auth-submit').click();
+
+    // Code step should appear
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#auth-verify-btn')).toBeVisible();
+    await expect(page.locator('#auth-resend-btn')).toBeVisible();
+
+    // Back button returns to email step
+    await page.locator('#auth-step-code button:has-text("Back")').click();
+    await expect(page.locator('#auth-step-email')).toBeVisible();
 
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 
-  test('click magic link submit with empty field (HTML5 validation blocks)', async ({ page }) => {
+  test('click submit with empty email field (HTML5 validation blocks)', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#magic-link-form')).toBeVisible();
+    await expect(page.locator('#auth-step-email')).toBeVisible();
     await page.locator('#auth-submit').click();
     // Auth message stays hidden (form not submitted due to required field)
     await expect(page.locator('#auth-message')).toBeHidden();
   });
 
-  test('click password submit with empty fields (HTML5 validation blocks)', async ({ page }) => {
+  test('click submit with invalid email (HTML5 validation blocks)', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#tab-password').click();
-    await page.locator('#auth-submit-pw').click();
-    await expect(page.locator('#auth-message-pw')).toBeHidden();
+    await page.fill('#auth-email', 'notanemail');
+    await page.locator('#auth-submit').click();
+    await expect(page.locator('#auth-message')).toBeHidden();
   });
 });
 

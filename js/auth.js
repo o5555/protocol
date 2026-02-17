@@ -1,30 +1,35 @@
-// Authentication Module - Magic Link Flow
+// Authentication Module - OTP Code Flow
 
 const Auth = {
-  // Send magic link to email
-  async sendMagicLink(email) {
+  _pendingEmail: null,
+
+  // Send OTP code to email
+  async sendOtp(email) {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
 
     const { data, error } = await client.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: window.location.origin
+        emailRedirectTo: window.location.origin,
+        shouldCreateUser: true
       }
     });
 
     if (error) throw error;
+    this._pendingEmail = email;
     return data;
   },
 
-  // Sign in with email and password
-  async signInWithPassword(email, password) {
+  // Verify OTP code
+  async verifyOtp(email, token) {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
 
-    const { data, error } = await client.auth.signInWithPassword({
+    const { data, error } = await client.auth.verifyOtp({
       email,
-      password
+      token,
+      type: 'email'
     });
 
     if (error) throw error;
@@ -39,8 +44,47 @@ const Auth = {
     const { error } = await client.auth.signOut();
     if (error) throw error;
 
-    // Clear any local storage items
     localStorage.removeItem('oura_token');
+  },
+
+  // Show email step, hide code step
+  showEmailStep() {
+    document.getElementById('auth-step-email').classList.remove('hidden');
+    document.getElementById('auth-step-code').classList.add('hidden');
+    document.getElementById('auth-message').className = 'hidden';
+  },
+
+  // Show code step, hide email step
+  showCodeStep(email) {
+    document.getElementById('auth-step-email').classList.add('hidden');
+    document.getElementById('auth-step-code').classList.remove('hidden');
+    document.getElementById('auth-code-email').textContent = email;
+    document.getElementById('auth-code-message').className = 'hidden';
+
+    // Focus the first OTP input
+    const firstInput = document.querySelector('#otp-inputs .otp-digit');
+    if (firstInput) firstInput.focus();
+  },
+
+  // Resend OTP code
+  async resendCode() {
+    if (!this._pendingEmail) return;
+    const btn = document.getElementById('auth-resend-btn');
+    const msgEl = document.getElementById('auth-code-message');
+
+    try {
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      await this.sendOtp(this._pendingEmail);
+      msgEl.textContent = 'New code sent!';
+      msgEl.className = 'text-sm text-green-400 mt-2';
+    } catch (error) {
+      msgEl.textContent = 'Failed to resend. Try again.';
+      msgEl.className = 'text-sm text-red-400 mt-2';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Resend code';
+    }
   },
 
   // Get current user profile
@@ -106,7 +150,6 @@ const Auth = {
     try {
       await this.saveOuraToken(localToken);
       localStorage.removeItem('oura_token');
-      console.log('Oura token migrated to Supabase');
       return true;
     } catch (error) {
       console.error('Failed to migrate token:', error);
@@ -119,27 +162,22 @@ const Auth = {
     const client = SupabaseClient.client;
     if (!client) return;
 
-    // Check for magic link callback in URL
+    // Handle magic link callback in URL (for backwards compatibility)
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const queryParams = new URLSearchParams(window.location.search);
 
     if (hashParams.get('access_token') || queryParams.get('code')) {
-      // Handle the auth callback
       const { data, error } = await client.auth.getSession();
       if (error) {
         console.error('Auth callback error:', error);
       } else if (data.session) {
-        // Clean up URL
         window.history.replaceState({}, document.title, window.location.pathname);
-        // Try to migrate local token
         await this.migrateLocalToken();
       }
     }
 
     // Set up auth state change listener
     SupabaseClient.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
-
       if (event === 'SIGNED_IN') {
         await this.migrateLocalToken();
         this.updateUI(session?.user);
@@ -153,53 +191,20 @@ const Auth = {
     this.updateUI(user);
   },
 
-  // Switch between magic link and password auth tabs
-  switchAuthTab(tab) {
-    const magicForm = document.getElementById('magic-link-form');
-    const passwordForm = document.getElementById('password-form');
-    const tabMagic = document.getElementById('tab-magic');
-    const tabPassword = document.getElementById('tab-password');
-
-    if (tab === 'magic') {
-      magicForm.classList.remove('hidden');
-      passwordForm.classList.add('hidden');
-      tabMagic.classList.add('bg-oura-border', 'text-white');
-      tabMagic.classList.remove('text-oura-muted');
-      tabPassword.classList.remove('bg-oura-border', 'text-white');
-      tabPassword.classList.add('text-oura-muted');
-    } else {
-      magicForm.classList.add('hidden');
-      passwordForm.classList.remove('hidden');
-      tabPassword.classList.add('bg-oura-border', 'text-white');
-      tabPassword.classList.remove('text-oura-muted');
-      tabMagic.classList.remove('bg-oura-border', 'text-white');
-      tabMagic.classList.add('text-oura-muted');
-    }
-  },
-
   // Update UI based on auth state
   updateUI(user) {
     const authSection = document.getElementById('auth-section');
     const appContent = document.getElementById('app-content');
 
     if (user) {
-      // User is logged in — hide auth, check onboarding before showing app
       if (authSection) authSection.classList.add('hidden');
-
-      // Check onboarding state before showing app
       this.checkOnboarding(user);
-
-      // Dispatch custom event for other modules
       window.dispatchEvent(new CustomEvent('userLoggedIn', { detail: { user } }));
     } else {
-      // User is not logged in
       if (authSection) authSection.classList.remove('hidden');
       if (appContent) appContent.classList.add('hidden');
-      // Also hide onboarding section
       const onboardingSection = document.getElementById('onboarding-section');
       if (onboardingSection) onboardingSection.classList.add('hidden');
-
-      // Dispatch custom event for other modules
       window.dispatchEvent(new CustomEvent('userLoggedOut'));
     }
   },
@@ -209,10 +214,8 @@ const Auth = {
     try {
       const profile = await this.getProfile();
       if (!profile || profile.onboarding_step < 5) {
-        // No profile yet or onboarding incomplete — show onboarding flow
         Onboarding.start(profile || { onboarding_step: 0 });
       } else {
-        // Onboarding complete — show main app
         const appContent = document.getElementById('app-content');
         if (appContent) appContent.classList.remove('hidden');
         const bottomNav = document.querySelector('.bottom-nav');
@@ -220,7 +223,6 @@ const Auth = {
       }
     } catch (error) {
       console.error('Error checking onboarding:', error);
-      // Fallback: show onboarding to avoid bypassing it
       Onboarding.start({ onboarding_step: 0 });
     }
   }
@@ -228,10 +230,10 @@ const Auth = {
 
 // UI Event Handlers
 document.addEventListener('DOMContentLoaded', () => {
-  // Magic link form submission
-  const magicLinkForm = document.getElementById('magic-link-form');
-  if (magicLinkForm) {
-    magicLinkForm.addEventListener('submit', async (e) => {
+  // Step 1: Email form - send OTP
+  const emailForm = document.getElementById('otp-email-form');
+  if (emailForm) {
+    emailForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const emailInput = document.getElementById('auth-email');
@@ -243,26 +245,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Sending...';
-        messageEl.textContent = '';
+        submitBtn.textContent = 'Sending code...';
         messageEl.className = 'hidden';
 
-        // Clear any existing session to avoid conflicts when switching accounts
+        // Clear any existing session
         try {
           const client = SupabaseClient.client;
           if (client) await client.auth.signOut({ scope: 'local' });
         } catch (_) { /* ignore */ }
 
-        await Auth.sendMagicLink(email);
-
-        messageEl.textContent = 'Check your email for the magic link!';
-        messageEl.className = 'text-sm text-green-400 mt-2';
-        emailInput.value = '';
+        await Auth.sendOtp(email);
+        Auth.showCodeStep(email);
       } catch (error) {
-        let msg = 'Failed to send magic link. Please try again.';
-        if (typeof error === 'string' && error.length > 0 && error !== '{}') {
-          msg = error;
-        } else if (typeof error === 'object' && error !== null) {
+        let msg = 'Failed to send code. Please try again.';
+        if (typeof error === 'object' && error !== null) {
           const extracted = error.message || error.error_description || error.msg || '';
           if (extracted && extracted !== '{}') msg = extracted;
         }
@@ -270,48 +266,85 @@ document.addEventListener('DOMContentLoaded', () => {
         messageEl.className = 'text-sm text-red-400 mt-2';
       } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Send Magic Link';
+        submitBtn.textContent = 'Continue';
       }
     });
   }
 
-  // Password form submission
-  const passwordForm = document.getElementById('password-form');
-  if (passwordForm) {
-    passwordForm.addEventListener('submit', async (e) => {
+  // Step 2: Code form - verify OTP
+  const codeForm = document.getElementById('otp-code-form');
+  if (codeForm) {
+    codeForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const emailInput = document.getElementById('auth-email-pw');
-      const passwordInput = document.getElementById('auth-password');
-      const submitBtn = document.getElementById('auth-submit-pw');
-      const messageEl = document.getElementById('auth-message-pw');
+      const digits = document.querySelectorAll('#otp-inputs .otp-digit');
+      const code = Array.from(digits).map(d => d.value).join('');
+      const verifyBtn = document.getElementById('auth-verify-btn');
+      const messageEl = document.getElementById('auth-code-message');
+
+      if (code.length !== 6) {
+        messageEl.textContent = 'Please enter all 6 digits';
+        messageEl.className = 'text-sm text-red-400 mt-2';
+        return;
+      }
 
       try {
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Signing in...';
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = 'Verifying...';
+        messageEl.className = 'hidden';
 
-        // Clear any existing session to avoid conflicts when switching accounts
-        try {
-          const client = SupabaseClient.client;
-          if (client) await client.auth.signOut({ scope: 'local' });
-        } catch (_) { /* ignore */ }
-
-        await Auth.signInWithPassword(emailInput.value.trim(), passwordInput.value);
+        await Auth.verifyOtp(Auth._pendingEmail, code);
+        // Auth state change listener will handle the rest
       } catch (error) {
-        let msg = 'Failed to sign in. Please try again.';
+        let msg = 'Invalid code. Please try again.';
         if (typeof error === 'object' && error !== null) {
           const extracted = error.message || error.error_description || error.msg || '';
           if (extracted && extracted !== '{}') msg = extracted;
-        } else if (typeof error === 'string' && error.length > 0 && error !== '{}') {
-          msg = error;
         }
         messageEl.textContent = msg;
         messageEl.className = 'text-sm text-red-400 mt-2';
-        messageEl.classList.remove('hidden');
+        // Clear inputs on error
+        digits.forEach(d => { d.value = ''; });
+        digits[0].focus();
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Sign In';
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = 'Verify';
       }
+    });
+
+    // OTP digit input behavior: auto-advance, paste support
+    const digits = document.querySelectorAll('#otp-inputs .otp-digit');
+    digits.forEach((input, i) => {
+      input.addEventListener('input', (e) => {
+        const val = e.target.value.replace(/\D/g, '');
+        e.target.value = val.charAt(0) || '';
+        if (val && i < digits.length - 1) {
+          digits[i + 1].focus();
+        }
+        // Auto-submit when all 6 digits filled
+        if (i === digits.length - 1 && val) {
+          const code = Array.from(digits).map(d => d.value).join('');
+          if (code.length === 6) codeForm.requestSubmit();
+        }
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !e.target.value && i > 0) {
+          digits[i - 1].focus();
+        }
+      });
+
+      // Handle paste of full code
+      input.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const pasted = (e.clipboardData.getData('text') || '').replace(/\D/g, '');
+        if (pasted.length >= 6) {
+          digits.forEach((d, j) => { d.value = pasted.charAt(j) || ''; });
+          digits[5].focus();
+          // Auto-submit
+          codeForm.requestSubmit();
+        }
+      });
     });
   }
 

@@ -230,30 +230,25 @@ test.describe('Auth flows', () => {
     await expect(page.locator('#app-content')).toBeHidden();
   });
 
-  test('magic link form is the default visible form', async ({ page }) => {
+  test('OTP email step is the default visible form', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await expect(page.locator('#password-form')).toBeHidden();
+    await expect(page.locator('#auth-step-email')).toBeVisible();
+    await expect(page.locator('#auth-step-code')).toBeHidden();
   });
 
-  test('magic link: empty email triggers HTML5 validation (form does not submit)', async ({ page }) => {
+  test('empty email triggers HTML5 validation (form does not submit)', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#magic-link-form')).toBeVisible();
+    await expect(page.locator('#auth-step-email')).toBeVisible();
 
-    // The email input has `required` attribute -- submitting with empty value
-    // will not fire the submit event. Verify the input is still empty
-    // and no success/error message appeared.
     const emailInput = page.locator('#auth-email');
     await expect(emailInput).toHaveValue('');
 
-    // Click submit without filling email
     await page.locator('#auth-submit').click();
 
-    // The auth-message should remain hidden because the form didn't submit
     await expect(page.locator('#auth-message')).toBeHidden();
   });
 
-  test('magic link: valid email submits and enters sending state', async ({ page }) => {
+  test('valid email submits and enters sending state', async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -262,110 +257,71 @@ test.describe('Auth flows', () => {
     const submitBtn = page.locator('#auth-submit');
     await submitBtn.click();
 
-    // Button should change to "Sending..." while the Supabase request is in flight.
-    // In test, Supabase may be unreachable so this may hang -- verify the state change
-    // and that the button eventually resolves (either reverts or stays sending).
     const isSending = await submitBtn
-      .evaluate((btn) => btn.textContent.trim() === 'Sending...' || btn.disabled)
+      .evaluate((btn) => btn.textContent.trim() === 'Sending code...' || btn.disabled)
       .catch(() => false);
 
-    // After click, the button should have entered the sending state or already reverted
-    // with an error message. Either outcome is acceptable.
     const messageEl = page.locator('#auth-message');
     const messageVisible = await messageEl.isVisible().catch(() => false);
 
-    // At least one of these should be true: button went to "Sending..." or a message appeared
     expect(isSending || messageVisible).toBeTruthy();
 
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 
-  test('password tab: switching to password tab shows password form', async ({ page }) => {
+  test('OTP send shows code step with 6 digit inputs', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#tab-password').click();
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
+    });
+    await page.fill('#auth-email', 'test@example.com');
+    await page.locator('#auth-submit').click();
 
-    await expect(page.locator('#password-form')).toBeVisible();
-    await expect(page.locator('#magic-link-form')).toBeHidden();
-    await expect(page.locator('#auth-email-pw')).toBeVisible();
-    await expect(page.locator('#auth-password')).toBeVisible();
-    await expect(page.locator('#auth-submit-pw')).toBeVisible();
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 10000 });
+    const digits = page.locator('#otp-inputs .otp-digit');
+    await expect(digits).toHaveCount(6);
+    await expect(page.locator('#auth-verify-btn')).toBeVisible();
   });
 
-  test('password tab: empty fields trigger HTML5 validation', async ({ page }) => {
-    await page.goto('/');
-    await page.locator('#tab-password').click();
-
-    // Both fields are empty and have `required`
-    await expect(page.locator('#auth-email-pw')).toHaveValue('');
-    await expect(page.locator('#auth-password')).toHaveValue('');
-
-    await page.locator('#auth-submit-pw').click();
-
-    // Message should stay hidden (form did not actually submit)
-    await expect(page.locator('#auth-message-pw')).toBeHidden();
-  });
-
-  test('password tab: bad credentials show error message', async ({ page }) => {
+  test('failed OTP send shows error message', async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    await page.locator('#tab-password').click();
-    await page.fill('#auth-email-pw', 'baduser@test.com');
-    await page.fill('#auth-password', 'wrong-password-123');
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => {
+        throw new Error('Rate limit exceeded');
+      };
+    });
 
-    const submitBtn = page.locator('#auth-submit-pw');
-    await submitBtn.click();
+    await page.fill('#auth-email', 'test@example.com');
+    await page.locator('#auth-submit').click();
 
-    // Button may briefly show "Signing in..."
-    await expect(submitBtn).toHaveText('Signing in...', { timeout: 2000 }).catch(() => {});
+    await expect(page.locator('#auth-submit')).toHaveText('Continue', { timeout: 10000 });
 
-    // Wait for button to revert
-    await expect(submitBtn).toHaveText('Sign In', { timeout: 10000 });
-
-    // Error message should appear
-    const messageEl = page.locator('#auth-message-pw');
-    await expect(messageEl).toBeVisible({ timeout: 10000 });
+    const messageEl = page.locator('#auth-message');
+    await expect(messageEl).toBeVisible({ timeout: 5000 });
     const text = await messageEl.textContent();
     expect(text.length).toBeGreaterThan(0);
 
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 
-  test('tab switching: can toggle between magic link and password tabs', async ({ page }) => {
-    await page.goto('/');
-
-    // Start on magic link
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-
-    // Switch to password
-    await page.locator('#tab-password').click();
-    await expect(page.locator('#password-form')).toBeVisible();
-    await expect(page.locator('#magic-link-form')).toBeHidden();
-
-    // Switch back to magic link
-    await page.locator('#tab-magic').click();
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await expect(page.locator('#password-form')).toBeHidden();
-  });
-
-  test('rapid tab switching does not break UI', async ({ page }) => {
+  test('back button from code step returns to email step', async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto('/');
 
-    // Rapidly toggle between tabs 10 times
-    for (let i = 0; i < 10; i++) {
-      await page.locator('#tab-password').click();
-      await page.locator('#tab-magic').click();
-    }
+    await page.evaluate(() => {
+      SupabaseClient.client.auth.signInWithOtp = async () => ({ data: {}, error: null });
+    });
 
-    // UI should still be consistent: magic link form visible, password form hidden
-    await expect(page.locator('#magic-link-form')).toBeVisible();
-    await expect(page.locator('#password-form')).toBeHidden();
+    await page.fill('#auth-email', 'test@example.com');
+    await page.locator('#auth-submit').click();
+    await expect(page.locator('#auth-step-code')).toBeVisible({ timeout: 10000 });
 
-    // Both tab buttons should still be visible and functional
-    await expect(page.locator('#tab-magic')).toBeVisible();
-    await expect(page.locator('#tab-password')).toBeVisible();
+    await page.locator('#auth-step-code button:has-text("Back")').click();
+    await expect(page.locator('#auth-step-email')).toBeVisible();
+    await expect(page.locator('#auth-step-code')).toBeHidden();
 
     expect(unexpectedErrors(errors)).toEqual([]);
   });
