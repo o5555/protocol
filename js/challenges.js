@@ -857,15 +857,11 @@ const Challenges = {
     if (!container) return;
 
     try {
-      const currentUser = await SupabaseClient.getCurrentUser();
-      const challenge = await this.getChallenge(challengeId);
       const now = new Date();
       const today = this.toLocalDateStr(now);
-
-      // Store challengeId for sync refresh
       container.dataset.challengeId = challengeId;
 
-      // SWR caching: skip sync + loading screen on repeat visits the same day
+      // Check cache BEFORE any network calls
       const cacheKey = 'challenge_detail_' + challengeId;
       const cachedData = typeof Cache !== 'undefined' ? Cache.get(cacheKey) : null;
       const syncedToday = typeof Cache !== 'undefined' && typeof Cache.isSyncedToday === 'function' ? Cache.isSyncedToday() : false;
@@ -873,71 +869,75 @@ const Challenges = {
 
       let syncResult = null;
       var sleepData;
+      var currentUser;
+      var challenge;
 
       if (cachedData && !needsSync) {
-        // FAST PATH: Use cached data, no sync, no loading screen
+        // FAST PATH: Use cached data — zero network calls, no loading screen
         sleepData = cachedData.sleepData;
         syncResult = cachedData.syncResult;
-      } else if (!skipSync && typeof SleepSync !== 'undefined' && !syncedToday) {
-        // SYNC PATH: Show loading screen, sync + fetch in parallel
-        container.innerHTML = `
-          <div class="nav-bar flex items-center justify-between mb-4">
-            <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
-              &larr; Back
-            </button>
-            <span class="text-base font-medium">${escapeHtml(challenge.name)}</span>
-            <span style="width: 50px;"></span>
-          </div>
-          <div class="sync-screen">
-            <div class="sync-ring-container">
-              <svg class="sync-ring-svg" width="96" height="96" viewBox="0 0 100 100">
-                <defs>
-                  <linearGradient id="sync-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#00c8a0"/>
-                    <stop offset="100%" stop-color="#6c63ff"/>
-                  </linearGradient>
-                </defs>
-                <circle class="sync-ring-bg" cx="50" cy="50" r="40"/>
-                <circle class="sync-ring-progress" cx="50" cy="50" r="40"/>
-              </svg>
+        currentUser = cachedData.currentUser;
+        challenge = cachedData.challenge;
+      } else {
+        // Need fresh data — fetch user + challenge first
+        currentUser = await SupabaseClient.getCurrentUser();
+        challenge = await this.getChallenge(challengeId);
+
+        if (!skipSync && typeof SleepSync !== 'undefined' && !syncedToday) {
+          // SYNC PATH: Show loading screen, sync + fetch in parallel
+          container.innerHTML = `
+            <div class="nav-bar flex items-center justify-between mb-4">
+              <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+                &larr; Back
+              </button>
+              <span class="text-base font-medium">${escapeHtml(challenge.name)}</span>
+              <span style="width: 50px;"></span>
             </div>
-            <p class="sync-label">Syncing...</p>
-          </div>
-        `;
-        // Start sync and data fetch in parallel for faster loading
-        const syncWithTimeout = Promise.race([
-          SleepSync.syncNow({ silent: true, skipRefresh: true }),
-          new Promise(resolve => setTimeout(() => resolve({ success: false, count: 0, error: 'Sync timed out' }), 8000))
-        ]);
-        const dataFetch = Comparison.getChallengeSleepData(challengeId);
+            <div class="sync-screen">
+              <div class="sync-ring-container">
+                <svg class="sync-ring-svg" width="96" height="96" viewBox="0 0 100 100">
+                  <defs>
+                    <linearGradient id="sync-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#00c8a0"/>
+                      <stop offset="100%" stop-color="#6c63ff"/>
+                    </linearGradient>
+                  </defs>
+                  <circle class="sync-ring-bg" cx="50" cy="50" r="40"/>
+                  <circle class="sync-ring-progress" cx="50" cy="50" r="40"/>
+                </svg>
+              </div>
+              <p class="sync-label">Syncing...</p>
+            </div>
+          `;
+          const syncWithTimeout = Promise.race([
+            SleepSync.syncNow({ silent: true, skipRefresh: true }),
+            new Promise(resolve => setTimeout(() => resolve({ success: false, count: 0, error: 'Sync timed out' }), 8000))
+          ]);
+          const dataFetch = Comparison.getChallengeSleepData(challengeId);
 
-        const [syncRes, initialData] = await Promise.all([syncWithTimeout, dataFetch]);
-        syncResult = syncRes;
+          const [syncRes, initialData] = await Promise.all([syncWithTimeout, dataFetch]);
+          syncResult = syncRes;
 
-        // If sync got new data, invalidate comparison cache and re-fetch; otherwise use initial data
-        if (syncResult?.count > 0) {
-          if (typeof Cache !== 'undefined') Cache.clear('comparison_' + challengeId);
-          const refreshed = await Comparison.getChallengeSleepData(challengeId);
-          sleepData = refreshed.sleepData;
-        } else {
-          sleepData = initialData.sleepData;
-        }
+          if (syncResult?.count > 0) {
+            if (typeof Cache !== 'undefined') Cache.clear('comparison_' + challengeId);
+            const refreshed = await Comparison.getChallengeSleepData(challengeId);
+            sleepData = refreshed.sleepData;
+          } else {
+            sleepData = initialData.sleepData;
+          }
 
-        // Cache the result and mark sync done for today
-        if (typeof Cache !== 'undefined') {
-          Cache.set(cacheKey, { sleepData, syncResult });
-          if (typeof Cache.markSyncedToday === 'function') {
+          if (typeof Cache !== 'undefined' && typeof Cache.markSyncedToday === 'function') {
             Cache.markSyncedToday();
           }
+        } else {
+          // NO SYNC PATH: Just fetch data directly
+          const result = await Comparison.getChallengeSleepData(challengeId);
+          sleepData = result.sleepData;
         }
-      } else {
-        // NO SYNC PATH: Just fetch data directly
-        const result = await Comparison.getChallengeSleepData(challengeId);
-        sleepData = result.sleepData;
 
-        // Cache the result
+        // Cache everything needed for the fast path
         if (typeof Cache !== 'undefined') {
-          Cache.set(cacheKey, { sleepData, syncResult: null });
+          Cache.set(cacheKey, { sleepData, syncResult, currentUser, challenge });
         }
       }
 
