@@ -88,6 +88,7 @@ const Dashboard = {
       const avgHR = this.calcAvgHR(recentSleep);
       const avgDeepSleep = this.calcAvgDeepSleep(recentSleep);
       const avgSleepScore = this.calcAvgSleepScore(recentSleep);
+      const avgBedtime = this.calcAvgBedtime(recentSleep);
       const challenge = activeChallenges[0] || null;
 
       // Chronological order for sparklines
@@ -146,6 +147,13 @@ const Dashboard = {
               </div>
               <div class="flex-1 h-10 overflow-hidden"><canvas id="sparkline-deep-sleep"></canvas></div>
             </div>
+            <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('bedtime')">
+              <div class="flex-shrink-0">
+                <div class="text-[0.6rem] font-semibold text-indigo-400 uppercase tracking-wider mb-1">Bedtime</div>
+                <div class="text-xl font-bold text-indigo-400 leading-none">${avgBedtime || '--'}</div>
+              </div>
+              <div class="flex-1 h-10 overflow-hidden"><canvas id="sparkline-bedtime"></canvas></div>
+            </div>
           </div>
         </div>
       `;
@@ -185,6 +193,7 @@ const Dashboard = {
       this.renderSparkline('sparkline-avg-hr', chronologicalSleep.map(d => d.avg_hr), '#fb923c');
       this.renderSparkline('sparkline-presleep-hr', chronologicalSleep.map(d => d.pre_sleep_hr), '#2dd4bf');
       this.renderSparkline('sparkline-deep-sleep', chronologicalSleep.map(d => d.deep_sleep_minutes), '#60a5fa');
+      this.renderSparkline('sparkline-bedtime', chronologicalSleep.map(d => this.bedtimeToMinutesSince6pm(d.bedtime_start)), '#818cf8');
     } catch (error) {
       console.error('Error rendering dashboard:', error);
       container.innerHTML = `
@@ -225,7 +234,7 @@ const Dashboard = {
 
     const { data, error } = await client
       .from('sleep_data')
-      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, bedtime_start')
       .eq('user_id', user.id)
       .gte('date', startStr)
       .order('date', { ascending: false });
@@ -262,6 +271,41 @@ const Dashboard = {
     const vals = sleepData.filter(d => d.sleep_score != null).map(d => d.sleep_score);
     if (vals.length === 0) return null;
     return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+  },
+
+  // Convert bedtime_start ISO string to minutes-since-6pm (for charting/averaging)
+  // 6pm = 0, 9pm = 180, midnight = 360, 3am = 540
+  bedtimeToMinutesSince6pm(bedtimeStart) {
+    if (!bedtimeStart) return null;
+    const d = new Date(bedtimeStart);
+    const hours = d.getHours();
+    const minutes = d.getMinutes();
+    let totalMinutes = hours * 60 + minutes;
+    // Shift so 6pm (18:00) = 0. Range: 6pm to 6am next day = 0 to 720
+    totalMinutes -= 18 * 60;
+    if (totalMinutes < 0) totalMinutes += 24 * 60; // before 6pm wraps (rare)
+    return totalMinutes;
+  },
+
+  // Convert minutes-since-6pm back to display time string (e.g. "10:30 PM")
+  minutesSince6pmToDisplay(mins) {
+    let totalMinutes = mins + 18 * 60;
+    if (totalMinutes >= 24 * 60) totalMinutes -= 24 * 60;
+    const h = Math.floor(totalMinutes / 60);
+    const m = Math.round(totalMinutes % 60);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+  },
+
+  calcAvgBedtime(sleepData) {
+    const vals = sleepData
+      .filter(d => d.bedtime_start != null)
+      .map(d => this.bedtimeToMinutesSince6pm(d.bedtime_start))
+      .filter(v => v != null);
+    if (vals.length === 0) return null;
+    const avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+    return this.minutesSince6pmToDisplay(avg);
   },
 
   getMinHR(sleepData) {
@@ -358,42 +402,51 @@ const Dashboard = {
 
   // Fetch last 30 days of sleep data for detail views
   async get30DaySleepData() {
+    return this.getSleepData(30);
+  },
+
+  // Fetch N days of sleep data for detail views
+  async getSleepData(days = 30) {
     const client = SupabaseClient.client;
     if (!client) return [];
 
     const user = await SupabaseClient.getCurrentUser();
     if (!user) return [];
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const startStr = DateUtils.toLocalDateStr(thirtyDaysAgo);
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    const startStr = DateUtils.toLocalDateStr(startDate);
 
     const { data, error } = await client
       .from('sleep_data')
-      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, bedtime_start')
       .eq('user_id', user.id)
       .gte('date', startStr)
       .order('date', { ascending: true });
 
     if (error) {
-      console.error('Error fetching 30-day sleep data:', error);
+      console.error(`Error fetching ${days}-day sleep data:`, error);
       return [];
     }
 
-    // Filter to only valid nights (>= 5 hours, has all metrics)
     return this.filterValidNights(data || []);
   },
 
   // Show detail modal for a metric
   async showMetricDetail(metric) {
+    const isBedtime = metric === 'bedtime';
     const config = {
       sleep_score: { label: 'Sleep Score', unit: 'pts', color: '#c084fc', field: 'sleep_score' },
       avg_hr: { label: 'Average Heart Rate', unit: 'bpm', color: '#fb923c', field: 'avg_hr' },
       pre_sleep_hr: { label: 'Lowest Heart Rate', unit: 'bpm', color: '#2dd4bf', field: 'pre_sleep_hr' },
-      deep_sleep: { label: 'Deep Sleep', unit: 'min', color: '#60a5fa', field: 'deep_sleep_minutes' }
+      deep_sleep: { label: 'Deep Sleep', unit: 'min', color: '#60a5fa', field: 'deep_sleep_minutes' },
+      bedtime: { label: 'Sleep Onset', unit: '', color: '#818cf8', field: 'bedtime_start' }
     }[metric];
 
     if (!config) return;
+
+    const days = isBedtime ? 90 : 30;
+    const daysLabel = isBedtime ? '90d' : '30d';
 
     // Show loading modal immediately
     const modal = document.createElement('div');
@@ -407,14 +460,23 @@ const Dashboard = {
           </button>
           <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
         </div>
-        <div class="text-center py-8 text-oura-muted text-sm">Loading 30-day data...</div>
+        <div class="text-center py-8 text-oura-muted text-sm">Loading ${daysLabel} data...</div>
       </div>
     `;
     modal.addEventListener('click', (e) => { if (e.target === modal) this.closeMetricDetail(); });
     document.body.appendChild(modal);
 
     // Fetch data
-    const sleepData = await this.get30DaySleepData();
+    const sleepData = await this.getSleepData(days);
+
+    if (isBedtime) {
+      this._renderBedtimeDetail(modal, sleepData, config, daysLabel);
+    } else {
+      this._renderNumericDetail(modal, sleepData, config, daysLabel);
+    }
+  },
+
+  _renderNumericDetail(modal, sleepData, config, daysLabel) {
     const values = sleepData.map(d => ({ date: d.date, value: d[config.field] })).filter(d => d.value != null);
 
     if (values.length === 0) {
@@ -446,7 +508,7 @@ const Dashboard = {
       <div class="flex justify-around mb-6">
         <div class="text-center">
           <div class="text-2xl font-bold" style="color: ${config.color}">${avg}</div>
-          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">30d Avg</div>
+          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">${daysLabel} Avg</div>
         </div>
         <div class="text-center">
           <div class="text-2xl font-bold text-white">${min}</div>
@@ -458,7 +520,7 @@ const Dashboard = {
         </div>
       </div>
 
-      <!-- 30-day chart -->
+      <!-- Chart -->
       <div class="bg-oura-card rounded-2xl p-4 mb-6">
         <div class="h-48"><canvas id="detail-chart-30d"></canvas></div>
       </div>
@@ -481,10 +543,9 @@ const Dashboard = {
       </div>
     `;
 
-    // Render 30-day chart
+    // Render chart
     const canvas = document.getElementById('detail-chart-30d');
     if (canvas) {
-      // Destroy old chart instance if it exists
       if (this.charts['detail-chart-30d']) {
         this.charts['detail-chart-30d'].destroy();
         delete this.charts['detail-chart-30d'];
@@ -529,6 +590,141 @@ const Dashboard = {
             },
             y: {
               ticks: { color: '#6b7280', font: { size: 10 } },
+              grid: { color: '#ffffff10' }
+            }
+          }
+        }
+      });
+    }
+  },
+
+  _renderBedtimeDetail(modal, sleepData, config, daysLabel) {
+    const values = sleepData
+      .filter(d => d.bedtime_start != null)
+      .map(d => ({
+        date: d.date,
+        raw: d.bedtime_start,
+        mins: this.bedtimeToMinutesSince6pm(d.bedtime_start)
+      }))
+      .filter(d => d.mins != null);
+
+    if (values.length === 0) {
+      modal.querySelector('.bg-oura-bg').innerHTML = `
+        <div class="flex items-center gap-3 mb-6">
+          <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+          </button>
+          <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
+        </div>
+        <p class="text-oura-muted text-sm text-center py-8">No bedtime data yet. Re-sync your Oura ring to populate sleep onset times.</p>
+      `;
+      return;
+    }
+
+    const avgMins = Math.round(values.reduce((s, d) => s + d.mins, 0) / values.length);
+    const earliestMins = Math.min(...values.map(d => d.mins));
+    const latestMins = Math.max(...values.map(d => d.mins));
+
+    modal.querySelector('.bg-oura-bg').innerHTML = `
+      <div class="flex items-center gap-3 mb-6">
+        <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+        </button>
+        <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
+      </div>
+
+      <!-- Summary stats -->
+      <div class="flex justify-around mb-6">
+        <div class="text-center">
+          <div class="text-2xl font-bold" style="color: ${config.color}">${this.minutesSince6pmToDisplay(avgMins)}</div>
+          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">${daysLabel} Avg</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-white">${this.minutesSince6pmToDisplay(earliestMins)}</div>
+          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Earliest</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-white">${this.minutesSince6pmToDisplay(latestMins)}</div>
+          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Latest</div>
+        </div>
+      </div>
+
+      <!-- 90-day chart -->
+      <div class="bg-oura-card rounded-2xl p-4 mb-6">
+        <div class="h-48"><canvas id="detail-chart-30d"></canvas></div>
+      </div>
+
+      <!-- Daily breakdown -->
+      <div class="bg-oura-card rounded-2xl p-4">
+        <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Nightly Bedtimes</div>
+        <div class="space-y-1.5 max-h-60 overflow-y-auto">
+          ${[...values].reverse().map(d => {
+            const dateObj = new Date(d.date + 'T00:00:00');
+            const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            return `
+              <div class="flex items-center justify-between py-1.5 border-b border-oura-border/50 last:border-0">
+                <span class="text-sm text-oura-muted">${dateStr}</span>
+                <span class="text-sm font-medium" style="color: ${config.color}">${this.minutesSince6pmToDisplay(d.mins)}</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    // Render bedtime chart with time-formatted Y axis (inverted: earlier = higher)
+    const canvas = document.getElementById('detail-chart-30d');
+    if (canvas) {
+      if (this.charts['detail-chart-30d']) {
+        this.charts['detail-chart-30d'].destroy();
+        delete this.charts['detail-chart-30d'];
+      }
+
+      const self = this;
+      this.charts['detail-chart-30d'] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: values.map(d => {
+            const dt = new Date(d.date + 'T00:00:00');
+            return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          }),
+          datasets: [{
+            data: values.map(d => d.mins),
+            borderColor: config.color,
+            backgroundColor: config.color + '20',
+            borderWidth: 2,
+            pointRadius: values.length > 60 ? 1 : 3,
+            pointBackgroundColor: config.color,
+            tension: 0.3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#1a1a2e',
+              titleColor: '#fff',
+              bodyColor: config.color,
+              callbacks: {
+                label: (ctx) => self.minutesSince6pmToDisplay(ctx.parsed.y)
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#6b7280', font: { size: 10 }, maxTicksLimit: 7 },
+              grid: { display: false }
+            },
+            y: {
+              reverse: true,
+              ticks: {
+                color: '#6b7280',
+                font: { size: 10 },
+                callback: (value) => self.minutesSince6pmToDisplay(value)
+              },
               grid: { color: '#ffffff10' }
             }
           }

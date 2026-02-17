@@ -16,7 +16,8 @@ const Comparison = {
     '#6366f1', // Indigo
   ],
 
-  // Get sleep data for challenge participants (includes 30-day baseline before start)
+  // Get sleep data for challenge participants (includes baseline before start)
+  // Looks back 90 days and takes the most recent 30 data points as baseline
   async getChallengeSleepData(challengeId) {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
@@ -24,10 +25,10 @@ const Comparison = {
     const challenge = await Challenges.getChallenge(challengeId);
     const participants = challenge.participants.filter(p => p.status === 'accepted');
 
-    // Calculate exact 30-day baseline period (day -30 to day -1 before challenge start)
+    // Look back 90 days to find baseline data (handles gaps from lost rings etc.)
     const challengeStart = Challenges.parseLocalDate(challenge.start_date);
     const baselineStart = new Date(challengeStart);
-    baselineStart.setDate(baselineStart.getDate() - 30);
+    baselineStart.setDate(baselineStart.getDate() - 90);
     const baselineStartStr = Challenges.toLocalDateStr(baselineStart);
 
     // Include the night before start date in challenge data.
@@ -49,12 +50,13 @@ const Comparison = {
 
       if (error) {
         console.error('Error fetching sleep data:', error);
-        return { user: participant.user, data: [], baselineData: [], challengeData: [], baselineDays: 30, challengeDays: 0 };
+        return { user: participant.user, data: [], baselineData: [], challengeData: [], baselineDays: 0, challengeDays: 0 };
       }
 
       // Split data into baseline and challenge period
-      // Baseline ends before the night-before boundary to avoid overlap
-      const baselineData = data.filter(d => d.date >= baselineStartStr && d.date < challengeDataStartStr);
+      // Baseline: all pre-challenge data from the 90-day window, take most recent 30
+      const allBaseline = data.filter(d => d.date >= baselineStartStr && d.date < challengeDataStartStr);
+      const baselineData = allBaseline.slice(-30);
       const challengeData = data.filter(d => d.date >= challengeDataStartStr);
 
       // Calculate how many days are in the challenge so far
@@ -69,7 +71,7 @@ const Comparison = {
         data,
         baselineData,
         challengeData,
-        baselineDays: 30,
+        baselineDays: baselineData.length,
         challengeDays
       };
     });
@@ -548,19 +550,19 @@ const SleepSync = {
     }
 
     try {
-      // Determine earliest needed date: default 30 days, but extend
+      // Determine earliest needed date: default 90 days, but extend
       // if any active challenge needs baseline data from further back
-      // (challenge start_date minus 30 days for baseline comparison)
+      // (challenge start_date minus 90 days for baseline comparison)
       const endDate = new Date();
       const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 30);
+      startDate.setDate(startDate.getDate() - 90);
 
       try {
         const activeChallenges = await Challenges.getActiveChallenges();
         for (const ch of activeChallenges) {
           const challengeStart = Challenges.parseLocalDate(ch.start_date);
           const baselineNeeded = new Date(challengeStart);
-          baselineNeeded.setDate(baselineNeeded.getDate() - 30);
+          baselineNeeded.setDate(baselineNeeded.getDate() - 90);
           if (baselineNeeded < startDate) {
             startDate.setTime(baselineNeeded.getTime());
           }

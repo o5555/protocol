@@ -166,7 +166,8 @@ const server = http.createServer(async (req, res) => {
                 light_sleep_minutes: Math.round((sleep.light_sleep_duration || 0) / 60),
                 sleep_score: scoresByDay[sleep.day] || null,
                 avg_hr: sleep.average_heart_rate || null,
-                pre_sleep_hr: sleep.lowest_heart_rate || null
+                pre_sleep_hr: sleep.lowest_heart_rate || null,
+                bedtime_start: sleep.bedtime_start || null
             }));
 
             // Upsert to Supabase using server-side credentials
@@ -557,12 +558,13 @@ const server = http.createServer(async (req, res) => {
                     const ouraToken = tokenMap[userId];
                     const userChals = userChallenges[userId] || [];
 
-                    // Calculate date range: earliest challenge start - 30 days to today
+                    // Calculate date range: earliest challenge start - 90 days to today
+                    // (expanded window to handle gaps like lost rings)
                     const earliestStart = userChals.reduce((earliest, c) => {
                         return c.start_date < earliest ? c.start_date : earliest;
                     }, today);
                     const baselineDate = new Date(earliestStart);
-                    baselineDate.setDate(baselineDate.getDate() - 30);
+                    baselineDate.setDate(baselineDate.getDate() - 90);
                     const startDate = toLocalDateStr(baselineDate);
                     const endDate = today;
 
@@ -612,7 +614,8 @@ const server = http.createServer(async (req, res) => {
                         light_sleep_minutes: Math.round((sleep.light_sleep_duration || 0) / 60),
                         sleep_score: scoresByDay[sleep.day] || null,
                         avg_hr: sleep.average_heart_rate || null,
-                        pre_sleep_hr: sleep.lowest_heart_rate || null
+                        pre_sleep_hr: sleep.lowest_heart_rate || null,
+                        bedtime_start: sleep.bedtime_start || null
                     }));
 
                     // Upsert to Supabase
