@@ -55,6 +55,79 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // TEMPORARY: Debug endpoint to see raw Oura sleep sessions for a date
+    // Usage: GET /api/debug-sleep?date=2026-02-16 (requires Authorization header with Oura token)
+    if (req.url.startsWith('/api/debug-sleep') && req.method === 'GET') {
+        try {
+            const url = new URL(req.url, `http://${req.headers.host}`);
+            const date = url.searchParams.get('date') || toLocalDateStr(new Date());
+            const ouraToken = (req.headers.authorization || '').replace('Bearer ', '');
+            if (!ouraToken) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Pass Oura token as Authorization: Bearer <token>' }));
+                return;
+            }
+            // Fetch raw sleep sessions for +/- 1 day around the target date
+            const d = new Date(date + 'T00:00:00');
+            const start = new Date(d); start.setDate(start.getDate() - 1);
+            const end = new Date(d); end.setDate(end.getDate() + 1);
+            const startStr = toLocalDateStr(start);
+            const endStr = toLocalDateStr(end);
+
+            const fetchOuraDebug = (apiPath) => new Promise((resolve, reject) => {
+                const options = {
+                    hostname: 'api.ouraring.com', path: apiPath, method: 'GET',
+                    headers: { 'Authorization': `Bearer ${ouraToken}`, 'Content-Type': 'application/json' }
+                };
+                const r = https.request(options, (resp) => {
+                    let data = '';
+                    resp.on('data', chunk => data += chunk);
+                    resp.on('end', () => { try { resolve(JSON.parse(data)); } catch (e) { reject(e); } });
+                });
+                r.on('error', reject);
+                r.end();
+            });
+
+            const [sleepData, dailySleep] = await Promise.all([
+                fetchOuraDebug(`/v2/usercollection/sleep?start_date=${startStr}&end_date=${endStr}`),
+                fetchOuraDebug(`/v2/usercollection/daily_sleep?start_date=${startStr}&end_date=${endStr}`).catch(() => null)
+            ]);
+
+            // Filter to target date and summarize
+            const sessionsForDate = (sleepData.data || []).filter(s => s.day === date);
+            const summary = sessionsForDate.map(s => ({
+                day: s.day, type: s.type,
+                total_min: Math.round((s.total_sleep_duration || 0) / 60),
+                deep_min: Math.round((s.deep_sleep_duration || 0) / 60),
+                rem_min: Math.round((s.rem_sleep_duration || 0) / 60),
+                light_min: Math.round((s.light_sleep_duration || 0) / 60),
+                deep_raw_seconds: s.deep_sleep_duration,
+                avg_hr: s.average_heart_rate,
+                lowest_hr: s.lowest_heart_rate,
+                bedtime_start: s.bedtime_start,
+                bedtime_end: s.bedtime_end,
+            }));
+            const summed = {
+                deep_min_total: summary.reduce((sum, s) => sum + s.deep_min, 0),
+                rem_min_total: summary.reduce((sum, s) => sum + s.rem_min, 0),
+                light_min_total: summary.reduce((sum, s) => sum + s.light_min, 0),
+                total_min_total: summary.reduce((sum, s) => sum + s.total_min, 0),
+            };
+
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+            res.end(JSON.stringify({
+                date, sessions_count: sessionsForDate.length,
+                sessions: summary, summed,
+                daily_sleep: (dailySleep?.data || []).find(d => d.day === date) || null,
+                all_sessions_in_range: (sleepData.data || []).map(s => ({ day: s.day, type: s.type, deep_sec: s.deep_sleep_duration }))
+            }, null, 2));
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
     // Webhook endpoint for sleep data sync
     // This can be called by a cron job or external service
     if (req.url === '/webhook/sync-sleep' && req.method === 'POST') {
