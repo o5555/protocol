@@ -6,8 +6,17 @@
     <title>Sleep Challenge</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icons/icon-192.svg">
+    <meta name="theme-color" content="#0d0d0d">
+    <link rel="icon" type="image/png" href="icons/favicon.png">
+    <link rel="apple-touch-icon" href="icons/icon-180.png">
     <link rel="manifest" href="manifest.json">
+    <!-- Splash screens -->
+    <link rel="apple-touch-startup-image" href="icons/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)">
+    <link rel="apple-touch-startup-image" href="icons/splash-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)">
+    <link rel="apple-touch-startup-image" href="icons/splash-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)">
+    <link rel="apple-touch-startup-image" href="icons/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
+    <link rel="apple-touch-startup-image" href="icons/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
+    <link rel="apple-touch-startup-image" href="icons/splash-1536x2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)">
     <link rel="stylesheet" href="css/mobile.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -278,42 +287,96 @@
         const App = {
             currentPage: 'dashboard',
             currentDetailId: null,
+            _isPopstate: false,
+            _transitionTimer: null,
 
             navigateTo(page, detailId = null) {
-                // Hide all pages
-                document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
-
-                // Update nav buttons — teal + highlight bg for active, muted for inactive
-                document.querySelectorAll('.nav-btn').forEach(btn => {
-                    btn.classList.remove('text-oura-accent', 'bg-oura-accent/10');
-                    btn.classList.add('text-oura-muted');
-                });
-
-                // Determine actual page name (for detail pages, highlight parent)
-                let navPage = page;
-                if (page === 'protocol-detail') navPage = 'protocols';
-                if (page === 'challenge-detail') navPage = 'challenges';
-
-                const activeBtn = document.querySelector(`.nav-btn[data-page="${navPage}"]`);
-                if (activeBtn) {
-                    activeBtn.classList.add('text-oura-accent', 'bg-oura-accent/10');
-                    activeBtn.classList.remove('text-oura-muted');
-                }
-
-                // Show target page
                 const targetPage = document.getElementById(`page-${page}`);
-                if (targetPage) {
-                    targetPage.classList.remove('hidden');
+                if (!targetPage) return;
+
+                // Cancel any pending transition
+                if (this._transitionTimer) {
+                    clearTimeout(this._transitionTimer);
+                    this._transitionTimer = null;
+                    // Clean up any exit animation classes
+                    document.querySelectorAll('.page-exit').forEach(p => p.classList.remove('page-exit'));
                 }
 
+                const oldEl = document.getElementById(`page-${this.currentPage}`);
+
+                // Update state immediately
                 this.currentPage = page;
                 this.currentDetailId = detailId;
 
-                // Scroll to top on page switch
-                window.scrollTo(0, 0);
+                // Save state to localStorage
+                try {
+                    localStorage.setItem('app_nav_state', JSON.stringify({ page, detailId }));
+                } catch (e) { /* ignore */ }
 
-                // Load page content
-                this.loadPageContent(page, detailId);
+                // Push history state (avoid duplicates and popstate loops)
+                if (!this._isPopstate) {
+                    const currentState = history.state;
+                    if (!currentState || currentState.page !== page || currentState.detailId !== detailId) {
+                        history.pushState({ page, detailId }, '');
+                    }
+                }
+
+                // Check reduced motion preference
+                const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                const shouldAnimate = !prefersReduced && oldEl && oldEl !== targetPage && !oldEl.classList.contains('hidden');
+
+                const showPage = () => {
+                    // Hide all pages
+                    document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+
+                    // Update nav buttons
+                    document.querySelectorAll('.nav-btn').forEach(btn => {
+                        btn.classList.remove('text-oura-accent', 'bg-oura-accent/10');
+                        btn.classList.add('text-oura-muted');
+                    });
+
+                    let navPage = page;
+                    if (page === 'protocol-detail') navPage = 'protocols';
+                    if (page === 'challenge-detail') navPage = 'challenges';
+
+                    const activeBtn = document.querySelector(`.nav-btn[data-page="${navPage}"]`);
+                    if (activeBtn) {
+                        activeBtn.classList.add('text-oura-accent', 'bg-oura-accent/10');
+                        activeBtn.classList.remove('text-oura-muted');
+                    }
+
+                    // Show target page with enter animation
+                    if (shouldAnimate) {
+                        targetPage.classList.add('page-enter');
+                    }
+                    targetPage.classList.remove('hidden');
+
+                    if (shouldAnimate) {
+                        targetPage.offsetHeight; // Force reflow
+                        targetPage.classList.remove('page-enter');
+                        targetPage.classList.add('page-enter-active');
+                        setTimeout(() => {
+                            targetPage.classList.remove('page-enter-active');
+                        }, 150);
+                    }
+
+                    // Scroll to top
+                    window.scrollTo(0, 0);
+
+                    // Load page content
+                    this.loadPageContent(page, detailId);
+                };
+
+                if (shouldAnimate) {
+                    oldEl.classList.add('page-exit');
+                    this._transitionTimer = setTimeout(() => {
+                        this._transitionTimer = null;
+                        oldEl.classList.remove('page-exit');
+                        showPage();
+                    }, 150);
+                } else {
+                    showPage();
+                }
             },
 
             loadPageContent(page, detailId) {
@@ -335,7 +398,7 @@
                         break;
                     case 'friends':
                         Friends.render();
-                        this.checkNotifications(); // Refresh badges
+                        this.checkNotifications();
                         break;
                     case 'dashboard':
                         Dashboard.render();
@@ -347,8 +410,47 @@
             },
 
             init() {
-                // Navigate to dashboard by default
-                this.navigateTo('dashboard');
+                // Restore saved navigation state, or default to dashboard
+                let startPage = 'dashboard';
+                let startDetailId = null;
+                try {
+                    const saved = JSON.parse(localStorage.getItem('app_nav_state'));
+                    if (saved && saved.page) {
+                        if (saved.page === 'protocol-detail' || saved.page === 'challenge-detail') {
+                            if (saved.detailId) {
+                                startPage = saved.page;
+                                startDetailId = saved.detailId;
+                            } else {
+                                startPage = saved.page === 'protocol-detail' ? 'protocols' : 'challenges';
+                            }
+                        } else {
+                            startPage = saved.page;
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+
+                // Set initial history state
+                history.replaceState({ page: startPage, detailId: startDetailId }, '');
+
+                this.navigateTo(startPage, startDetailId);
+
+                // Listen for back/forward navigation
+                window.addEventListener('popstate', (e) => {
+                    if (e.state && e.state.page) {
+                        this._isPopstate = true;
+                        this.navigateTo(e.state.page, e.state.detailId || null);
+                        this._isPopstate = false;
+                    }
+                });
+
+                // App resume: refresh stale data when returning from background
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') {
+                        if (!Cache.isFresh('dashboard')) {
+                            this.loadPageContent(this.currentPage, this.currentDetailId);
+                        }
+                    }
+                });
 
                 // Initialize pull-to-refresh
                 PullToRefresh.init();
@@ -358,7 +460,10 @@
 
                 // Register service worker for PWA
                 if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.register('/sw.js').catch(() => {});
+                    navigator.serviceWorker.register('/sw.js').then((reg) => {
+                        // Check for updates every hour
+                        setInterval(() => reg.update(), 60 * 60 * 1000);
+                    }).catch(() => {});
                 }
             },
 

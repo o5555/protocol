@@ -40,18 +40,8 @@ const Account = {
       const displayName = profile?.display_name || (currentUser.email ? currentUser.email.split('@')[0] : 'User');
       const hasOuraToken = !!profile?.oura_token;
 
-      // Validate Oura token if it exists (via server proxy to avoid CORS)
-      let ouraStatus = hasOuraToken ? 'connected' : 'disconnected'; // connected | expired | disconnected
-      if (hasOuraToken) {
-        try {
-          const resp = await fetch('/api/personal_info', {
-            headers: { 'Authorization': `Bearer ${profile.oura_token}` }
-          });
-          if (!resp.ok) ouraStatus = 'expired';
-        } catch (_) {
-          ouraStatus = 'expired';
-        }
-      }
+      // Token exists = connected. Background cron sync validates the token.
+      const ouraStatus = hasOuraToken ? 'connected' : 'disconnected';
 
       // Only update DOM if this is still the most recent render call
       if (generation !== this._renderGeneration) return;
