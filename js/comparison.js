@@ -38,13 +38,7 @@ const Comparison = {
     baselineStart.setDate(baselineStart.getDate() - 90);
     const baselineStartStr = Challenges.toLocalDateStr(baselineStart);
 
-    // Include the night before start date in challenge data.
-    // Sleep from the night of (start-1 → start) is the first challenge data point,
-    // but Oura may record it with day = start-1 (bedtime date). Including this
-    // day ensures Day 1 data shows regardless of timezone or bedtime.
-    const dayBeforeStart = new Date(challengeStart);
-    dayBeforeStart.setDate(dayBeforeStart.getDate() - 1);
-    const challengeDataStartStr = Challenges.toLocalDateStr(dayBeforeStart);
+    const challengeDataStartStr = challenge.start_date;
 
     const sleepDataPromises = participants.map(async (participant) => {
       const { data, error } = await client
@@ -568,6 +562,7 @@ const SleepSync = {
       // if any active challenge needs baseline data from further back
       // (challenge start_date minus 90 days for baseline comparison)
       const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 1); // +1 because Oura end_date is exclusive
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 90);
 

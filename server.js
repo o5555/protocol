@@ -567,7 +567,10 @@ const server = http.createServer(async (req, res) => {
                     const baselineDate = new Date(earliestStart);
                     baselineDate.setDate(baselineDate.getDate() - 90);
                     const startDate = toLocalDateStr(baselineDate);
-                    const endDate = today;
+                    // +1 day because Oura end_date is exclusive
+                    const endTomorrow = new Date();
+                    endTomorrow.setDate(endTomorrow.getDate() + 1);
+                    const endDate = toLocalDateStr(endTomorrow);
 
                     console.log(`[cron-sync] Syncing user ${userId}: ${startDate} to ${endDate}`);
 

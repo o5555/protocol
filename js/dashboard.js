@@ -362,7 +362,7 @@ const Dashboard = {
   },
 
   // Fetch N days of sleep data for detail views
-  async getSleepData(days = 30) {
+  async getSleepData(days = 30, { strictFilter = true } = {}) {
     const client = SupabaseClient.client;
     if (!client) return [];
 
@@ -385,7 +385,11 @@ const Dashboard = {
       return [];
     }
 
-    return this.filterValidNights(data || []);
+    if (strictFilter) {
+      return this.filterValidNights(data || []);
+    }
+    // Lenient filter: only require minimum sleep duration
+    return (data || []).filter(d => d.total_sleep_minutes >= this.MIN_SLEEP_MINUTES);
   },
 
   // Show detail modal for a metric
@@ -419,8 +423,8 @@ const Dashboard = {
     modal.addEventListener('click', (e) => { if (e.target === modal) this.closeMetricDetail(); });
     document.body.appendChild(modal);
 
-    // Fetch data
-    const sleepData = await this.getSleepData(30);
+    // Fetch data (lenient filter — detail view only needs the specific metric)
+    const sleepData = await this.getSleepData(30, { strictFilter: false });
 
     this._renderNumericDetail(modal, sleepData, config, daysLabel);
   },
