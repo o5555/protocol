@@ -627,38 +627,36 @@ const SleepSync = {
 
       // Transform and upsert sleep data
       // Oura can return multiple sessions per day (naps + main sleep),
-      // so deduplicate by date, preferring long_sleep over rest/naps,
-      // then keeping the longest session as tiebreaker
-      const byDate = {};
+      // so group by date and SUM durations across all sessions,
+      // taking HR metrics from the primary (longest long_sleep) session
+      const sessionsByDate = {};
       for (const sleep of ouraData.data) {
-        const existing = byDate[sleep.day];
-        if (!existing) {
-          byDate[sleep.day] = sleep;
-          continue;
-        }
-        // Prefer long_sleep type over rest/short naps
-        const isLong = sleep.type === 'long_sleep';
-        const existingIsLong = existing.type === 'long_sleep';
-        if (isLong && !existingIsLong) {
-          byDate[sleep.day] = sleep;
-        } else if (isLong === existingIsLong) {
-          // Same type — keep longer session
-          if ((sleep.total_sleep_duration || 0) > (existing.total_sleep_duration || 0)) {
-            byDate[sleep.day] = sleep;
-          }
-        }
+        if (!sessionsByDate[sleep.day]) sessionsByDate[sleep.day] = [];
+        sessionsByDate[sleep.day].push(sleep);
       }
-      const sleepRecords = Object.values(byDate).map(sleep => ({
-        user_id: currentUser.id,
-        date: sleep.day,
-        total_sleep_minutes: Math.round((sleep.total_sleep_duration || 0) / 60),
-        deep_sleep_minutes: Math.round((sleep.deep_sleep_duration || 0) / 60),
-        rem_sleep_minutes: Math.round((sleep.rem_sleep_duration || 0) / 60),
-        light_sleep_minutes: Math.round((sleep.light_sleep_duration || 0) / 60),
-        sleep_score: scoresByDay[sleep.day] || null,
-        avg_hr: sleep.average_heart_rate || null,
-        pre_sleep_hr: sleep.lowest_heart_rate || null,
-      }));
+      const sleepRecords = Object.entries(sessionsByDate).map(([day, sessions]) => {
+        const primary = [...sessions].sort((a, b) => {
+          const aLong = a.type === 'long_sleep' ? 1 : 0;
+          const bLong = b.type === 'long_sleep' ? 1 : 0;
+          if (aLong !== bLong) return bLong - aLong;
+          return (b.total_sleep_duration || 0) - (a.total_sleep_duration || 0);
+        })[0];
+        const totalSleep = sessions.reduce((sum, s) => sum + (s.total_sleep_duration || 0), 0);
+        const deepSleep = sessions.reduce((sum, s) => sum + (s.deep_sleep_duration || 0), 0);
+        const remSleep = sessions.reduce((sum, s) => sum + (s.rem_sleep_duration || 0), 0);
+        const lightSleep = sessions.reduce((sum, s) => sum + (s.light_sleep_duration || 0), 0);
+        return {
+          user_id: currentUser.id,
+          date: day,
+          total_sleep_minutes: Math.round(totalSleep / 60),
+          deep_sleep_minutes: Math.round(deepSleep / 60),
+          rem_sleep_minutes: Math.round(remSleep / 60),
+          light_sleep_minutes: Math.round(lightSleep / 60),
+          sleep_score: scoresByDay[day] || null,
+          avg_hr: primary.average_heart_rate || null,
+          pre_sleep_hr: primary.lowest_heart_rate || null,
+        };
+      });
 
       // Upsert to Supabase
       const { error } = await client
