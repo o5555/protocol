@@ -872,12 +872,15 @@ const Challenges = {
       var currentUser;
       var challenge;
 
+      var hasOuraToken = false;
+
       if (cachedData && !needsSync) {
         // FAST PATH: Use cached data — zero network calls, no loading screen
         sleepData = cachedData.sleepData;
         syncResult = cachedData.syncResult;
         currentUser = cachedData.currentUser;
         challenge = cachedData.challenge;
+        hasOuraToken = cachedData.hasOuraToken || false;
       } else {
         // Need fresh data — fetch user + challenge first
         currentUser = await SupabaseClient.getCurrentUser();
@@ -935,9 +938,15 @@ const Challenges = {
           sleepData = result.sleepData;
         }
 
+        // Fetch Oura status while we're doing network calls
+        try {
+          const profile = await Auth.getProfile();
+          hasOuraToken = !!profile?.oura_token;
+        } catch (_) {}
+
         // Cache everything needed for the fast path
         if (typeof Cache !== 'undefined') {
-          Cache.set(cacheKey, { sleepData, syncResult, currentUser, challenge });
+          Cache.set(cacheKey, { sleepData, syncResult, currentUser, challenge, hasOuraToken });
         }
       }
 
@@ -1035,12 +1044,7 @@ const Challenges = {
       const isCompleted = !challenge.isActive && challenge.daysRemaining === 0;
       const justStarted = challenge.dayNumber <= 1;
 
-      // Detect whether Oura is connected
-      let hasOuraToken = false;
-      try {
-        const profile = await Auth.getProfile();
-        hasOuraToken = !!profile?.oura_token;
-      } catch (_) {}
+      // hasOuraToken already set from cache or fresh fetch above
 
       // On day 1 with Oura connected, skip the hero and show the normal view
       // so users see their baseline data and chart instead of a blocking "come back tomorrow" message
