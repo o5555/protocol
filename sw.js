@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pc-v12';
+const CACHE_NAME = 'pc-v13';
 
 const APP_SHELL = [
   '/',
@@ -38,7 +38,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.filter((key) => key !== CACHE_NAME && key !== 'pc-deeplink').map((key) => caches.delete(key))
       ))
       .then(() => self.clients.claim())
   );
@@ -122,6 +122,17 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// Store deep-link target in Cache API (accessible by both SW and main thread)
+async function storeDeepLink(navData) {
+  if (!navData || !navData.page) return;
+  const cache = await caches.open('pc-deeplink');
+  await cache.put('/deeplink-target', new Response(JSON.stringify({
+    page: navData.page,
+    id: navData.challengeId || null,
+    timestamp: Date.now()
+  })));
+}
+
 // Open app and navigate to the right page when notification is clicked
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
@@ -129,22 +140,27 @@ self.addEventListener('notificationclick', (event) => {
   const navData = event.notification.data || {};
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clients) => {
-        // Focus existing window and tell it where to navigate
-        for (const client of clients) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.postMessage({ type: 'navigate', page: navData.page, detailId: navData.challengeId });
-            return client.focus();
-          }
+    (async () => {
+      // Store deep-link in Cache API first (works reliably on iOS PWA)
+      await storeDeepLink(navData);
+
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+      // Focus existing window and tell it where to navigate
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.postMessage({ type: 'navigate', page: navData.page, detailId: navData.challengeId });
+          return client.focus();
         }
-        // Open new window with query params so the app knows where to go
-        let url = '/';
-        if (navData.page) {
-          url = '/?nav=' + navData.page;
-          if (navData.challengeId) url += '&id=' + navData.challengeId;
-        }
-        return self.clients.openWindow(url);
-      })
+      }
+
+      // Open new window (URL params as fallback for non-iOS platforms)
+      let url = '/';
+      if (navData.page) {
+        url = '/?nav=' + navData.page;
+        if (navData.challengeId) url += '&id=' + navData.challengeId;
+      }
+      return self.clients.openWindow(url);
+    })()
   );
 });

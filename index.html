@@ -407,19 +407,44 @@
                 }
             },
 
-            init() {
+            async init() {
                 // Restore saved navigation state, or default to dashboard
                 let startPage = 'dashboard';
                 let startDetailId = null;
+                let fromDeepLink = false;
 
-                // Deep-link from push notification takes priority (app opened fresh via /?nav=...&id=...)
-                const params = new URLSearchParams(window.location.search);
-                if (params.get('nav')) {
-                    startPage = params.get('nav');
-                    startDetailId = params.get('id') || null;
-                    // Clean URL
+                // Priority 1: Cache API deep-link from push notification (works on iOS PWA)
+                try {
+                    const cache = await caches.open('pc-deeplink');
+                    const response = await cache.match('/deeplink-target');
+                    if (response) {
+                        const data = await response.json();
+                        await cache.delete('/deeplink-target');
+                        if (data.page && data.timestamp && (Date.now() - data.timestamp) < 30000) {
+                            startPage = data.page;
+                            startDetailId = data.id || null;
+                            fromDeepLink = true;
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+
+                // Priority 2: URL params (fallback for Android/desktop)
+                if (!fromDeepLink) {
+                    const params = new URLSearchParams(window.location.search);
+                    if (params.get('nav')) {
+                        startPage = params.get('nav');
+                        startDetailId = params.get('id') || null;
+                        fromDeepLink = true;
+                    }
+                }
+
+                // Clean URL if it has query params
+                if (window.location.search) {
                     history.replaceState({ page: startPage, detailId: startDetailId }, '', '/');
-                } else {
+                }
+
+                // Priority 3: localStorage saved state (normal resume)
+                if (!fromDeepLink) {
                     try {
                         const saved = JSON.parse(localStorage.getItem('app_nav_state'));
                         if (saved && saved.page) {
@@ -435,10 +460,10 @@
                             }
                         }
                     } catch (e) { /* ignore */ }
-
-                    // Set initial history state
-                    history.replaceState({ page: startPage, detailId: startDetailId }, '');
                 }
+
+                // Set initial history state
+                history.replaceState({ page: startPage, detailId: startDetailId }, '');
 
                 this.navigateTo(startPage, startDetailId);
 
@@ -519,7 +544,7 @@
         // Initialize app when DOM is ready (auth must resolve before app navigates)
         document.addEventListener('DOMContentLoaded', async () => {
             await Auth.init();
-            App.init();
+            await App.init();
         });
     </script>
 
