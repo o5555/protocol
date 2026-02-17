@@ -450,6 +450,22 @@
                     }
                 });
 
+                // Handle deep-link from push notification (app opened fresh)
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('nav') && params.get('id')) {
+                    startPage = params.get('nav');
+                    startDetailId = params.get('id');
+                    // Clean URL
+                    history.replaceState({ page: startPage, detailId: startDetailId }, '', '/');
+                }
+
+                // Handle navigation from push notification (app already open)
+                navigator.serviceWorker?.addEventListener('message', (event) => {
+                    if (event.data?.type === 'navigate' && event.data.page) {
+                        this.navigateTo(event.data.page, event.data.detailId || null);
+                    }
+                });
+
                 // Initialize pull-to-refresh
                 PullToRefresh.init();
 

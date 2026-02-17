@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pc-v9';
+const CACHE_NAME = 'pc-v10';
 
 const APP_SHELL = [
   '/',
@@ -113,7 +113,7 @@ self.addEventListener('push', (event) => {
     body: data.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    data: { url: data.url || '/' },
+    data: { page: data.page || null, challengeId: data.challengeId || null },
     vibrate: [100, 50, 100]
   };
 
@@ -122,23 +122,28 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Open app when notification is clicked
+// Open app and navigate to the right page when notification is clicked
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const targetUrl = event.notification.data?.url || '/';
+  const navData = event.notification.data || {};
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clients) => {
-        // Focus existing window if found
+        // Focus existing window and tell it where to navigate
         for (const client of clients) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
+            client.postMessage({ type: 'navigate', page: navData.page, detailId: navData.challengeId });
             return client.focus();
           }
         }
-        // Otherwise open new window
-        return self.clients.openWindow(targetUrl);
+        // Open new window with query params so the app knows where to go
+        let url = '/';
+        if (navData.page && navData.challengeId) {
+          url = '/?nav=' + navData.page + '&id=' + navData.challengeId;
+        }
+        return self.clients.openWindow(url);
       })
   );
 });

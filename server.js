@@ -725,7 +725,8 @@ const server = http.createServer(async (req, res) => {
                             const payload = JSON.stringify({
                                 title: 'All data is in!',
                                 body: 'See where you stand on the leaderboard and prepare for a great night of sleep.',
-                                url: '/'
+                                page: 'challenge-detail',
+                                challengeId: challenge.id
                             });
 
                             let sent = 0, failed = 0;
