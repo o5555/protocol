@@ -828,7 +828,7 @@ const Challenges = {
       if (!skipSync && typeof SleepSync !== 'undefined') {
         container.innerHTML = `
           <div class="nav-bar flex items-center justify-between mb-4">
-            <button onclick="App.navigateTo('protocols')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+            <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
               &larr; Back
             </button>
             <span class="text-base font-medium">${escapeHtml(challenge.name)}</span>
@@ -986,7 +986,7 @@ const Challenges = {
         container.innerHTML = `
           <!-- Navigation -->
           <div class="flex items-center justify-between mb-4">
-            <button onclick="App.navigateTo('protocols')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+            <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
               &larr; Back
             </button>
             <span class="text-base font-semibold">${escapeHtml(challenge.name)}</span>
