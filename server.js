@@ -7,9 +7,9 @@ const path = require('path');
 const PORT = process.env.PORT || 3000;
 const OURA_API_BASE = 'https://api.ouraring.com';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fhsbkcvepvlqbygpmdpc.supabase.co';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
-const CRON_SECRET = process.env.CRON_SECRET || '';
+const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+const WEBHOOK_SECRET = (process.env.WEBHOOK_SECRET || '').trim();
+const CRON_SECRET = (process.env.CRON_SECRET || '').trim();
 
 function toLocalDateStr(d) {
     return d.getFullYear() + '-' +
