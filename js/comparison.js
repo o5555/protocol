@@ -611,14 +611,10 @@ const SleepSync = {
       const scoresByDay = {};
       if (dailySleepResponse?.ok) {
         const dailyData = await dailySleepResponse.json();
-        console.log('[SleepSync] daily_sleep response:', dailyData.data?.length, 'days, sample:', dailyData.data?.[0]);
         for (const d of (dailyData.data || [])) {
           scoresByDay[d.day] = d.score;
         }
-      } else {
-        console.warn('[SleepSync] daily_sleep fetch failed:', dailySleepResponse?.status, dailySleepResponse?.statusText);
       }
-      console.log('[SleepSync] scoresByDay:', scoresByDay);
 
       // Guard: ensure Oura returned a valid data array
       if (!Array.isArray(ouraData.data)) {
