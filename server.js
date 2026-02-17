@@ -9,6 +9,7 @@ const OURA_API_BASE = 'https://api.ouraring.com';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fhsbkcvepvlqbygpmdpc.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
+const CRON_SECRET = process.env.CRON_SECRET || '';
 
 function toLocalDateStr(d) {
     return d.getFullYear() + '-' +
@@ -408,6 +409,256 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({ success: true }));
         } catch (error) {
             console.error('[bug-report] Error:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+    }
+
+    // Cron endpoint: sync sleep data for ALL active challenge participants
+    if (req.url.split('?')[0] === '/api/cron/sync-sleep' && (req.method === 'GET' || req.method === 'POST')) {
+        try {
+            const authHeader = req.headers['authorization'] || '';
+            const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+            const validSecret = (WEBHOOK_SECRET && token === WEBHOOK_SECRET) ||
+                                (CRON_SECRET && token === CRON_SECRET);
+            if (!validSecret) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Unauthorized' }));
+                return;
+            }
+
+            if (!SUPABASE_SERVICE_ROLE_KEY) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Server not configured: missing SUPABASE_SERVICE_ROLE_KEY' }));
+                return;
+            }
+
+            console.log('[cron-sync] Starting sleep sync for active challenges');
+
+            // Helper: make a Supabase REST GET request
+            const supabaseGet = (restPath) => new Promise((resolve, reject) => {
+                const url = new URL(restPath, SUPABASE_URL);
+                const options = {
+                    hostname: url.hostname,
+                    path: url.pathname + url.search,
+                    method: 'GET',
+                    headers: {
+                        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                };
+                const r = https.request(options, (response) => {
+                    let data = '';
+                    response.on('data', chunk => data += chunk);
+                    response.on('end', () => {
+                        try {
+                            resolve(JSON.parse(data));
+                        } catch (e) {
+                            reject(new Error(`Failed to parse Supabase response: ${data.slice(0, 200)}`));
+                        }
+                    });
+                });
+                r.on('error', reject);
+                r.end();
+            });
+
+            // Helper: fetch from Oura API with a given token
+            const fetchOura = (apiPath, ouraToken) => new Promise((resolve, reject) => {
+                const options = {
+                    hostname: 'api.ouraring.com',
+                    path: apiPath,
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${ouraToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                };
+                const r = https.request(options, (response) => {
+                    let data = '';
+                    response.on('data', chunk => data += chunk);
+                    response.on('end', () => {
+                        try {
+                            resolve(JSON.parse(data));
+                        } catch (e) {
+                            reject(new Error('Failed to parse Oura response'));
+                        }
+                    });
+                });
+                r.on('error', reject);
+                r.end();
+            });
+
+            // 1. Get active challenges (start_date <= today AND end_date >= today)
+            const today = toLocalDateStr(new Date());
+            const challenges = await supabaseGet(
+                `/rest/v1/challenges?start_date=lte.${today}&end_date=gte.${today}&select=id,start_date,end_date`
+            );
+
+            if (!Array.isArray(challenges) || challenges.length === 0) {
+                console.log('[cron-sync] No active challenges found');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ synced: [], errors: [], total: 0, message: 'No active challenges' }));
+                return;
+            }
+
+            console.log(`[cron-sync] Found ${challenges.length} active challenge(s)`);
+
+            // 2. Get accepted participants for those challenges
+            const challengeIds = challenges.map(c => c.id).join(',');
+            const participants = await supabaseGet(
+                `/rest/v1/challenge_participants?challenge_id=in.(${challengeIds})&status=eq.accepted&select=user_id,challenge_id`
+            );
+
+            if (!Array.isArray(participants) || participants.length === 0) {
+                console.log('[cron-sync] No accepted participants found');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ synced: [], errors: [], total: 0, message: 'No accepted participants' }));
+                return;
+            }
+
+            // 3. Get unique user IDs and their oura_tokens from profiles
+            const uniqueUserIds = [...new Set(participants.map(p => p.user_id))];
+            const profiles = await supabaseGet(
+                `/rest/v1/profiles?id=in.(${uniqueUserIds.join(',')})&select=id,oura_token`
+            );
+
+            if (!Array.isArray(profiles)) {
+                console.error('[cron-sync] Failed to fetch profiles');
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to fetch profiles' }));
+                return;
+            }
+
+            // Build a map of userId -> oura_token, filter out those without tokens
+            const tokenMap = {};
+            for (const p of profiles) {
+                if (p.oura_token) tokenMap[p.id] = p.oura_token;
+            }
+
+            // Build a map of userId -> challenge info for date range calculation
+            const userChallenges = {};
+            for (const p of participants) {
+                if (!userChallenges[p.user_id]) userChallenges[p.user_id] = [];
+                const challenge = challenges.find(c => c.id === p.challenge_id);
+                if (challenge) userChallenges[p.user_id].push(challenge);
+            }
+
+            const usersToSync = Object.keys(tokenMap);
+            console.log(`[cron-sync] ${usersToSync.length} user(s) with Oura tokens to sync`);
+
+            const synced = [];
+            const errors = [];
+
+            // 4. Process each user sequentially to avoid Oura rate limits
+            for (const userId of usersToSync) {
+                try {
+                    const ouraToken = tokenMap[userId];
+                    const userChals = userChallenges[userId] || [];
+
+                    // Calculate date range: earliest challenge start - 30 days to today
+                    const earliestStart = userChals.reduce((earliest, c) => {
+                        return c.start_date < earliest ? c.start_date : earliest;
+                    }, today);
+                    const baselineDate = new Date(earliestStart);
+                    baselineDate.setDate(baselineDate.getDate() - 30);
+                    const startDate = toLocalDateStr(baselineDate);
+                    const endDate = today;
+
+                    console.log(`[cron-sync] Syncing user ${userId}: ${startDate} to ${endDate}`);
+
+                    // Fetch sleep sessions and daily sleep scores in parallel
+                    const [ouraData, dailySleepData] = await Promise.all([
+                        fetchOura(`/v2/usercollection/sleep?start_date=${startDate}&end_date=${endDate}`, ouraToken),
+                        fetchOura(`/v2/usercollection/daily_sleep?start_date=${startDate}&end_date=${endDate}`, ouraToken)
+                            .catch(() => ({ data: [] }))
+                    ]);
+
+                    if (!ouraData.data || ouraData.data.length === 0) {
+                        console.log(`[cron-sync] No sleep data for user ${userId}`);
+                        synced.push({ userId, nights: 0 });
+                        continue;
+                    }
+
+                    // Build daily sleep score lookup
+                    const scoresByDay = {};
+                    for (const d of (dailySleepData.data || [])) {
+                        scoresByDay[d.day] = d.score;
+                    }
+
+                    // Deduplicate by date: prefer long_sleep, then longest session
+                    const byDate = {};
+                    for (const sleep of ouraData.data) {
+                        const existing = byDate[sleep.day];
+                        if (!existing) { byDate[sleep.day] = sleep; continue; }
+                        const isLong = sleep.type === 'long_sleep';
+                        const existingIsLong = existing.type === 'long_sleep';
+                        if (isLong && !existingIsLong) {
+                            byDate[sleep.day] = sleep;
+                        } else if (isLong === existingIsLong) {
+                            if ((sleep.total_sleep_duration || 0) > (existing.total_sleep_duration || 0))
+                                byDate[sleep.day] = sleep;
+                        }
+                    }
+
+                    // Transform to sleep_data records
+                    const sleepRecords = Object.values(byDate).map(sleep => ({
+                        user_id: userId,
+                        date: sleep.day,
+                        total_sleep_minutes: Math.round((sleep.total_sleep_duration || 0) / 60),
+                        deep_sleep_minutes: Math.round((sleep.deep_sleep_duration || 0) / 60),
+                        rem_sleep_minutes: Math.round((sleep.rem_sleep_duration || 0) / 60),
+                        light_sleep_minutes: Math.round((sleep.light_sleep_duration || 0) / 60),
+                        sleep_score: scoresByDay[sleep.day] || null,
+                        avg_hr: sleep.average_heart_rate || null,
+                        pre_sleep_hr: sleep.lowest_heart_rate || null
+                    }));
+
+                    // Upsert to Supabase
+                    const postData = JSON.stringify(sleepRecords);
+                    const upsertResult = await new Promise((resolve, reject) => {
+                        const url = new URL('/rest/v1/sleep_data', SUPABASE_URL);
+                        const options = {
+                            hostname: url.hostname,
+                            path: url.pathname + '?on_conflict=user_id,date',
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                                'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                                'Prefer': 'resolution=merge-duplicates',
+                                'Content-Length': Buffer.byteLength(postData)
+                            }
+                        };
+                        const r = https.request(options, (response) => {
+                            let data = '';
+                            response.on('data', chunk => data += chunk);
+                            response.on('end', () => resolve({ status: response.statusCode, data }));
+                        });
+                        r.on('error', reject);
+                        r.write(postData);
+                        r.end();
+                    });
+
+                    if (upsertResult.status >= 200 && upsertResult.status < 300) {
+                        console.log(`[cron-sync] Synced ${sleepRecords.length} nights for user ${userId}`);
+                        synced.push({ userId, nights: sleepRecords.length });
+                    } else {
+                        console.error(`[cron-sync] Supabase upsert failed for user ${userId}: ${upsertResult.data}`);
+                        errors.push({ userId, error: `Supabase upsert failed: ${upsertResult.status}` });
+                    }
+                } catch (userError) {
+                    console.error(`[cron-sync] Error syncing user ${userId}:`, userError.message);
+                    errors.push({ userId, error: userError.message });
+                }
+            }
+
+            console.log(`[cron-sync] Done. Synced: ${synced.length}, Errors: ${errors.length}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ synced, errors, total: usersToSync.length }));
+        } catch (error) {
+            console.error('[cron-sync] Fatal error:', error);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message }));
         }

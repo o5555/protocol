@@ -57,5 +57,11 @@
         { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
       ]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/sync-sleep",
+      "schedule": "0 */6 * * *"
+    }
   ]
 }
