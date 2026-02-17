@@ -4,6 +4,9 @@ const Challenges = {
   // Track in-flight habit toggles to prevent race conditions
   _togglingHabits: new Set(),
 
+  // Generation counter for stale-while-revalidate in renderList
+  _listGeneration: 0,
+
   // Create a new challenge
   async create({ protocolId, name, friendIds, mode, startDate: customStartDate }) {
     const client = SupabaseClient.client;
@@ -342,9 +345,10 @@ const Challenges = {
 
     try {
       await this.deleteChallenge(challengeId);
-      // Clear dashboard cache so it doesn't show deleted challenge
+      // Clear caches so they don't show deleted challenge
       if (typeof Cache !== 'undefined') {
         Cache.clear('dashboard');
+        Cache.clear('challenges_list');
       }
       App.navigateTo('challenges');
     } catch (error) {
@@ -380,6 +384,7 @@ const Challenges = {
       await this.leaveChallenge(challengeId);
       if (typeof Cache !== 'undefined') {
         Cache.clear('dashboard');
+        Cache.clear('challenges_list');
       }
       App.navigateTo('challenges');
     } catch (error) {
@@ -453,6 +458,7 @@ const Challenges = {
 
       if (typeof Cache !== 'undefined') {
         Cache.clear('dashboard');
+        Cache.clear('challenges_list');
       }
 
       await this.renderDetail(challengeId);
@@ -699,114 +705,144 @@ const Challenges = {
     }
   },
 
-  // Full challenges list
+  // Full challenges list (with stale-while-revalidate caching)
   async renderList() {
     const container = document.getElementById('challenges-container');
     if (!container) return;
 
-    try {
-      const [invitations, activeChallenges, completedChallenges] = await Promise.all([
-        this.getInvitations(),
-        this.getActiveChallenges(),
-        this.getCompletedChallenges()
-      ]);
+    const generation = ++this._listGeneration;
 
+    // Try to render instantly from cache (but always refresh in background)
+    const cachedData = Cache.get('challenges_list');
+    if (cachedData) {
+      this._renderListContent(container, cachedData);
+    } else {
       container.innerHTML = `
-        <!-- Page Header -->
-        <div class="mb-6">
-          <h2 class="text-2xl font-semibold mb-1">Challenge</h2>
-          <p class="text-oura-muted text-sm">Track habits and compete with friends</p>
-        </div>
-
-        <!-- Invitations -->
-        ${invitations.length > 0 ? `
-          <div class="rounded-2xl p-5 mb-6" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(249, 115, 22, 0.08) 100%); border: 1px solid rgba(239, 68, 68, 0.3);">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
-              <h3 class="text-base font-semibold text-red-400">${invitations.length === 1 ? 'You have an invitation!' : `You have ${invitations.length} invitations!`}</h3>
-            </div>
-            <div class="space-y-3">
-              ${invitations.map(inv => `
-                <div class="bg-oura-bg/60 rounded-xl p-4">
-                  <div class="mb-3">
-                    <p class="font-semibold">${escapeHtml(inv.name)} ${Protocols.renderModeBadge(inv.mode || 'pro')}</p>
-                    <p class="text-sm text-oura-muted mt-0.5">${escapeHtml(inv.protocol.name)}</p>
-                    <p class="text-xs text-oura-muted mt-1">Invited by ${escapeHtml(inv.creator.display_name || inv.creator.email)}</p>
-                  </div>
-                  <div class="flex gap-2">
-                    <button onclick="Challenges.handleAcceptInvite('${inv.participantId}')"
-                      class="flex-1 py-2.5 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-semibold">
-                      Join Challenge
-                    </button>
-                    <button onclick="Challenges.handleDeclineInvite('${inv.participantId}')"
-                      class="px-4 py-2.5 min-h-[44px] bg-oura-border text-oura-muted rounded-lg text-sm font-medium">
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Completed Challenge Summaries -->
-        ${completedChallenges.length > 0 ? `
-          <div class="space-y-3 mb-6" id="completed-summaries-list">
-            ${completedChallenges.map(c => this._renderSummaryCard(c)).join('')}
-          </div>
-        ` : ''}
-
-        <!-- Active Challenges -->
-        ${activeChallenges.length > 0 ? `
-          <div class="space-y-3 mb-6">
-            ${activeChallenges.map(challenge => {
-              const initials = Protocols.getInitials(challenge.protocol.name);
-              const dayNum = this.getDayNumber(challenge.start_date);
-              const isUpcoming = dayNum === 0;
-              const daysUntilStart = isUpcoming ? Math.ceil((this.parseLocalDate(challenge.start_date) - new Date(new Date().setHours(0,0,0,0))) / (1000*60*60*24)) : 0;
-              return `
-              <div onclick="App.navigateTo('challenge-detail', '${challenge.id}')"
-                class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors">
-                <div class="flex items-center gap-4">
-                  <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-lg font-semibold text-white flex-shrink-0">
-                    ${initials}
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3 class="text-lg font-semibold">${escapeHtml(challenge.name)} ${Protocols.renderModeBadge(challenge.mode || 'pro')}</h3>
-                    <p class="text-oura-muted text-sm mt-1">${escapeHtml(challenge.protocol.name)}</p>
-                  </div>
-                  <div class="text-right flex-shrink-0">
-                    ${isUpcoming ? `
-                      <p class="text-yellow-400 font-semibold text-sm">Upcoming</p>
-                      <p class="text-xs text-oura-muted mt-0.5">Starts ${daysUntilStart === 1 ? 'tomorrow' : `in ${daysUntilStart}d`}</p>
-                    ` : `
-                      <p class="text-oura-teal font-semibold text-sm">${challenge.daysRemaining}d left</p>
-                      <p class="text-xs text-oura-muted mt-0.5">Day ${dayNum}/30</p>
-                    `}
-                  </div>
-                  <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            `}).join('')}
-          </div>
-        ` : ''}
-
-        <!-- Start Challenge button -->
-        <button onclick="App.navigateTo('protocols')"
-          class="w-full py-4 min-h-[48px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2">
-          + Start New Challenge
-        </button>
-      `;
-    } catch (error) {
-      console.error('Error rendering challenges:', error);
-      container.innerHTML = `
-        <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p class="text-red-400">Failed to load challenges. Please try again.</p>
-        </div>
+        <div class="text-center py-10 text-oura-muted text-sm">Loading challenges...</div>
       `;
     }
+
+    // Fetch fresh data (in background if we have cache)
+    try {
+      const allChallenges = await this.getMyChallenges();
+      const dismissed = this._getDismissedSummaries();
+      const invitations = allChallenges.filter(c => c.status === 'invited');
+      const activeChallenges = allChallenges.filter(c => c.status === 'accepted' && (c.isActive || c.daysRemaining > 0));
+      const completedChallenges = allChallenges.filter(c => c.status === 'accepted' && !c.isActive && c.daysRemaining === 0 && !dismissed.includes(c.id));
+
+      // Only update DOM if this is still the most recent render call
+      if (generation !== this._listGeneration) return;
+
+      const freshData = { invitations, activeChallenges, completedChallenges };
+
+      // Cache the data
+      Cache.set('challenges_list', freshData);
+
+      // Re-render with fresh data
+      this._renderListContent(container, freshData);
+    } catch (error) {
+      console.error('Error rendering challenges:', error);
+      if (generation !== this._listGeneration) return;
+      if (!cachedData) {
+        container.innerHTML = `
+          <div class="bg-red-900/20 border border-red-500 rounded-lg p-4">
+            <p class="text-red-400">Failed to load challenges. Please try again.</p>
+          </div>
+        `;
+      }
+    }
+  },
+
+  // Render challenges list HTML from data
+  _renderListContent(container, { invitations, activeChallenges, completedChallenges }) {
+    container.innerHTML = `
+      <!-- Page Header -->
+      <div class="mb-6">
+        <h2 class="text-2xl font-semibold mb-1">Challenge</h2>
+        <p class="text-oura-muted text-sm">Track habits and compete with friends</p>
+      </div>
+
+      <!-- Invitations -->
+      ${invitations.length > 0 ? `
+        <div class="rounded-2xl p-5 mb-6" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(249, 115, 22, 0.08) 100%); border: 1px solid rgba(239, 68, 68, 0.3);">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+            <h3 class="text-base font-semibold text-red-400">${invitations.length === 1 ? 'You have an invitation!' : `You have ${invitations.length} invitations!`}</h3>
+          </div>
+          <div class="space-y-3">
+            ${invitations.map(inv => `
+              <div class="bg-oura-bg/60 rounded-xl p-4">
+                <div class="mb-3">
+                  <p class="font-semibold">${escapeHtml(inv.name)} ${Protocols.renderModeBadge(inv.mode || 'pro')}</p>
+                  <p class="text-sm text-oura-muted mt-0.5">${escapeHtml(inv.protocol.name)}</p>
+                  <p class="text-xs text-oura-muted mt-1">Invited by ${escapeHtml(inv.creator.display_name || inv.creator.email)}</p>
+                </div>
+                <div class="flex gap-2">
+                  <button onclick="Challenges.handleAcceptInvite('${inv.participantId}')"
+                    class="flex-1 py-2.5 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-semibold">
+                    Join Challenge
+                  </button>
+                  <button onclick="Challenges.handleDeclineInvite('${inv.participantId}')"
+                    class="px-4 py-2.5 min-h-[44px] bg-oura-border text-oura-muted rounded-lg text-sm font-medium">
+                    Decline
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Completed Challenge Summaries -->
+      ${completedChallenges.length > 0 ? `
+        <div class="space-y-3 mb-6" id="completed-summaries-list">
+          ${completedChallenges.map(c => this._renderSummaryCard(c)).join('')}
+        </div>
+      ` : ''}
+
+      <!-- Active Challenges -->
+      ${activeChallenges.length > 0 ? `
+        <div class="space-y-3 mb-6">
+          ${activeChallenges.map(challenge => {
+            const initials = Protocols.getInitials(challenge.protocol.name);
+            const dayNum = this.getDayNumber(challenge.start_date);
+            const isUpcoming = dayNum === 0;
+            const daysUntilStart = isUpcoming ? Math.ceil((this.parseLocalDate(challenge.start_date) - new Date(new Date().setHours(0,0,0,0))) / (1000*60*60*24)) : 0;
+            return `
+            <div onclick="App.navigateTo('challenge-detail', '${challenge.id}')"
+              class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors">
+              <div class="flex items-center gap-4">
+                <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-lg font-semibold text-white flex-shrink-0">
+                  ${initials}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-lg font-semibold">${escapeHtml(challenge.name)} ${Protocols.renderModeBadge(challenge.mode || 'pro')}</h3>
+                  <p class="text-oura-muted text-sm mt-1">${escapeHtml(challenge.protocol.name)}</p>
+                </div>
+                <div class="text-right flex-shrink-0">
+                  ${isUpcoming ? `
+                    <p class="text-yellow-400 font-semibold text-sm">Upcoming</p>
+                    <p class="text-xs text-oura-muted mt-0.5">Starts ${daysUntilStart === 1 ? 'tomorrow' : `in ${daysUntilStart}d`}</p>
+                  ` : `
+                    <p class="text-oura-teal font-semibold text-sm">${challenge.daysRemaining}d left</p>
+                    <p class="text-xs text-oura-muted mt-0.5">Day ${dayNum}/30</p>
+                  `}
+                </div>
+                <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          `}).join('')}
+        </div>
+      ` : ''}
+
+      <!-- Start Challenge button -->
+      <button onclick="App.navigateTo('protocols')"
+        class="w-full py-4 min-h-[48px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2">
+        + Start New Challenge
+      </button>
+    `;
   },
 
   // Render challenge detail page (Redesigned - simplified UX)
