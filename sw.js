@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pc-v7';
+const CACHE_NAME = 'pc-v8';
 
 const APP_SHELL = [
   '/',
@@ -60,14 +60,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for same-origin static assets
+  // Network-first for JS and HTML (always get latest code)
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.html') || url.pathname === '/') {
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') return caches.match('/index.html');
+      }))
+    );
+    return;
+  }
+
+  // Cache-first for static assets (icons, CSS, manifest)
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) {
         return cached;
       }
       return fetch(event.request).then((response) => {
-        // Cache successful same-origin responses for future use
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
@@ -75,7 +91,6 @@ self.addEventListener('fetch', (event) => {
         return response;
       });
     }).catch(() => {
-      // SPA fallback: serve cached index.html for failed navigation requests
       if (event.request.mode === 'navigate') {
         return caches.match('/index.html');
       }

@@ -356,8 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Initialize auth
-  Auth.init();
+  // Auth.init() is called from index.html after App is defined
 });
 
 // Export for use in other modules

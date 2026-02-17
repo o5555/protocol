@@ -67,7 +67,7 @@
   "crons": [
     {
       "path": "/api/cron/sync-sleep",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 */2 * * *"
     }
   ]
 }

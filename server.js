@@ -10,6 +10,19 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fhsbkcvepvlqbygpmdpc.s
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const WEBHOOK_SECRET = (process.env.WEBHOOK_SECRET || '').trim();
 const CRON_SECRET = (process.env.CRON_SECRET || '').trim();
+const VAPID_PUBLIC_KEY = (process.env.VAPID_PUBLIC_KEY || '').trim();
+const VAPID_PRIVATE_KEY = (process.env.VAPID_PRIVATE_KEY || '').trim();
+const VAPID_EMAIL = (process.env.VAPID_EMAIL || 'mailto:hello@protocolcircle.com').trim();
+
+let webpush;
+try {
+    webpush = require('web-push');
+    if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+        webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    }
+} catch (e) {
+    console.warn('web-push not available, push notifications disabled');
+}
 
 function toLocalDateStr(d) {
     return d.getFullYear() + '-' +
@@ -666,6 +679,120 @@ const server = http.createServer(async (req, res) => {
                 }
             }
 
+            // === Leaderboard notification: check if all participants have data for today ===
+            if (webpush && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+                try {
+                    for (const challenge of challenges) {
+                        const challengeParticipants = participants.filter(p => p.challenge_id === challenge.id);
+                        const participantUserIds = challengeParticipants.map(p => p.user_id);
+
+                        if (participantUserIds.length === 0) continue;
+
+                        // Check if we already sent this notification today
+                        const existingNotif = await supabaseGet(
+                            `/rest/v1/notification_log?challenge_id=eq.${challenge.id}&notification_type=eq.leaderboard_ready&sleep_date=eq.${today}&select=id&limit=1`
+                        );
+
+                        if (Array.isArray(existingNotif) && existingNotif.length > 0) {
+                            console.log(`[cron-notify] Already notified for challenge ${challenge.id} on ${today}`);
+                            continue;
+                        }
+
+                        // Check if all participants have sleep data for today
+                        const sleepDataToday = await supabaseGet(
+                            `/rest/v1/sleep_data?user_id=in.(${participantUserIds.join(',')})&date=eq.${today}&select=user_id`
+                        );
+
+                        const usersWithData = new Set((sleepDataToday || []).map(d => d.user_id));
+                        const allHaveData = participantUserIds.every(uid => usersWithData.has(uid));
+
+                        if (!allHaveData) {
+                            const missing = participantUserIds.filter(uid => !usersWithData.has(uid)).length;
+                            console.log(`[cron-notify] Challenge ${challenge.id}: ${missing}/${participantUserIds.length} participants still missing data for ${today}`);
+                            continue;
+                        }
+
+                        console.log(`[cron-notify] All ${participantUserIds.length} participants have data for ${today} in challenge ${challenge.id}. Sending notifications...`);
+
+                        // Get push subscriptions for all participants
+                        const subscriptions = await supabaseGet(
+                            `/rest/v1/push_subscriptions?user_id=in.(${participantUserIds.join(',')})&select=endpoint,p256dh,auth,user_id`
+                        );
+
+                        if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
+                            console.log('[cron-notify] No push subscriptions found for participants');
+                        } else {
+                            const payload = JSON.stringify({
+                                title: 'All data is in!',
+                                body: 'See where you stand on the leaderboard and prepare for a great night of sleep.',
+                                url: '/'
+                            });
+
+                            let sent = 0, failed = 0;
+                            for (const sub of subscriptions) {
+                                try {
+                                    await webpush.sendNotification({
+                                        endpoint: sub.endpoint,
+                                        keys: { p256dh: sub.p256dh, auth: sub.auth }
+                                    }, payload);
+                                    sent++;
+                                } catch (pushErr) {
+                                    failed++;
+                                    console.error(`[cron-notify] Push failed for user ${sub.user_id}:`, pushErr.message);
+                                    // If subscription is expired/invalid (410 Gone or 404), remove it
+                                    if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+                                        await new Promise((resolve) => {
+                                            const url = new URL(`/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(sub.endpoint)}`, SUPABASE_URL);
+                                            const options = {
+                                                hostname: url.hostname,
+                                                path: url.pathname + url.search,
+                                                method: 'DELETE',
+                                                headers: {
+                                                    'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                                                    'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+                                                }
+                                            };
+                                            const r = https.request(options, () => resolve());
+                                            r.on('error', () => resolve());
+                                            r.end();
+                                        });
+                                    }
+                                }
+                            }
+                            console.log(`[cron-notify] Push results: ${sent} sent, ${failed} failed`);
+                        }
+
+                        // Log notification to prevent re-sending
+                        const logData = JSON.stringify({
+                            challenge_id: challenge.id,
+                            notification_type: 'leaderboard_ready',
+                            sleep_date: today
+                        });
+                        await new Promise((resolve) => {
+                            const url = new URL('/rest/v1/notification_log', SUPABASE_URL);
+                            const options = {
+                                hostname: url.hostname,
+                                path: url.pathname + '?on_conflict=challenge_id,notification_type,sleep_date',
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                                    'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                                    'Prefer': 'resolution=merge-duplicates',
+                                    'Content-Length': Buffer.byteLength(logData)
+                                }
+                            };
+                            const r = https.request(options, () => resolve());
+                            r.on('error', () => resolve());
+                            r.write(logData);
+                            r.end();
+                        });
+                    }
+                } catch (notifyErr) {
+                    console.error('[cron-notify] Notification check error:', notifyErr.message);
+                }
+            }
+
             console.log(`[cron-sync] Done. Synced: ${synced.length}, Errors: ${errors.length}`);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ synced, errors, total: usersToSync.length }));
@@ -673,6 +800,78 @@ const server = http.createServer(async (req, res) => {
             console.error('[cron-sync] Fatal error:', error);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message }));
+        }
+        return;
+    }
+
+    // Push notification endpoints
+    if (req.url === '/api/push/vapid-key' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ publicKey: VAPID_PUBLIC_KEY }));
+        return;
+    }
+
+    if (req.url === '/api/push/subscribe' && req.method === 'POST') {
+        try {
+            const body = await parseBody(req);
+            const { subscription, userId } = body;
+
+            if (!subscription || !userId || !subscription.endpoint || !subscription.keys) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Missing subscription or userId' }));
+                return;
+            }
+
+            if (!SUPABASE_SERVICE_ROLE_KEY) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Server not configured' }));
+                return;
+            }
+
+            // Upsert push subscription to Supabase
+            const subData = JSON.stringify({
+                user_id: userId,
+                endpoint: subscription.endpoint,
+                p256dh: subscription.keys.p256dh,
+                auth: subscription.keys.auth
+            });
+
+            const upsertResult = await new Promise((resolve, reject) => {
+                const url = new URL('/rest/v1/push_subscriptions', SUPABASE_URL);
+                const options = {
+                    hostname: url.hostname,
+                    path: url.pathname + '?on_conflict=user_id,endpoint',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                        'Prefer': 'resolution=merge-duplicates',
+                        'Content-Length': Buffer.byteLength(subData)
+                    }
+                };
+                const r = https.request(options, (response) => {
+                    let data = '';
+                    response.on('data', chunk => data += chunk);
+                    response.on('end', () => resolve({ status: response.statusCode, data }));
+                });
+                r.on('error', reject);
+                r.write(subData);
+                r.end();
+            });
+
+            if (upsertResult.status >= 200 && upsertResult.status < 300) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true }));
+            } else {
+                console.error('[push] Subscription save failed:', upsertResult.data);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to save subscription' }));
+            }
+        } catch (err) {
+            console.error('[push] Subscribe error:', err.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
         }
         return;
     }
