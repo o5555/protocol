@@ -1525,18 +1525,7 @@ const Challenges = {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: {
-            backgroundColor: '#1a1a2e',
-            titleColor: '#fff',
-            bodyColor: challengeColor,
-            callbacks: {
-              label: (ctx) => {
-                const val = Math.round(ctx.parsed.y);
-                const units = { score: 'pts', hr: 'bpm', avghr: 'bpm', deep: 'min' };
-                return val + ' ' + (units[metric] || '');
-              }
-            }
-          }
+          tooltip: { enabled: false }
         },
         scales: {
           x: {
@@ -1723,6 +1712,9 @@ const Challenges = {
   async showMetricDetailModal(challengeId) {
     if (!this._currentChallengeData) return;
 
+    // Remove any existing modal to prevent duplicates
+    this.closeMetricDetailModal();
+
     const { myData, challenge } = this._currentChallengeData;
     const { baselineData, challengeData } = myData;
 
@@ -1904,96 +1896,6 @@ const Challenges = {
       this._metricDetailChartInstance = null;
     }
     document.getElementById('metric-detail-modal')?.remove();
-  },
-
-  // Show details modal with habits and full metrics
-  async showDetailsModal(challengeId) {
-    const currentUser = await SupabaseClient.getCurrentUser();
-    const challenge = await this.getChallenge(challengeId);
-    const today = this.toLocalDateStr(new Date());
-    const completedHabits = await this.getHabitCompletions(challengeId, currentUser.id, today);
-    const habits = Protocols.getHabitsForMode(challenge.protocol, challenge.mode || 'pro');
-    const participantProgress = await this.getParticipantProgress(challengeId);
-
-    const modal = document.createElement('div');
-    modal.id = 'details-modal';
-    modal.className = 'fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center';
-    modal.innerHTML = `
-      <div class="bg-oura-bg w-full sm:max-w-lg sm:rounded-2xl rounded-t-3xl max-h-[90vh] overflow-hidden flex flex-col">
-        <div class="p-5 border-b border-oura-border flex items-center justify-between flex-shrink-0">
-          <h3 class="text-lg font-bold">Challenge Details</h3>
-          <button onclick="Challenges.closeDetailsModal()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
-        </div>
-
-        <div class="flex-1 overflow-y-auto p-5 space-y-6">
-          <!-- Today's Habits -->
-          <div>
-            <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-3">Today's Habits</h4>
-            <div class="space-y-2">
-              ${habits.map(habit => `
-                <label class="flex items-start gap-3 p-3 bg-oura-card rounded-lg cursor-pointer hover:bg-oura-subtle">
-                  <input type="checkbox" ${completedHabits.includes(habit.id) ? 'checked' : ''}
-                    onchange="Challenges.handleToggleHabit('${challengeId}', '${habit.id}', '${today}')"
-                    class="mt-1 w-5 h-5 rounded border-oura-border text-oura-teal focus:ring-oura-teal bg-oura-border">
-                  <div>
-                    <p class="font-medium text-sm">${escapeHtml(habit.title)}</p>
-                    ${habit.description ? `<p class="text-xs text-oura-muted">${escapeHtml(habit.description)}</p>` : ''}
-                  </div>
-                </label>
-              `).join('')}
-            </div>
-          </div>
-
-          <!-- Habit Progress -->
-          <div>
-            <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-3">Habit Completion</h4>
-            <div class="space-y-3">
-              ${participantProgress.sort((a, b) => b.percentage - a.percentage).map(p => `
-                <div>
-                  <div class="flex justify-between mb-1">
-                    <span class="text-sm font-medium">${escapeHtml(p.user.display_name || p.user.email)}</span>
-                    <span class="text-sm text-oura-muted">${p.percentage}%</span>
-                  </div>
-                  <div class="w-full bg-oura-card rounded-full h-2">
-                    <div class="bg-oura-teal h-2 rounded-full transition-all" style="width: ${p.percentage}%"></div>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-
-          <!-- Full Comparison Charts -->
-          <div>
-            <h4 class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-3">Detailed Metrics</h4>
-            <div id="modal-comparison-charts" class="space-y-4">
-              <p class="text-oura-muted text-sm">Loading...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    // Close on backdrop click
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) this.closeDetailsModal();
-    });
-
-    // Load full comparison charts into modal
-    setTimeout(() => {
-      Comparison.renderForChallenge(challengeId, 'modal-comparison-charts');
-    }, 100);
-  },
-
-  // Close details modal
-  closeDetailsModal() {
-    const modal = document.getElementById('details-modal');
-    if (modal) modal.remove();
   },
 
   // Show settings menu (sync, fresh start, delete)

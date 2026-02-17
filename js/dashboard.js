@@ -403,6 +403,9 @@ const Dashboard = {
 
     if (!config) return;
 
+    // Remove any existing modal to prevent duplicates
+    this.closeMetricDetail();
+
     const daysLabel = '30d';
 
     // Show loading modal immediately
