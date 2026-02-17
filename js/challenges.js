@@ -353,6 +353,41 @@ const Challenges = {
     }
   },
 
+  // Leave a challenge (participant removes themselves)
+  async leaveChallenge(challengeId) {
+    const client = SupabaseClient.client;
+    if (!client) throw new Error('Supabase not initialized');
+
+    const currentUser = await SupabaseClient.getCurrentUser();
+    if (!currentUser) throw new Error('Not authenticated');
+
+    const { error } = await client
+      .from('challenge_participants')
+      .delete()
+      .eq('challenge_id', challengeId)
+      .eq('user_id', currentUser.id);
+
+    if (error) throw error;
+  },
+
+  // Handle leave challenge with confirmation
+  async handleLeaveChallenge(challengeId) {
+    if (!confirm('Leave this challenge? You can be re-invited later.')) {
+      return;
+    }
+
+    try {
+      await this.leaveChallenge(challengeId);
+      if (typeof Cache !== 'undefined') {
+        Cache.clear('dashboard');
+      }
+      App.navigateTo('challenges');
+    } catch (error) {
+      console.error('Error leaving challenge:', error);
+      alert('Failed to leave challenge: ' + error.message);
+    }
+  },
+
   // Fresh Start: reset challenge timeline (creator-only, days 1-3, one-time)
   async freshStartChallenge(challengeId, newStartDate) {
     const client = SupabaseClient.client;
@@ -877,7 +912,7 @@ const Challenges = {
       // Build leaderboard with improvement %
       const leaderboard = sleepData
         .map(p => {
-          const baseline = Comparison.calcAverages(p.baselineData, 30);
+          const baseline = Comparison.calcAverages(p.baselineData, p.baselineDays || p.baselineData.length);
           const current = Comparison.calcAverages(p.challengeData, p.challengeDays || 1);
           let pct = null;
           if (baseline.score && current.score) {
@@ -1909,7 +1944,15 @@ const Challenges = {
           </svg>
           <span class="text-red-400 font-medium">Delete Challenge</span>
         </button>
-        ` : ''}
+        ` : `
+        <button onclick="Challenges.closeSettingsMenu(); Challenges.handleLeaveChallenge('${challengeId}');"
+          class="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-red-900/20 transition-colors mt-1">
+          <svg class="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+          </svg>
+          <span class="text-red-400 font-medium">Leave Challenge</span>
+        </button>
+        `}
 
         <button onclick="Challenges.closeSettingsMenu()"
           class="w-full p-4 mt-4 rounded-xl bg-oura-subtle text-oura-muted font-medium hover:bg-oura-border transition-colors">
