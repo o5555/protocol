@@ -155,9 +155,10 @@ font-[-apple-system,BlinkMacSystemFont,'SF_Pro_Display','Segoe_UI',Roboto,sans-s
 <input class="w-full px-4 py-3 bg-oura-bg border border-oura-border rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
 ```
 
-**Bottom nav tab:**
-- Inactive: `text-oura-muted`
-- Active: `text-oura-accent bg-oura-accent/10`
+**Bottom nav:**
+- Must be **opaque** (`bg-oura-card`), never semi-transparent. Content must not bleed through.
+- Inactive tab: `text-oura-muted`
+- Active tab: `text-oura-accent bg-oura-accent/10`
 - Icons: inline SVG, `w-7 h-7`, stroke-based (Heroicons style)
 
 ### Icons
