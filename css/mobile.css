@@ -130,7 +130,7 @@ button, a, input, select, textarea, label {
   justify-content: center;
   gap: 8px;
   height: 48px;
-  background: #0d0d1a;
+  background: #0a0a12;
   transform: translateY(0);
   opacity: 0;
   pointer-events: none;

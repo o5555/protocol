@@ -70,7 +70,7 @@ const Onboarding = {
               : 'w-2.5 h-2.5 bg-oura-border rounded-full';
           return `<div class="flex flex-col items-center gap-1.5">
             <div class="${dotClass}"></div>
-            <span class="text-[10px] ${isActive ? 'text-oura-accent' : 'text-oura-muted'}">${label}</span>
+            <span class="text-xs ${isActive ? 'text-oura-accent' : 'text-oura-muted'}">${label}</span>
           </div>`;
         }).join('<div class="w-6 h-px bg-oura-border mb-4"></div>')}
       </div>
@@ -81,7 +81,7 @@ const Onboarding = {
   renderNameStep(container) {
     container.innerHTML += `
       <div class="text-center mb-8">
-        <div class="text-5xl mb-4">&#x1F44B;</div>
+        <svg class="w-12 h-12 mx-auto text-oura-accent mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z" /></svg>
         <h2 class="text-2xl font-bold mb-2">What's Your Name?</h2>
         <p class="text-oura-muted text-sm">This is how you'll appear to friends on the leaderboard.</p>
       </div>
@@ -89,7 +89,7 @@ const Onboarding = {
         <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-2">Display Name</label>
         <input type="text" id="onboarding-name" placeholder="e.g. Alex"
           maxlength="30"
-          class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
+          class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-base focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
       </div>
       <button onclick="Onboarding.handleNameSave()"
         class="w-full py-3.5 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all mb-3">
@@ -124,12 +124,12 @@ const Onboarding = {
   renderTokenStep(container) {
     container.innerHTML += `
       <div class="text-center mb-8">
-        <div class="text-5xl mb-4">&#x1F48D;</div>
+        <svg class="w-12 h-12 mx-auto text-oura-accent mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>
         <h2 class="text-2xl font-bold mb-2">Connect Your Oura Ring</h2>
         <p class="text-oura-muted text-sm">Enter your Oura Personal Access Token to sync sleep data automatically.</p>
       </div>
       <div class="bg-oura-card rounded-2xl p-6 mb-4">
-        <div class="bg-oura-subtle rounded-lg p-3 mb-4 text-xs text-oura-muted">
+        <div class="bg-oura-subtle rounded-lg p-3 mb-4 text-sm text-oura-muted">
           <p class="font-medium text-white mb-1">How to get your token:</p>
           <ol class="list-decimal list-inside space-y-1">
             <li>Tap the button below to open Oura Cloud</li>
@@ -145,7 +145,7 @@ const Onboarding = {
         </a>
         <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-2">Oura Personal Access Token</label>
         <input type="password" id="onboarding-token" placeholder="Paste your token here"
-          class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
+          class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-base focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
         <p id="onboarding-token-status" class="text-xs text-oura-muted mt-2"></p>
       </div>
       <button onclick="Onboarding.handleTokenSave()" id="onboarding-token-btn"
@@ -163,7 +163,7 @@ const Onboarding = {
   async renderChallengeStep(container) {
     container.innerHTML += `
       <div class="text-center mb-8">
-        <div class="text-5xl mb-4">&#x1F3C6;</div>
+        <svg class="w-12 h-12 mx-auto text-oura-accent mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M18.75 4.236c.982.143 1.954.317 2.916.52A6.003 6.003 0 0 1 16.27 9.728M18.75 4.236V4.5c0 2.108-.966 3.99-2.48 5.228m0 0a6.023 6.023 0 0 1-2.021 1.247m0 0A6.015 6.015 0 0 1 12 11.25a6.015 6.015 0 0 1-2.27-.475m4.54 0a6.023 6.023 0 0 0 2.021 1.247m-6.561 0a6.023 6.023 0 0 1-2.021 1.247" /></svg>
         <h2 class="text-2xl font-bold mb-2">Pick a Challenge</h2>
         <p class="text-oura-muted text-sm">Choose a protocol and start a 30-day challenge.</p>
       </div>
@@ -199,7 +199,7 @@ const Onboarding = {
         <div onclick="Onboarding.selectProtocol('${p.id}', this)"
           class="onboarding-protocol-card bg-oura-card rounded-2xl p-5 cursor-pointer border-2 border-transparent hover:border-oura-accent/30 transition-all">
           <div class="flex items-center gap-4">
-            <span class="text-3xl">${p.icon || '&#x1F4CB;'}</span>
+            <div class="protocol-icon w-10 h-10 rounded-lg flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">${Protocols.getInitials(p.name)}</div>
             <div>
               <h3 class="font-semibold">${escapeHtml(p.name)}</h3>
               <p class="text-oura-muted text-sm mt-0.5">${escapeHtml(p.description || '')}</p>
@@ -282,7 +282,7 @@ const Onboarding = {
   async renderFriendStep(container) {
     container.innerHTML += `
       <div class="text-center mb-8">
-        <div class="text-5xl mb-4">&#x1F91D;</div>
+        <svg class="w-12 h-12 mx-auto text-oura-accent mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" /></svg>
         <h2 class="text-2xl font-bold mb-2">Add a Friend</h2>
         <p class="text-oura-muted text-sm">Invite a friend to join your challenge and compare sleep data.</p>
       </div>
@@ -290,7 +290,7 @@ const Onboarding = {
       <div class="bg-oura-card rounded-2xl p-6 mb-6">
         <label class="block text-xs text-oura-muted font-medium uppercase tracking-wide mb-2">Friend's Email</label>
         <input type="email" id="onboarding-friend-email" placeholder="friend@email.com"
-          class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-sm focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
+          class="w-full px-4 py-3.5 rounded-xl border border-oura-border bg-oura-bg text-white text-base focus:outline-none focus:border-oura-accent placeholder:text-neutral-600">
         <p id="onboarding-friend-status" class="text-xs mt-2 hidden"></p>
       </div>
       <button onclick="Onboarding.handleSendInvite()" id="onboarding-invite-btn"
@@ -382,7 +382,7 @@ const Onboarding = {
   renderCompleteStep(container) {
     container.innerHTML += `
       <div class="text-center mb-8">
-        <div class="text-6xl mb-4">&#x1F389;</div>
+        <svg class="w-12 h-12 mx-auto text-oura-accent mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.745 3.745 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" /></svg>
         <h2 class="text-2xl font-bold mb-3">You're All Set!</h2>
         <p class="text-oura-muted text-sm leading-relaxed">
           Your sleep journey starts now. Track your habits, compare with friends, and watch your heart rate improve over 30 days.

@@ -98,7 +98,7 @@ const Dashboard = {
         html += `
           <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-5 mb-4">
             <div class="flex items-start gap-3">
-              <span class="text-2xl">&#x1F48D;</span>
+              <svg class="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>
               <div>
                 <p class="font-semibold text-amber-400 mb-1">Connect Your Oura Ring</p>
                 <p class="text-sm text-oura-muted">Link your Oura ring to see heart rate data and sleep insights.</p>
@@ -411,9 +411,9 @@ const Dashboard = {
     // Show loading modal immediately
     const modal = document.createElement('div');
     modal.id = 'metric-detail-modal';
-    modal.className = 'fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50';
     modal.innerHTML = `
-      <div class="bg-oura-bg rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg sm:mx-4 p-6 max-h-[85vh] overflow-y-auto">
+      <div class="bg-oura-bg rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg sm:mx-4 p-6 max-h-[85vh] overflow-y-auto safe-bottom">
         <div class="flex items-center gap-3 mb-6">
           <button onclick="Dashboard.closeMetricDetail()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
@@ -531,8 +531,13 @@ const Dashboard = {
           plugins: {
             legend: { display: false },
             tooltip: {
+              // Hex values required by Chart.js API — matches oura-subtle/oura-border tokens
               backgroundColor: '#1a1a2e',
+              borderColor: '#2a2a4e',
+              borderWidth: 1,
+              cornerRadius: 12,
               titleColor: '#fff',
+              titleFont: { family: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" },
               bodyColor: config.color,
               callbacks: {
                 label: (ctx) => `${Math.round(ctx.parsed.y)} ${config.unit}`

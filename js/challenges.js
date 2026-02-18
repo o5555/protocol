@@ -453,7 +453,7 @@ const Challenges = {
     const btn = document.getElementById('fresh-start-confirm-btn');
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-gray-900 border-t-transparent rounded-full animate-spin mr-2"></span>Resetting...';
+      btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-oura-border border-t-transparent rounded-full animate-spin mr-2"></span>Resetting...';
     }
 
     try {
@@ -474,7 +474,7 @@ const Challenges = {
 
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '\u{1F680} Let\'s Go!';
+        btn.innerHTML = '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg> Let\'s Go!';
       }
     }
   },
@@ -785,7 +785,7 @@ const Challenges = {
                 </div>
                 <div class="flex gap-2">
                   <button onclick="Challenges.handleAcceptInvite('${inv.participantId}')"
-                    class="flex-1 py-2.5 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-semibold">
+                    class="flex-1 py-2.5 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black rounded-lg text-sm font-semibold">
                     Join Challenge
                   </button>
                   <button onclick="Challenges.handleDeclineInvite('${inv.participantId}')"
@@ -830,7 +830,7 @@ const Challenges = {
                     <p class="text-yellow-400 font-semibold text-sm">Upcoming</p>
                     <p class="text-xs text-oura-muted mt-0.5">Starts ${daysUntilStart === 1 ? 'tomorrow' : `in ${daysUntilStart}d`}</p>
                   ` : `
-                    <p class="text-oura-teal font-semibold text-sm">${challenge.daysRemaining}d left</p>
+                    <p class="text-oura-accent font-semibold text-sm">${challenge.daysRemaining}d left</p>
                     <p class="text-xs text-oura-muted mt-0.5">Day ${dayNum}/30</p>
                   `}
                 </div>
@@ -953,7 +953,7 @@ const Challenges = {
       // Fresh Start notification banner for participants
       const freshStartBanner = challenge.fresh_start_at && challenge.creator.id !== currentUser.id && !localStorage.getItem('fresh_start_dismissed_' + challengeId) ? `
         <div class="rounded-xl p-4 mb-5 flex items-start gap-3" style="background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), rgba(59, 130, 246, 0.08)); border: 1px solid rgba(74, 222, 128, 0.2);">
-          <span class="text-2xl flex-shrink-0">\u{1F305}</span>
+          <span class="flex-shrink-0"><svg class="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg></span>
           <div class="flex-1">
             <div class="text-sm font-semibold text-white mb-0.5">Fresh Start!</div>
             <div class="text-xs text-oura-muted">The challenge was restarted. New Day 1 is ${new Date(challenge.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}. A clean slate for everyone!</div>
@@ -1007,7 +1007,7 @@ const Challenges = {
       const imp = improvements[currentMetric];
       const improvementPct = imp.pct;
       const improvementDirection = imp.direction;
-      const heroEmoji = improvementDirection === 'up' ? '📈' : improvementDirection === 'down' ? '📉' : '📊';
+      const heroEmoji = improvementDirection === 'up' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" /></svg>' : improvementDirection === 'down' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" /></svg>' : '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>';
 
       // Build leaderboard with improvement %
       const leaderboard = sleepData
@@ -1030,9 +1030,13 @@ const Challenges = {
         .sort((a, b) => b.improvementPct - a.improvementPct);
 
       // Assign ranks
-      const rankEmojis = ['🥇', '🥈', '🥉'];
+      const rankBadges = [
+        '<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold">1</span>',
+        '<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-400/20 text-gray-300 text-xs font-bold">2</span>',
+        '<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-600/20 text-orange-400 text-xs font-bold">3</span>'
+      ];
       leaderboard.forEach((p, i) => {
-        p.rank = i < 3 ? rankEmojis[i] : `${i + 1}`;
+        p.rank = i < 3 ? rankBadges[i] : `<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-oura-subtle text-oura-muted text-xs font-bold">${i + 1}</span>`;
       });
 
       // Find my rank
@@ -1114,7 +1118,7 @@ const Challenges = {
 
           <!-- Celebration Hero Card -->
           <div class="rounded-2xl p-6 text-center mb-6" style="background: linear-gradient(135deg, #0f1a2e 0%, #1a1035 100%); border: 1px solid ${isCompleted ? 'rgba(168, 85, 247, 0.15)' : 'rgba(74, 222, 128, 0.15)'};">
-            <div class="text-5xl mb-4">${isCompleted ? '🏁' : !hasOuraToken ? '⌚' : syncFailed ? '⚠️' : justStarted ? '🚀' : '📊'}</div>
+            <div class="mb-4 flex justify-center">${isCompleted ? '<svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5" /></svg>' : !hasOuraToken ? '<svg class="w-8 h-8 text-oura-muted" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>' : syncFailed ? '<svg class="w-8 h-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>' : justStarted ? '<svg class="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>' : '<svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>'}</div>
             <div class="text-2xl font-bold mb-3">${heroTitle}</div>
             <p class="text-sm leading-relaxed mb-6" style="color: #6b7280;">
               ${heroMessage}
@@ -1144,13 +1148,13 @@ const Challenges = {
             <div class="mb-6">
               <div class="flex items-center justify-center mb-3">
                 <div class="flex gap-1.5 sm:gap-2 w-full" id="metric-toggle">
-                  <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[36px]" style="background: #1a2035; color: #fff" data-metric="score">SLEEP</button>
+                  <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[36px] bg-oura-subtle text-white" data-metric="score">SLEEP</button>
                   <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="avghr">AVG HR</button>
                   <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="hr">LOW HR</button>
                   <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="deep">DEEP</button>
                 </div>
               </div>
-              <div class="rounded-2xl p-4 cursor-pointer" style="background: #0a0a14" onclick="Challenges.showMetricDetailModal('${challengeId}')">
+              <div class="rounded-2xl p-4 cursor-pointer bg-oura-bg" onclick="Challenges.showMetricDetailModal('${challengeId}')">
                 <div id="trend-chart-container" class="h-48">
                   <canvas id="main-trend-chart"></canvas>
                 </div>
@@ -1167,7 +1171,7 @@ const Challenges = {
           ${(!hasOuraToken || syncFailed) && !isCompleted ? `
           <!-- Connect/Reconnect Oura CTA -->
           <button onclick="App.navigateTo('account')"
-            class="w-full py-3 min-h-[44px] bg-oura-teal text-gray-900 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity">
+            class="w-full py-3 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity">
             ${!hasOuraToken ? 'Connect Oura Ring' : 'Reconnect Oura Ring'}
           </button>
           ` : ''}
@@ -1235,11 +1239,11 @@ const Challenges = {
         <div id="stats-row-container" class="flex justify-around mb-5">
           <div class="text-center">
             <div class="text-3xl font-bold text-oura-muted">${myBaseline.score ? Math.round(myBaseline.score) : '--'}</div>
-            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
+            <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
           </div>
           <div class="text-center">
             <div class="text-3xl font-bold" style="color: #4ade80">${myCurrent.score ? Math.round(myCurrent.score) : '--'}</div>
-            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
+            <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
           </div>
         </div>
 
@@ -1247,13 +1251,13 @@ const Challenges = {
         <div class="mb-6">
           <div class="flex items-center justify-center mb-3">
             <div class="flex gap-1.5 sm:gap-2 w-full" id="metric-toggle">
-              <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[36px]" style="background: #1a2035; color: #fff" data-metric="score">SLEEP</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[36px] bg-oura-subtle text-white" data-metric="score">SLEEP</button>
               <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="avghr">AVG HR</button>
               <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="hr">LOW HR</button>
               <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="deep">DEEP</button>
             </div>
           </div>
-          <div class="rounded-2xl p-4 cursor-pointer" style="background: #0a0a14" onclick="Challenges.showMetricDetailModal('${challengeId}')">
+          <div class="rounded-2xl p-4 cursor-pointer bg-oura-bg" onclick="Challenges.showMetricDetailModal('${challengeId}')">
             <div id="trend-chart-container" class="h-48">
               <canvas id="main-trend-chart"></canvas>
             </div>
@@ -1270,7 +1274,7 @@ const Challenges = {
               return `
                 <div class="flex items-center p-3.5 rounded-xl" style="background: ${p.isMe ? '#1a2035' : '#0f1525'}; ${p.isMe ? 'border: 1px solid rgba(108, 99, 255, 0.2);' : ''}">
                   <span class="text-lg mr-3 w-7">${p.rank}</span>
-                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm mr-3" style="background: #1a2035">${p.isMe ? '👤' : initial}</div>
+                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm mr-3 bg-oura-subtle">${p.isMe ? '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>' : initial}</div>
                   <div class="flex-1">
                     <div class="text-sm font-medium">${p.isMe ? 'You' : escapeHtml(name)}</div>
                     <div class="text-xs text-oura-muted">${Math.round(p.baselineScore)} → ${Math.round(p.currentScore)}</div>
@@ -1573,7 +1577,7 @@ const Challenges = {
 
       if (imp.pct !== null) {
         const direction = imp.direction;
-        const heroEmoji = direction === 'up' ? '📈' : direction === 'down' ? '📉' : '📊';
+        const heroEmoji = direction === 'up' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" /></svg>' : direction === 'down' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" /></svg>' : '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>';
         heroContainer.innerHTML = `
           <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">${labels[metric]}</div>
           <div class="text-6xl font-bold leading-none" style="color: ${direction === 'up' ? '#4ade80' : direction === 'down' ? '#f87171' : '#ffffff'}">
@@ -1610,11 +1614,11 @@ const Challenges = {
       statsRow.innerHTML = `
         <div class="text-center">
           <div class="text-3xl font-bold text-oura-muted">${baselineAvg ?? '--'}</div>
-          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
+          <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
         </div>
         <div class="text-center">
           <div class="text-3xl font-bold" style="color: #4ade80">${challengeAvg ?? '--'}</div>
-          <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
+          <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
         </div>
       `;
     }
@@ -1656,8 +1660,12 @@ const Challenges = {
           return lowerIsBetter ? a.improvementPct - b.improvementPct : b.improvementPct - a.improvementPct;
         });
 
-      const rankEmojis = ['🥇', '🥈', '🥉'];
-      leaderboard.forEach((p, i) => { p.rank = i < 3 ? rankEmojis[i] : `${i + 1}`; });
+      const rankBadges = [
+        '<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold">1</span>',
+        '<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-400/20 text-gray-300 text-xs font-bold">2</span>',
+        '<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-600/20 text-orange-400 text-xs font-bold">3</span>'
+      ];
+      leaderboard.forEach((p, i) => { p.rank = i < 3 ? rankBadges[i] : `<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-oura-subtle text-oura-muted text-xs font-bold">${i + 1}</span>`; });
 
       const isCompleted = !challenge.isActive && challenge.daysRemaining === 0;
       leaderboardContainer.innerHTML = `
@@ -1671,7 +1679,7 @@ const Challenges = {
             return `
               <div class="flex items-center p-3.5 rounded-xl" style="background: ${p.isMe ? '#1a2035' : '#0f1525'}; ${p.isMe ? 'border: 1px solid rgba(108, 99, 255, 0.2);' : ''}">
                 <span class="text-lg mr-3 w-7">${p.rank}</span>
-                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm mr-3" style="background: #1a2035">${p.isMe ? '👤' : initial}</div>
+                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm mr-3 bg-oura-subtle">${p.isMe ? '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>' : initial}</div>
                 <div class="flex-1">
                   <div class="text-sm font-medium">${p.isMe ? 'You' : escapeHtml(name)}</div>
                   <div class="text-xs text-oura-muted">${p.baselineVal} → ${p.currentVal}</div>
@@ -1754,9 +1762,9 @@ const Challenges = {
 
     const modal = document.createElement('div');
     modal.id = 'metric-detail-modal';
-    modal.className = 'fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50';
     modal.innerHTML = `
-      <div class="bg-oura-bg rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg sm:mx-4 p-6 max-h-[85vh] overflow-y-auto">
+      <div class="bg-oura-bg rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg sm:mx-4 p-6 max-h-[85vh] overflow-y-auto safe-bottom">
         <div class="flex items-center gap-3 mb-6">
           <button onclick="Challenges.closeMetricDetailModal()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
@@ -1768,17 +1776,17 @@ const Challenges = {
         <div class="flex justify-around mb-6">
           <div class="text-center">
             <div class="text-2xl font-bold text-oura-muted">${baselineAvg ?? '--'}</div>
-            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
+            <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
           </div>
           <div class="text-center">
             <div class="text-2xl font-bold" style="color: ${config.color}">${challengeAvg ?? '--'}</div>
-            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
+            <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
           </div>
           <div class="text-center">
             <div class="text-2xl font-bold" style="color: ${isImproving ? '#4ade80' : improvementPct !== null ? '#f87171' : '#6b7280'}">
               ${improvementPct !== null ? (improvementPct > 0 ? '+' : '') + improvementPct + '%' : '--'}
             </div>
-            <div class="text-[0.65rem] text-oura-muted uppercase tracking-wider mt-1">Change</div>
+            <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Change</div>
           </div>
         </div>
 
@@ -1905,7 +1913,7 @@ const Challenges = {
     modal.id = 'settings-menu-modal';
     modal.className = 'fixed inset-0 bg-black/50 z-50 flex items-end justify-center';
     modal.innerHTML = `
-      <div class="bg-oura-card rounded-t-2xl w-full max-w-md p-4 pb-8 max-h-[80vh] overflow-y-auto">
+      <div class="bg-oura-card rounded-t-2xl w-full max-w-md p-4 pb-8 max-h-[80vh] overflow-y-auto safe-bottom">
         <div class="w-10 h-1 bg-oura-border rounded-full mx-auto mb-4"></div>
 
         <button onclick="SleepSync.syncNow(); Challenges.closeSettingsMenu();"
@@ -1919,7 +1927,7 @@ const Challenges = {
         ${showFreshStart ? `
         <button onclick="Challenges.closeSettingsMenu(); Challenges.showFreshStartModal('${challengeId}');"
           class="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-oura-subtle transition-colors mt-1">
-          <span class="text-xl w-5 text-center">\u{1F504}</span>
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.992 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182M2.985 19.644l3.181-3.183" /></svg>
           <div class="flex-1 text-left">
             <span class="text-white font-medium">Fresh Start</span>
             <span class="block text-xs text-oura-muted">Restart the challenge timeline</span>
@@ -1978,11 +1986,11 @@ const Challenges = {
     const minDate = DateUtils.toLocalDateStr(new Date());
 
     modal.innerHTML = `
-      <div class="bg-oura-card rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 pb-8">
+      <div class="bg-oura-card rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 pb-8 safe-bottom">
         <div class="w-10 h-1 bg-oura-border rounded-full mx-auto mb-6"></div>
 
         <div class="text-center mb-4">
-          <div class="text-6xl mb-3">\u{1F305}</div>
+          <div class="mb-3 flex justify-center"><svg class="w-12 h-12 text-amber-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg></div>
           <h3 class="text-xl font-bold text-white mb-1">Plot twist!</h3>
           <p class="text-sm text-oura-muted leading-relaxed">
             Sometimes the best move is a do-over.<br>
@@ -2012,14 +2020,14 @@ const Challenges = {
           <label class="block text-sm font-medium text-white mb-2">New start date</label>
           <input type="date" id="fresh-start-date"
             value="${defaultDate}" min="${minDate}" max="${maxDateStr}"
-            class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white">
+            class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-white">
         </div>
 
         <button id="fresh-start-confirm-btn"
           onclick="Challenges.handleFreshStart('${challengeId}')"
           class="w-full py-3.5 min-h-[44px] rounded-xl text-sm font-bold transition-all"
           style="background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%); color: #0a0a14;">
-          \u{1F680} Let's Go!
+          <svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg> Let's Go!
         </button>
         <button onclick="Challenges.closeFreshStartModal()"
           class="w-full py-3 min-h-[44px] mt-2 rounded-xl text-sm font-medium text-oura-muted hover:text-white transition-colors">
@@ -2243,9 +2251,9 @@ const Challenges = {
           <p class="text-oura-muted text-xs mb-3">Invite anyone - they'll automatically become your friend when they accept.</p>
           <div class="flex gap-2">
             <input type="email" id="invite-email-input" placeholder="friend@email.com"
-              class="flex-1 min-w-0 px-3 sm:px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white text-sm placeholder-neutral-600 focus:outline-none focus:border-oura-teal">
+              class="flex-1 min-w-0 px-3 sm:px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-white text-base placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
             <button type="button" id="invite-email-btn"
-              class="px-4 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90 whitespace-nowrap">
+              class="px-4 py-3 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-lg hover:opacity-90 whitespace-nowrap">
               Invite
             </button>
           </div>
@@ -2260,13 +2268,13 @@ const Challenges = {
                 ${availableFriends.map(f => `
                   <label class="flex items-center gap-3 p-3 bg-oura-subtle rounded-lg cursor-pointer hover:bg-oura-border">
                     <input type="checkbox" name="friends" value="${f.id}"
-                      class="w-5 h-5 rounded border-oura-border text-oura-teal focus:ring-oura-teal bg-oura-border">
+                      class="w-5 h-5 rounded border-oura-border text-oura-accent focus:ring-oura-accent bg-oura-border">
                     <span class="font-medium">${escapeHtml(f.displayName || f.email)}</span>
                   </label>
                 `).join('')}
               </div>
               <button type="submit"
-                class="w-full py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+                class="w-full py-3 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-lg hover:opacity-90">
                 Invite Selected
               </button>
             </form>
@@ -2391,7 +2399,7 @@ const Challenges = {
           <div>
             <label class="block text-sm font-medium mb-1">Protocol</label>
             <select id="challenge-protocol" required
-              class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white">
+              class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-white">
               ${protocols.map(p => `<option value="${p.id}" ${p.id === preselectedProtocolId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
             </select>
           </div>
@@ -2405,7 +2413,7 @@ const Challenges = {
             <label class="block text-sm font-medium mb-2">Start Date</label>
             <div class="flex gap-2" id="start-date-toggle">
               <button type="button" data-start="today"
-                class="flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-teal bg-oura-teal/10 text-oura-teal">
+                class="flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-accent bg-oura-accent/10 text-oura-accent">
                 Start Today
               </button>
               <button type="button" data-start="pick"
@@ -2414,7 +2422,7 @@ const Challenges = {
               </button>
             </div>
             <input type="date" id="challenge-start-date"
-              class="hidden w-full mt-2 px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white"
+              class="hidden w-full mt-2 px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-white"
               min="${DateUtils.toLocalDateStr(new Date())}">
           </div>
 
@@ -2425,7 +2433,7 @@ const Challenges = {
                 ${friends.map(f => `
                   <label class="flex items-center gap-2 p-2 bg-oura-subtle rounded">
                     <input type="checkbox" name="friends" value="${f.id}"
-                      class="rounded border-oura-border text-oura-teal focus:ring-oura-teal bg-oura-border">
+                      class="rounded border-oura-border text-oura-accent focus:ring-oura-accent bg-oura-border">
                     <span>${escapeHtml(f.displayName || f.email)}</span>
                   </label>
                 `).join('')}
@@ -2441,7 +2449,7 @@ const Challenges = {
               Cancel
             </button>
             <button type="submit"
-              class="flex-1 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+              class="flex-1 py-3 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-lg hover:opacity-90">
               Create
             </button>
           </div>
@@ -2465,12 +2473,12 @@ const Challenges = {
       if (btn.dataset.start === 'today') {
         useCustomDate = false;
         dateInput.classList.add('hidden');
-        todayBtn.className = 'flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-teal bg-oura-teal/10 text-oura-teal';
+        todayBtn.className = 'flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-accent bg-oura-accent/10 text-oura-accent';
         pickBtn.className = 'flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-border text-oura-muted';
       } else {
         useCustomDate = true;
         dateInput.classList.remove('hidden');
-        pickBtn.className = 'flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-teal bg-oura-teal/10 text-oura-teal';
+        pickBtn.className = 'flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-accent bg-oura-accent/10 text-oura-accent';
         todayBtn.className = 'flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium border-2 border-oura-border text-oura-muted';
       }
     });

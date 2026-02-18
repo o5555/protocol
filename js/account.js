@@ -101,7 +101,7 @@ const Account = {
             </div>
           </div>
           <button onclick="Account.showOuraTokenModal()"
-            class="px-4 py-2 min-h-[44px] ${ouraStatus === 'disconnected' ? 'bg-oura-teal text-gray-900' : ouraStatus === 'expired' ? 'bg-yellow-500 text-gray-900' : 'bg-oura-subtle'} rounded-lg text-sm font-medium">
+            class="px-4 py-2 min-h-[44px] ${ouraStatus === 'disconnected' ? 'bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black' : ouraStatus === 'expired' ? 'bg-yellow-500 text-black' : 'bg-oura-subtle'} rounded-lg text-sm font-medium">
             ${ouraStatus === 'connected' ? 'Update' : ouraStatus === 'expired' ? 'Reconnect' : 'Connect'}
           </button>
         </div>
@@ -178,13 +178,13 @@ const Account = {
     modal.id = 'edit-profile-modal';
     modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
     modal.innerHTML = `
-      <div class="bg-oura-card rounded-2xl p-6 w-full max-w-md mx-4">
+      <div class="bg-oura-card rounded-2xl p-6 safe-bottom w-full max-w-md mx-4">
         <h3 class="text-xl font-bold mb-4">Edit Profile</h3>
         <form id="edit-profile-form" class="space-y-4">
           <div>
             <label class="block text-sm font-medium mb-1">Display Name</label>
             <input type="text" id="display-name-input" value="${escapeHtml(displayName)}" placeholder="Your name"
-              class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white placeholder-neutral-600 focus:outline-none focus:border-oura-teal">
+              class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-base text-white placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
           </div>
           <div class="flex gap-3 pt-4">
             <button type="button" onclick="Account.closeEditProfileModal()"
@@ -192,7 +192,7 @@ const Account = {
               Cancel
             </button>
             <button type="submit"
-              class="flex-1 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+              class="flex-1 py-3 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-lg hover:shadow-lg hover:shadow-oura-accent/30">
               Save
             </button>
           </div>
@@ -258,7 +258,7 @@ const Account = {
     modal.id = 'oura-token-modal';
     modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
     modal.innerHTML = `
-      <div class="bg-oura-card rounded-2xl p-6 w-full max-w-md mx-4">
+      <div class="bg-oura-card rounded-2xl p-6 safe-bottom w-full max-w-md mx-4">
         <h3 class="text-xl font-bold mb-2">${hasToken ? 'Update' : 'Connect'} Oura Ring</h3>
         <p class="text-sm text-oura-muted mb-4">Enter your Oura Personal Access Token to sync sleep data.</p>
 
@@ -275,7 +275,7 @@ const Account = {
         <form id="oura-token-form" class="space-y-4">
           <div>
             <input type="password" id="oura-token-input" placeholder="Paste your token here"
-              class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white placeholder-neutral-600 focus:outline-none focus:border-oura-teal">
+              class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-base text-white placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
           </div>
           <p id="oura-token-status" class="text-xs hidden"></p>
           <div class="flex gap-3">
@@ -284,7 +284,7 @@ const Account = {
               Cancel
             </button>
             <button type="submit"
-              class="flex-1 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+              class="flex-1 py-3 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-lg hover:shadow-lg hover:shadow-oura-accent/30">
               Save
             </button>
           </div>
@@ -350,14 +350,14 @@ const Account = {
     modal.id = 'bug-report-modal';
     modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
     modal.innerHTML = `
-      <div class="bg-oura-card rounded-2xl p-6 w-full max-w-md mx-4">
+      <div class="bg-oura-card rounded-2xl p-6 safe-bottom w-full max-w-md mx-4">
         <h3 class="text-xl font-bold mb-2">Report a Bug</h3>
         <p class="text-sm text-oura-muted mb-4">Describe what happened and we'll look into it.</p>
         <form id="bug-report-form" class="space-y-4">
           <div>
             <textarea id="bug-description" rows="4" required
               placeholder="What went wrong? What did you expect to happen?"
-              class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white placeholder-neutral-600 focus:outline-none focus:border-oura-teal resize-none"></textarea>
+              class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-base text-white placeholder-neutral-600 focus:outline-none focus:border-oura-accent resize-none"></textarea>
           </div>
           <p id="bug-status" class="text-xs hidden"></p>
           <div class="flex gap-3">
@@ -366,7 +366,7 @@ const Account = {
               Cancel
             </button>
             <button type="submit" id="bug-submit-btn"
-              class="flex-1 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+              class="flex-1 py-3 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-lg hover:shadow-lg hover:shadow-oura-accent/30">
               Submit
             </button>
           </div>

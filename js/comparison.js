@@ -4,7 +4,7 @@ const Comparison = {
   // Chart instances for cleanup
   charts: {},
 
-  // Colors for participants
+  // Chart participant colors — kept as hex for Chart.js API compatibility
   colors: [
     '#00c8a0', // Oura teal
     '#3b82f6', // Blue
@@ -389,6 +389,16 @@ const Comparison = {
           legend: {
             position: 'bottom',
             labels: { color: '#9ca3af' }
+          },
+          tooltip: {
+            // Hex values required by Chart.js API — matches oura-subtle/oura-border tokens
+            backgroundColor: '#1a1a2e',
+            borderColor: '#2a2a4e',
+            borderWidth: 1,
+            cornerRadius: 12,
+            titleColor: '#fff',
+            titleFont: { family: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" },
+            bodyColor: '#9ca3af'
           }
         },
         scales: {
@@ -445,6 +455,16 @@ const Comparison = {
           legend: {
             position: 'bottom',
             labels: { color: '#9ca3af' }
+          },
+          tooltip: {
+            // Hex values required by Chart.js API — matches oura-subtle/oura-border tokens
+            backgroundColor: '#1a1a2e',
+            borderColor: '#2a2a4e',
+            borderWidth: 1,
+            cornerRadius: 12,
+            titleColor: '#fff',
+            titleFont: { family: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" },
+            bodyColor: '#9ca3af'
           }
         },
         scales: {
@@ -502,6 +522,16 @@ const Comparison = {
         plugins: {
           legend: {
             display: false
+          },
+          tooltip: {
+            // Hex values required by Chart.js API — matches oura-subtle/oura-border tokens
+            backgroundColor: '#1a1a2e',
+            borderColor: '#2a2a4e',
+            borderWidth: 1,
+            cornerRadius: 12,
+            titleColor: '#fff',
+            titleFont: { family: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" },
+            bodyColor: '#9ca3af'
           }
         },
         scales: {

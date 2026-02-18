@@ -333,8 +333,8 @@ const Friends = {
         <h3 class="text-lg font-semibold mb-4">Add Friend</h3>
         <form id="invite-friend-form" class="flex flex-col sm:flex-row gap-2">
           <input type="email" id="friend-email" placeholder="friend@email.com"
-            class="flex-1 px-4 py-3 bg-oura-subtle border border-oura-border rounded-lg text-white placeholder-neutral-600 focus:outline-none focus:border-oura-teal">
-          <button type="submit" class="w-full sm:w-auto px-6 py-3 min-h-[44px] bg-oura-teal text-gray-900 font-semibold rounded-lg hover:bg-oura-teal/90">
+            class="flex-1 px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-base text-white placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
+          <button type="submit" class="w-full sm:w-auto px-6 py-3 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-lg hover:shadow-lg hover:shadow-oura-accent/30">
             Send Invite
           </button>
         </form>
@@ -354,7 +354,7 @@ const Friends = {
                 </div>
                 <div class="flex gap-2">
                   <button onclick="Friends.handleAccept('${req.friendshipId}')"
-                    class="px-4 py-2 min-h-[44px] bg-oura-teal text-gray-900 rounded-lg text-sm font-medium hover:bg-oura-teal/90">
+                    class="px-4 py-2 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-oura-accent/30">
                     Accept
                   </button>
                   <button onclick="Friends.handleDecline('${req.friendshipId}')"
