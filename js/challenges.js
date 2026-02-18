@@ -1635,8 +1635,8 @@ const Challenges = {
         .map(p => {
           const baseVals = p.baselineData.filter(d => d[field]).map(d => d[field]);
           const challVals = p.challengeData.filter(d => d[field]).map(d => d[field]);
-          const baseAvg = baseVals.length > 0 ? baseVals.reduce((a, b) => a + b, 0) / baseVals.length : null;
-          const challAvg = challVals.length > 0 ? challVals.reduce((a, b) => a + b, 0) / challVals.length : null;
+          const baseAvg = baseVals.length > 0 ? Math.round(baseVals.reduce((a, b) => a + b, 0) / baseVals.length) : null;
+          const challAvg = challVals.length > 0 ? Math.round(challVals.reduce((a, b) => a + b, 0) / challVals.length) : null;
           let pct = null;
           if (baseAvg && challAvg) {
             pct = Math.round(((challAvg - baseAvg) / baseAvg) * 100);
@@ -1647,8 +1647,8 @@ const Challenges = {
             : (pct > 0 ? 'up' : pct < 0 ? 'down' : 'neutral');
           return {
             user: p.user,
-            baselineVal: baseAvg ? Math.round(baseAvg) : null,
-            currentVal: challAvg ? Math.round(challAvg) : null,
+            baselineVal: baseAvg,
+            currentVal: challAvg,
             improvementPct: pct,
             direction,
             isMe: p.user.id === currentUserId
