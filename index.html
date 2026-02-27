@@ -550,7 +550,20 @@
 
         // Initialize app when DOM is ready (auth must resolve before app navigates)
         document.addEventListener('DOMContentLoaded', async () => {
-            await Auth.init();
+            // Safety: dismiss splash after 5s no matter what
+            const splashTimeout = setTimeout(() => {
+                const s = document.getElementById('splash-screen');
+                if (s) { s.style.opacity = '0'; s.style.transition = 'opacity 0.3s ease'; setTimeout(() => s.remove(), 300); }
+            }, 5000);
+            try {
+                await Auth.init();
+            } catch (e) {
+                console.error('Auth init failed:', e);
+            }
+            clearTimeout(splashTimeout);
+            // Ensure splash is gone even if Auth.init didn't dismiss it
+            const s = document.getElementById('splash-screen');
+            if (s) { s.style.opacity = '0'; s.style.transition = 'opacity 0.3s ease'; setTimeout(() => s.remove(), 300); }
             await App.init();
         });
     </script>
