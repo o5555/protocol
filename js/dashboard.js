@@ -18,10 +18,6 @@ const Dashboard = {
     const cachedData = Cache.get('dashboard');
     if (cachedData) {
       this._renderContent(container, cachedData);
-    } else {
-      container.innerHTML = `
-        <div class="text-center py-10 text-oura-muted text-sm">Loading dashboard...</div>
-      `;
     }
 
     // Fetch fresh data (in background if we have cache)
@@ -35,11 +31,24 @@ const Dashboard = {
       // Only update DOM if this is still the most recent render call
       if (generation !== this._renderGeneration) return;
 
+      // Fetch league data for first active challenge
+      let leagueData = null;
+      if (activeChallenges.length > 0) {
+        try {
+          const result = await Comparison.getChallengeSleepData(activeChallenges[0].id);
+          if (generation !== this._renderGeneration) return;
+          const currentUser = await SupabaseClient.getCurrentUser();
+          leagueData = this._buildLeagueData(result, currentUser?.id);
+        } catch (e) {
+          console.warn('[Dashboard] League data fetch failed:', e);
+        }
+      }
+
       // Cache the data
-      Cache.set('dashboard', { profile, activeChallenges, recentSleep });
+      Cache.set('dashboard', { profile, activeChallenges, recentSleep, leagueData });
 
       // Re-render with fresh data
-      this._renderContent(container, { profile, activeChallenges, recentSleep });
+      this._renderContent(container, { profile, activeChallenges, recentSleep, leagueData });
 
       // Background sync: pull latest Oura data, then re-render if new data arrived
       if (profile?.oura_token && typeof SleepSync !== 'undefined') {
@@ -71,17 +80,143 @@ const Dashboard = {
           this.getRecentSleepData().catch(() => [])
         ]);
         if (generation !== this._renderGeneration) return;
-        Cache.set('dashboard', { profile, activeChallenges, recentSleep });
+        let leagueData = null;
+        if (activeChallenges.length > 0) {
+          try {
+            const compCacheKey = 'comparison_' + activeChallenges[0].id;
+            if (typeof Cache !== 'undefined') Cache.clear(compCacheKey);
+            const r2 = await Comparison.getChallengeSleepData(activeChallenges[0].id);
+            if (generation !== this._renderGeneration) return;
+            const currentUser = await SupabaseClient.getCurrentUser();
+            leagueData = this._buildLeagueData(r2, currentUser?.id);
+          } catch (e) { /* ignore */ }
+        }
+        Cache.set('dashboard', { profile, activeChallenges, recentSleep, leagueData });
         const container = document.getElementById('dashboard-container');
-        if (container) this._renderContent(container, { profile, activeChallenges, recentSleep });
+        if (container) this._renderContent(container, { profile, activeChallenges, recentSleep, leagueData });
       }
     } catch (e) {
       console.warn('[Dashboard] Background sync failed:', e);
     }
   },
 
+  // League metric definitions
+  _leagueMetrics: [
+    { key: 'score', label: 'Sleep Score', unit: 'pts', lowerIsBetter: false },
+    { key: 'hr',    label: 'Avg Heart Rate', unit: 'bpm', lowerIsBetter: true },
+    { key: 'low',   label: 'Lowest Heart Rate', unit: 'bpm', lowerIsBetter: true },
+    { key: 'deep',  label: 'Deep Sleep', unit: 'min', lowerIsBetter: false }
+  ],
+  _leagueIndex: 0,
+
+  // Build league data from challenge comparison result
+  _buildLeagueData(result, currentUserId) {
+    const { challenge, sleepData } = result;
+    if (!sleepData || sleepData.length === 0) return null;
+
+    const avg = arr => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+    const participants = sleepData.map(p => {
+      const cd = p.challengeData || [];
+      return {
+        name: p.user.display_name || p.user.email.split('@')[0],
+        isMe: p.user.id === currentUserId,
+        score: avg(cd.filter(d => d.sleep_score).map(d => d.sleep_score)),
+        hr: avg(cd.filter(d => d.avg_hr).map(d => d.avg_hr)),
+        low: avg(cd.filter(d => d.pre_sleep_hr).map(d => d.pre_sleep_hr)),
+        deep: avg(cd.filter(d => d.deep_sleep_minutes).map(d => d.deep_sleep_minutes))
+      };
+    });
+
+    return {
+      challengeId: challenge.id,
+      challengeName: challenge.name,
+      dayNumber: Challenges.getDayNumber(challenge.start_date),
+      participants
+    };
+  },
+
+  // Render one page of the league scoreboard for a given metric
+  _renderLeaguePage(leagueData, metricIndex) {
+    const m = this._leagueMetrics[metricIndex];
+    const sorted = [...leagueData.participants].sort((a, b) => {
+      const av = a[m.key], bv = b[m.key];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return m.lowerIsBetter ? av - bv : bv - av;
+    });
+
+    return `
+      <div class="text-center mb-5">
+        <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider">${m.label}</div>
+      </div>
+      <div class="space-y-2">
+        ${sorted.map((p, i) => {
+          const rank = i + 1;
+          const name = p.isMe ? 'You' : escapeHtml(p.name.split(' ')[0]);
+          const val = p[m.key];
+          const isFirst = i === 0 && val != null;
+          // Row styling — highlight "You" row, accent the #1 value
+          const rowBg = p.isMe ? 'bg-oura-accent/5 border border-oura-accent/20' : 'bg-oura-subtle';
+          const nameColor = p.isMe ? 'text-oura-accent' : 'text-white';
+          const valColor = isFirst ? 'text-oura-accent' : 'text-white';
+          return `
+          <div class="flex items-center ${rowBg} rounded-xl px-4 py-3.5">
+            <span class="text-sm font-bold text-oura-muted w-6">${rank}</span>
+            <span class="flex-1 text-base font-semibold ${nameColor}">${name}</span>
+            <span class="text-2xl font-bold ${valColor}">${val ?? '--'}</span>
+            <span class="text-xs text-oura-muted ml-1.5 w-8">${m.unit}</span>
+          </div>`;
+        }).join('')}
+      </div>
+      <!-- Dots -->
+      <div class="flex justify-center gap-2 mt-5">
+        ${this._leagueMetrics.map((_, i) => {
+          const active = i === metricIndex;
+          return `<div class="w-2 h-2 rounded-full transition-colors ${active ? 'bg-oura-accent' : 'bg-oura-border'}"></div>`;
+        }).join('')}
+      </div>`;
+  },
+
+  // Switch league metric (called by swipe or dot tap)
+  _switchLeagueMetric(index) {
+    if (!this._leagueData) return;
+    this._leagueIndex = index;
+    const el = document.getElementById('league-page');
+    if (!el) return;
+    el.innerHTML = this._renderLeaguePage(this._leagueData, index);
+  },
+
+  // Attach swipe handlers to the league container
+  _attachLeagueSwipe() {
+    const el = document.getElementById('league-swipe-area');
+    if (!el) return;
+    let startX = 0, startY = 0, tracking = false;
+    el.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = true;
+    }, { passive: true });
+    el.addEventListener('touchend', (e) => {
+      if (!tracking) return;
+      tracking = false;
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      // Only register horizontal swipes (more horizontal than vertical, min 40px)
+      if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+      const total = this._leagueMetrics.length;
+      if (dx < 0) {
+        // Swipe left → next metric
+        this._switchLeagueMetric((this._leagueIndex + 1) % total);
+      } else {
+        // Swipe right → previous metric
+        this._switchLeagueMetric((this._leagueIndex - 1 + total) % total);
+      }
+    }, { passive: true });
+  },
+
   // Render dashboard content (separated for caching)
-  _renderContent(container, { profile, activeChallenges, recentSleep }) {
+  _renderContent(container, { profile, activeChallenges, recentSleep, leagueData }) {
     try {
 
       const avgPreSleepHR = this.calcAvgPreSleepHR(recentSleep);
@@ -92,6 +227,16 @@ const Dashboard = {
       const chronologicalSleep = [...recentSleep].sort((a, b) => a.date.localeCompare(b.date));
 
       let html = '';
+      const headerEl = document.getElementById('dashboard-header');
+
+      // Hide static "Dashboard" header when league table is showing
+      if (headerEl) {
+        if (leagueData && leagueData.participants.length > 0) {
+          headerEl.style.display = 'none';
+        } else {
+          headerEl.style.display = '';
+        }
+      }
 
       // No-token prompt
       if (!profile?.oura_token) {
@@ -111,8 +256,35 @@ const Dashboard = {
         `;
       }
 
-      // 30-Day Baseline — 4 full-width metric bars stacked vertically
-      html += `
+      if (leagueData && leagueData.participants.length > 0) {
+        // Store for swipe handler
+        this._leagueData = leagueData;
+        const ld = leagueData;
+        const progress = Math.min(100, Math.round((ld.dayNumber / 30) * 100));
+
+        html += `
+        <div class="mb-4">
+          <!-- Page header — replaces "Dashboard" title -->
+          <div class="mb-5">
+            <p class="text-oura-muted text-sm mb-1">Live Standings</p>
+            <h2 class="text-2xl font-semibold">${escapeHtml(ld.challengeName)}</h2>
+            <div class="flex items-center gap-3 mt-2">
+              <span class="text-oura-muted text-sm">Day ${ld.dayNumber}/30</span>
+              <div class="flex-1 bg-oura-border rounded-full h-1.5 max-w-[120px]">
+                <div class="bg-oura-accent h-1.5 rounded-full" style="width: ${progress}%"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Swipeable scoreboard -->
+          <div id="league-swipe-area" class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 cursor-pointer" onclick="App.navigateTo('challenge-detail', '${ld.challengeId}')">
+            <div id="league-page">
+              ${this._renderLeaguePage(leagueData, this._leagueIndex)}
+            </div>
+          </div>
+        </div>`;
+      } else {
+        // No active challenge — show personal 30-Day Baseline
+        html += `
         <div class="bg-oura-card rounded-2xl p-5 mb-4">
           <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">Your 30-Day Baseline</div>
           <div class="space-y-3">
@@ -146,45 +318,51 @@ const Dashboard = {
             </div>
           </div>
         </div>
-      `;
+        `;
 
-      // Active challenge cards
-      if (activeChallenges.length > 0) {
-        html += `<div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3 mt-2">Active Challenges</div>`;
-        for (const ch of activeChallenges) {
-          const dayNum = Challenges.getDayNumber(ch.start_date);
-          const progress = Math.min(100, Math.round((dayNum / 30) * 100));
-          html += `
-            <div onclick="App.navigateTo('challenge-detail', '${ch.id}')"
-              class="bg-oura-card rounded-2xl p-6 mb-3 cursor-pointer hover:bg-oura-subtle transition-colors">
-              <div class="flex items-center gap-4 mb-4">
-                <div class="protocol-icon w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">${Protocols.getInitials(ch.protocol?.name || 'CH')}</div>
-                <div>
-                  <h3 class="font-semibold text-lg">${escapeHtml(ch.name)}</h3>
-                  <p class="text-oura-muted text-sm">${escapeHtml(ch.protocol?.name || 'Protocol')}</p>
+        // Active challenge cards (only when no league table)
+        if (activeChallenges.length > 0) {
+          html += `<div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3 mt-2">Active Challenges</div>`;
+          for (const ch of activeChallenges) {
+            const dayNum = Challenges.getDayNumber(ch.start_date);
+            const progress = Math.min(100, Math.round((dayNum / 30) * 100));
+            html += `
+              <div onclick="App.navigateTo('challenge-detail', '${ch.id}')"
+                class="bg-oura-card rounded-2xl p-6 mb-3 cursor-pointer hover:bg-oura-subtle transition-colors">
+                <div class="flex items-center gap-4 mb-4">
+                  <div class="protocol-icon w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">${Protocols.getInitials(ch.protocol?.name || 'CH')}</div>
+                  <div>
+                    <h3 class="font-semibold text-lg">${escapeHtml(ch.name)}</h3>
+                    <p class="text-oura-muted text-sm">${escapeHtml(ch.protocol?.name || 'Protocol')}</p>
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <div class="flex justify-between text-sm mb-1.5">
+                    <span class="text-oura-muted">Day ${dayNum} of 30</span>
+                    <span class="text-oura-accent font-medium">${progress}%</span>
+                  </div>
+                  <div class="w-full bg-oura-border rounded-full h-2">
+                    <div class="bg-oura-accent h-2 rounded-full transition-all" style="width: ${progress}%"></div>
+                  </div>
                 </div>
               </div>
-              <div class="mb-2">
-                <div class="flex justify-between text-sm mb-1.5">
-                  <span class="text-oura-muted">Day ${dayNum} of 30</span>
-                  <span class="text-oura-accent font-medium">${progress}%</span>
-                </div>
-                <div class="w-full bg-oura-border rounded-full h-2">
-                  <div class="bg-oura-accent h-2 rounded-full transition-all" style="width: ${progress}%"></div>
-                </div>
-              </div>
-            </div>
-          `;
+            `;
+          }
         }
       }
 
       container.innerHTML = html;
 
-      // Initialize sparklines after DOM is ready
-      this.renderSparkline('sparkline-sleep-score', chronologicalSleep.map(d => d.sleep_score), '#c084fc');
-      this.renderSparkline('sparkline-avg-hr', chronologicalSleep.map(d => d.avg_hr), '#fb923c');
-      this.renderSparkline('sparkline-presleep-hr', chronologicalSleep.map(d => d.pre_sleep_hr), '#2dd4bf');
-      this.renderSparkline('sparkline-deep-sleep', chronologicalSleep.map(d => d.deep_sleep_minutes), '#60a5fa');
+      // Initialize sparklines (only when showing baseline)
+      if (!leagueData || leagueData.participants.length === 0) {
+        this.renderSparkline('sparkline-sleep-score', chronologicalSleep.map(d => d.sleep_score), '#c084fc');
+        this.renderSparkline('sparkline-avg-hr', chronologicalSleep.map(d => d.avg_hr), '#fb923c');
+        this.renderSparkline('sparkline-presleep-hr', chronologicalSleep.map(d => d.pre_sleep_hr), '#2dd4bf');
+        this.renderSparkline('sparkline-deep-sleep', chronologicalSleep.map(d => d.deep_sleep_minutes), '#60a5fa');
+      } else {
+        // Attach swipe handlers for league scoreboard
+        this._attachLeagueSwipe();
+      }
     } catch (error) {
       console.error('Error rendering dashboard:', error);
       container.innerHTML = `
