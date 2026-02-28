@@ -632,8 +632,6 @@ const Dashboard = {
       const avgHR = this.calcAvgHR(recentSleep);
       const avgDeepSleep = this.calcAvgDeepSleep(recentSleep);
       const avgSleepScore = this.calcAvgSleepScore(recentSleep);
-      // Most recent night (descending order)
-      const lastNight = recentSleep.length > 0 ? recentSleep[0] : null;
       // Chronological order for sparklines
       const chronologicalSleep = [...recentSleep].sort((a, b) => a.date.localeCompare(b.date));
 
