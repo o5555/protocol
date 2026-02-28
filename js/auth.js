@@ -215,12 +215,8 @@ const Auth = {
       window.dispatchEvent(new CustomEvent('userLoggedOut'));
     }
 
-    // Dismiss splash screen after auth resolves
-    if (splash) {
-      splash.style.opacity = '0';
-      splash.style.transition = 'opacity 0.3s ease';
-      setTimeout(() => splash.remove(), 300);
-    }
+    // Splash screen is now dismissed after App.init() completes (in index.html)
+    // so that logo keeps pulsing until all content is ready
   },
 
   // Check onboarding state and route accordingly

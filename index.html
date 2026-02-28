@@ -561,11 +561,11 @@
             } catch (e) {
                 console.error('Auth init failed:', e);
             }
+            await App.init();
             clearTimeout(splashTimeout);
-            // Ensure splash is gone even if Auth.init didn't dismiss it
+            // Dismiss splash after everything is ready — logo pulses until content is loaded
             const s = document.getElementById('splash-screen');
             if (s) { s.style.opacity = '0'; s.style.transition = 'opacity 0.3s ease'; setTimeout(() => s.remove(), 300); }
-            await App.init();
         });
     </script>
 
