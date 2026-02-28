@@ -377,7 +377,7 @@ const Dashboard = {
     return `
       <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 mb-3" id="habit-section">
         <div class="flex items-center justify-between mb-3">
-          <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider">Today's Habits</h3>
+          <h3 class="text-sm font-bold text-oura-muted uppercase tracking-wider">Today's Habits</h3>
           <span id="habit-counter" class="text-xs text-oura-muted">${completedCount} of ${habits.length}</span>
         </div>
         <div class="space-y-0 divide-y divide-oura-border/20">
@@ -543,9 +543,9 @@ const Dashboard = {
   },
 
   // Fetch AI insight (cached per challenge per day)
-  async _fetchAiInsight(recentSleep, leagueData, forceRefresh) {
+  async _fetchAiInsight(recentSleep, leagueData, forceRefresh, explicitChallengeId) {
     const today = DateUtils.toLocalDateStr(new Date());
-    const challengeId = this._habitData?.challenge?.id || 'personal';
+    const challengeId = explicitChallengeId || this._habitData?.challenge?.id || 'personal';
     const cacheKey = `ai_insight_${challengeId}_${today}`;
 
     if (!forceRefresh) {
@@ -588,7 +588,7 @@ const Dashboard = {
     }
     return `
       <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6 cursor-pointer active:bg-oura-subtle transition-colors" id="ai-card-slot" onclick="Dashboard.openAiChat()">
-        <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
+        <h3 class="text-sm font-bold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
         ${body}
         <div class="flex items-center gap-1.5 mt-3 text-oura-accent text-xs">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" /></svg>
@@ -601,7 +601,7 @@ const Dashboard = {
   _renderAiCardLoading() {
     return `
       <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6" id="ai-card-slot">
-        <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
+        <h3 class="text-sm font-bold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
         <p class="text-base text-oura-muted">Getting your daily insight...</p>
       </div>`;
   },
@@ -706,29 +706,29 @@ const Dashboard = {
           <div class="space-y-3">
             <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('sleep_score')">
               <div class="flex-shrink-0">
-                <div class="text-[0.6rem] font-semibold text-purple-400 uppercase tracking-wider mb-1">Sleep Score</div>
-                <div class="text-xl font-bold text-purple-400 leading-none">${avgSleepScore !== null ? avgSleepScore : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">pts</span></div>
+                <div class="text-[11px] font-semibold text-purple-400 uppercase tracking-wider mb-1">Sleep Score</div>
+                <div class="text-xl font-bold text-purple-400 leading-none">${avgSleepScore !== null ? avgSleepScore : '--'} <span class="text-xs font-normal text-oura-muted">pts</span></div>
               </div>
               <div class="flex-1 h-10 overflow-hidden"><canvas id="sparkline-sleep-score"></canvas></div>
             </div>
             <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('avg_hr')">
               <div class="flex-shrink-0">
-                <div class="text-[0.6rem] font-semibold text-orange-400 uppercase tracking-wider mb-1">Avg HR</div>
-                <div class="text-xl font-bold text-orange-400 leading-none">${avgHR !== null ? avgHR : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">bpm</span></div>
+                <div class="text-[11px] font-semibold text-orange-400 uppercase tracking-wider mb-1">Avg HR</div>
+                <div class="text-xl font-bold text-orange-400 leading-none">${avgHR !== null ? avgHR : '--'} <span class="text-xs font-normal text-oura-muted">bpm</span></div>
               </div>
               <div class="flex-1 h-10 overflow-hidden"><canvas id="sparkline-avg-hr"></canvas></div>
             </div>
             <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('pre_sleep_hr')">
               <div class="flex-shrink-0">
-                <div class="text-[0.6rem] font-semibold text-teal-400 uppercase tracking-wider mb-1">Lowest HR</div>
-                <div class="text-xl font-bold text-teal-400 leading-none">${avgPreSleepHR !== null ? avgPreSleepHR : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">bpm</span></div>
+                <div class="text-[11px] font-semibold text-teal-400 uppercase tracking-wider mb-1">Lowest HR</div>
+                <div class="text-xl font-bold text-teal-400 leading-none">${avgPreSleepHR !== null ? avgPreSleepHR : '--'} <span class="text-xs font-normal text-oura-muted">bpm</span></div>
               </div>
               <div class="flex-1 h-10 overflow-hidden"><canvas id="sparkline-presleep-hr"></canvas></div>
             </div>
             <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('deep_sleep')">
               <div class="flex-shrink-0">
-                <div class="text-[0.6rem] font-semibold text-blue-400 uppercase tracking-wider mb-1">Deep Sleep</div>
-                <div class="text-xl font-bold text-blue-400 leading-none">${avgDeepSleep !== null ? avgDeepSleep : '--'} <span class="text-[0.55rem] font-normal text-oura-muted">min</span></div>
+                <div class="text-[11px] font-semibold text-blue-400 uppercase tracking-wider mb-1">Deep Sleep</div>
+                <div class="text-xl font-bold text-blue-400 leading-none">${avgDeepSleep !== null ? avgDeepSleep : '--'} <span class="text-xs font-normal text-oura-muted">min</span></div>
               </div>
               <div class="flex-1 h-10 overflow-hidden"><canvas id="sparkline-deep-sleep"></canvas></div>
             </div>
@@ -771,10 +771,11 @@ const Dashboard = {
       html += this._renderHabitSection();
 
       // AI insight card (below habits) — shows whenever there's sleep data
+      // Use activeChallenges for cache key (not _habitData which may not be populated yet)
+      const aiChallengeId = activeChallenges?.[0]?.id || 'personal';
       if (recentSleep.length > 0) {
         const today = DateUtils.toLocalDateStr(new Date());
-        const challengeId = this._habitData?.challenge?.id || 'personal';
-        const cacheKey = `ai_insight_${challengeId}_${today}`;
+        const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
         const cachedInsight = Cache.get(cacheKey);
         html += cachedInsight ? this._renderAiCard(cachedInsight) : this._renderAiCardLoading();
       }
@@ -801,11 +802,10 @@ const Dashboard = {
       // Async: fetch AI insight if not cached
       if (recentSleep.length > 0) {
         const today = DateUtils.toLocalDateStr(new Date());
-        const challengeId = this._habitData?.challenge?.id || 'personal';
-        const cacheKey = `ai_insight_${challengeId}_${today}`;
+        const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
         if (!Cache.get(cacheKey)) {
           const gen = this._renderGeneration;
-          this._fetchAiInsight(recentSleep, leagueData, false).then(insight => {
+          this._fetchAiInsight(recentSleep, leagueData, false, aiChallengeId).then(insight => {
             if (gen !== this._renderGeneration) return; // stale callback — a newer render owns the DOM
             const slot = document.getElementById('ai-card-slot');
             if (slot && insight) {
@@ -1237,7 +1237,8 @@ const Dashboard = {
   openAiChat() {
     // Get current insight from the card
     const today = DateUtils.toLocalDateStr(new Date());
-    const challengeId = this._habitData?.challenge?.id || 'personal';
+    const dashData = Cache.get('dashboard');
+    const challengeId = dashData?.activeChallenges?.[0]?.id || this._habitData?.challenge?.id || 'personal';
     const chatCacheKey = `ai_chat_${challengeId}_${today}`;
     const insightCacheKey = `ai_insight_${challengeId}_${today}`;
 
@@ -1251,9 +1252,6 @@ const Dashboard = {
         ? [{ role: 'assistant', content: insight }]
         : [];
     }
-
-    // Build context from cached dashboard data
-    const dashData = Cache.get('dashboard');
     const recentSleep = dashData?.recentSleep || [];
     const leagueData = dashData?.leagueData || null;
     this._chatContext = this._buildAiContext(recentSleep, leagueData);
