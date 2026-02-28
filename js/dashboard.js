@@ -430,7 +430,24 @@ const Dashboard = {
       if (idx !== -1) completions.splice(idx, 1);
     }
     const counter = document.getElementById('habit-counter');
-    if (counter) counter.textContent = `${new Set(completions).size} of ${habits.length}`;
+    const completedCount = new Set(completions).size;
+    if (counter) counter.textContent = `${completedCount} of ${habits.length}`;
+
+    // Celebrate when all habits are checked off
+    if (!wasChecked && completedCount === habits.length) {
+      const section = document.getElementById('habit-section');
+      if (section) {
+        section.classList.remove('habits-complete');
+        void section.offsetWidth; // force reflow to restart animation
+        section.classList.add('habits-complete');
+      }
+      if (counter) {
+        counter.textContent = 'All done';
+        counter.className = 'text-xs text-oura-accent font-semibold';
+      }
+    } else if (counter) {
+      counter.className = 'text-xs text-oura-muted';
+    }
 
     try {
       await Challenges.toggleHabit(challenge.id, habitId, today);
@@ -457,7 +474,13 @@ const Dashboard = {
         const idx = completions.indexOf(habitId);
         if (idx !== -1) completions.splice(idx, 1);
       }
-      if (counter) counter.textContent = `${new Set(completions).size} of ${habits.length}`;
+      const revertCount = new Set(completions).size;
+      if (counter) {
+        counter.textContent = `${revertCount} of ${habits.length}`;
+        counter.className = 'text-xs text-oura-muted';
+      }
+      const section = document.getElementById('habit-section');
+      if (section) section.classList.remove('habits-complete');
     }
   },
 
@@ -563,9 +586,13 @@ const Dashboard = {
       body = `<p class="text-sm text-oura-muted leading-relaxed">${escapeHtml(insight)}</p>`;
     }
     return `
-      <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6" id="ai-card-slot">
+      <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6 cursor-pointer active:bg-oura-subtle transition-colors" id="ai-card-slot" onclick="Dashboard.openAiChat()">
         <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
         ${body}
+        <div class="flex items-center gap-1.5 mt-3 text-oura-accent text-xs">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" /></svg>
+          <span>Ask a follow-up</span>
+        </div>
       </div>`;
   },
 
@@ -605,6 +632,8 @@ const Dashboard = {
       const avgHR = this.calcAvgHR(recentSleep);
       const avgDeepSleep = this.calcAvgDeepSleep(recentSleep);
       const avgSleepScore = this.calcAvgSleepScore(recentSleep);
+      // Most recent night (descending order)
+      const lastNight = recentSleep.length > 0 ? recentSleep[0] : null;
       // Chronological order for sparklines
       const chronologicalSleep = [...recentSleep].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -636,6 +665,44 @@ const Dashboard = {
             </div>
           </div>
         `;
+      }
+
+      // Last Night summary — show most recent night's data
+      if (lastNight && profile?.oura_token) {
+        const nightDate = new Date(lastNight.date + 'T00:00:00');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const nightLabel = nightDate >= today ? 'Last Night' :
+          nightDate >= yesterday ? 'Last Night' : nightDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+        const deepHrs = lastNight.deep_sleep_minutes != null ? Math.floor(lastNight.deep_sleep_minutes / 60) : null;
+        const deepMins = lastNight.deep_sleep_minutes != null ? lastNight.deep_sleep_minutes % 60 : null;
+        const deepStr = deepHrs != null ? (deepHrs > 0 ? `${deepHrs}h ${deepMins}m` : `${deepMins}m`) : '--';
+
+        html += `
+        <div class="bg-oura-card rounded-2xl p-5 mb-4 border border-oura-border/30">
+          <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">${nightLabel}</div>
+          <div class="grid grid-cols-4 gap-3 text-center">
+            <div>
+              <div class="text-2xl font-bold text-purple-400">${lastNight.sleep_score ?? '--'}</div>
+              <div class="text-[0.6rem] text-oura-muted mt-1">Score</div>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-orange-400">${lastNight.avg_hr ?? '--'}</div>
+              <div class="text-[0.6rem] text-oura-muted mt-1">Avg HR</div>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-teal-400">${lastNight.pre_sleep_hr ?? '--'}</div>
+              <div class="text-[0.6rem] text-oura-muted mt-1">Low HR</div>
+            </div>
+            <div>
+              <div class="text-2xl font-bold text-blue-400">${deepStr}</div>
+              <div class="text-[0.6rem] text-oura-muted mt-1">Deep</div>
+            </div>
+          </div>
+        </div>`;
       }
 
       if (leagueData && leagueData.participants.length > 0) {
@@ -673,7 +740,7 @@ const Dashboard = {
         // No active challenge — show personal 30-Day Baseline
         html += `
         <div class="bg-oura-card rounded-2xl p-5 mb-4">
-          <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">Your 30-Day Baseline</div>
+          <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">30-Day Average</div>
           <div class="space-y-3">
             <div class="bg-oura-subtle rounded-xl p-3 cursor-pointer hover:bg-oura-border/50 transition-colors flex items-center gap-4" onclick="Dashboard.showMetricDetail('sleep_score')">
               <div class="flex-shrink-0">
@@ -1192,6 +1259,157 @@ const Dashboard = {
       return `${avgHR} bpm on day ${dayNum} — you're making progress with "${challenge.name}". Keep up the evening habits!`;
     }
     return `Day ${dayNum} of "${challenge.name}" — your HR is ${avgHR} bpm. Focus on winding down earlier tonight. Consistency is key.`;
+  },
+
+  // ── AI Chat ──
+
+  _chatMessages: [],
+  _chatContext: null,
+
+  openAiChat() {
+    // Get current insight from the card
+    const today = DateUtils.toLocalDateStr(new Date());
+    const challengeId = this._habitData?.challenge?.id || 'personal';
+    const chatCacheKey = `ai_chat_${challengeId}_${today}`;
+    const insightCacheKey = `ai_insight_${challengeId}_${today}`;
+
+    // Restore from cache or seed with current insight
+    const cached = Cache.get(chatCacheKey);
+    if (cached && cached.length > 0) {
+      this._chatMessages = cached;
+    } else {
+      const insight = Cache.get(insightCacheKey) || '';
+      this._chatMessages = insight
+        ? [{ role: 'assistant', content: insight }]
+        : [];
+    }
+
+    // Build context from cached dashboard data
+    const dashData = Cache.get('dashboard');
+    const recentSleep = dashData?.recentSleep || [];
+    const leagueData = dashData?.leagueData || null;
+    this._chatContext = this._buildAiContext(recentSleep, leagueData);
+
+    this._renderChatModal();
+  },
+
+  _renderChatModal() {
+    // Remove existing
+    document.getElementById('ai-chat-modal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'ai-chat-modal';
+    modal.className = 'fixed inset-0 bg-oura-bg z-50 flex flex-col';
+    modal.innerHTML = `
+      <div class="flex items-center gap-3 px-4 pt-safe-top pb-3 border-b border-oura-border/30 bg-oura-card">
+        <button onclick="Dashboard.closeAiChat()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+        </button>
+        <h3 class="text-lg font-semibold">Sleep Coach</h3>
+      </div>
+      <div id="ai-chat-messages" class="flex-1 overflow-y-auto px-4 py-4 space-y-3"></div>
+      <form onsubmit="Dashboard.sendChatMessage(event)" class="px-4 pb-safe-bottom pt-3 border-t border-oura-border/30 bg-oura-card">
+        <div class="flex gap-2">
+          <input id="ai-chat-input" type="text" placeholder="Ask about your sleep..." autocomplete="off"
+            class="flex-1 px-4 py-3 bg-oura-bg border border-oura-border rounded-xl text-white text-base placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
+          <button type="submit" class="min-w-[44px] min-h-[44px] flex items-center justify-center bg-oura-accent rounded-xl text-black">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
+          </button>
+        </div>
+      </form>
+    `;
+    document.body.appendChild(modal);
+    this._renderChatMessages();
+  },
+
+  _renderChatMessages() {
+    const container = document.getElementById('ai-chat-messages');
+    if (!container) return;
+
+    container.innerHTML = this._chatMessages.map(m => {
+      if (m.role === 'user') {
+        return `<div class="flex justify-end"><div class="max-w-[80%] px-4 py-2.5 rounded-2xl bg-oura-accent text-black text-sm">${escapeHtml(m.content)}</div></div>`;
+      }
+      // AI message — parse bullets
+      const text = m.content || '';
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      const hasBullets = lines.some(l => l.startsWith('- '));
+      let html;
+      if (hasBullets) {
+        html = lines.map(l => {
+          if (l.startsWith('- ')) {
+            return `<div class="flex gap-2"><span class="text-oura-accent flex-shrink-0">&bull;</span><span>${escapeHtml(l.slice(2))}</span></div>`;
+          }
+          return `<div>${escapeHtml(l)}</div>`;
+        }).join('');
+      } else {
+        html = escapeHtml(text);
+      }
+      return `<div class="flex justify-start"><div class="max-w-[80%] px-4 py-2.5 rounded-2xl bg-oura-card border border-oura-border/30 text-sm text-oura-muted leading-relaxed">${html}</div></div>`;
+    }).join('');
+
+    // Scroll to bottom
+    container.scrollTop = container.scrollHeight;
+  },
+
+  async sendChatMessage(event) {
+    event.preventDefault();
+    const input = document.getElementById('ai-chat-input');
+    const text = (input?.value || '').trim();
+    if (!text) return;
+
+    input.value = '';
+
+    // Add user message
+    this._chatMessages.push({ role: 'user', content: text });
+    this._renderChatMessages();
+
+    // Add thinking placeholder
+    this._chatMessages.push({ role: 'assistant', content: 'Thinking...' });
+    this._renderChatMessages();
+
+    try {
+      const resp = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: this._chatMessages.filter(m => m.content !== 'Thinking...'),
+          sleepContext: this._chatContext?.sleepContext || '',
+          habitContext: this._chatContext?.habitContext || ''
+        })
+      });
+
+      // Remove thinking placeholder
+      this._chatMessages.pop();
+
+      if (resp.ok) {
+        const { reply } = await resp.json();
+        this._chatMessages.push({ role: 'assistant', content: reply || 'Sorry, I could not generate a response.' });
+      } else {
+        this._chatMessages.push({ role: 'assistant', content: 'Something went wrong. Please try again.' });
+      }
+    } catch {
+      this._chatMessages.pop(); // remove thinking
+      this._chatMessages.push({ role: 'assistant', content: 'Could not reach the server. Please try again.' });
+    }
+
+    this._renderChatMessages();
+    this._saveChatToCache();
+  },
+
+  _saveChatToCache() {
+    const today = DateUtils.toLocalDateStr(new Date());
+    const challengeId = this._habitData?.challenge?.id || 'personal';
+    const key = `ai_chat_${challengeId}_${today}`;
+    // Keep max 20 messages
+    const toSave = this._chatMessages.slice(-20);
+    Cache.set(key, toSave, 24 * 60 * 60 * 1000);
+  },
+
+  closeAiChat() {
+    this._chatMessages = [];
+    this._chatContext = null;
+    document.getElementById('ai-chat-modal')?.remove();
   }
 };
 

@@ -968,6 +968,98 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // AI Coach chat — conversational follow-up to insight
+    if (req.url === '/api/ai/chat' && req.method === 'POST') {
+        const AI_GATEWAY_TOKEN = (process.env.AI_GATEWAY_TOKEN || '').trim();
+        if (!AI_GATEWAY_TOKEN) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'AI gateway not configured' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { messages, sleepContext, habitContext } = body;
+
+            if (!Array.isArray(messages) || messages.length === 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Missing messages' }));
+                return;
+            }
+
+            // Cap conversation length
+            const trimmed = messages.slice(-20);
+
+            const systemPrompt = 'You are a supportive sleep coach. Be brief, conversational, and data-driven. ' +
+                'Answer the user\'s questions about their sleep, habits, and health. ' +
+                'Use 2-4 short sentences. Use bullet points (starting with "- ") when listing things. ' +
+                'Do not use emoji. Do not use greeting words like "Hey" or "Hi".' +
+                (sleepContext ? '\n\nUser sleep data: ' + sleepContext : '') +
+                (habitContext ? '\n\nUser habits: ' + habitContext : '');
+
+            const input = [
+                { role: 'system', content: systemPrompt },
+                ...trimmed.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }))
+            ];
+
+            const payload = JSON.stringify({
+                model: 'anthropic/claude-haiku-4-5',
+                input,
+                max_output_tokens: 300
+            });
+
+            const options = {
+                hostname: 'ai-gateway.vercel.sh',
+                path: '/v1/responses',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${AI_GATEWAY_TOKEN}`,
+                    'Content-Length': Buffer.byteLength(payload)
+                }
+            };
+
+            const aiReq = https.request(options, (aiRes) => {
+                let data = '';
+                aiRes.on('data', chunk => data += chunk);
+                aiRes.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(data);
+                        const text = parsed.output?.[0]?.content?.[0]?.text
+                            || parsed.choices?.[0]?.message?.content
+                            || '';
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ reply: text }));
+                    } catch {
+                        console.error('[ai] Failed to parse chat response:', data.substring(0, 200));
+                        res.writeHead(502, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Failed to parse AI response' }));
+                    }
+                });
+            });
+
+            aiReq.on('error', (err) => {
+                console.error('[ai] Chat gateway error:', err.message);
+                res.writeHead(502, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'AI service unavailable' }));
+            });
+
+            aiReq.setTimeout(15000, () => {
+                aiReq.destroy();
+                res.writeHead(504, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'AI request timed out' }));
+            });
+
+            aiReq.write(payload);
+            aiReq.end();
+        } catch (err) {
+            console.error('[ai] Chat error:', err.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
     // Proxy requests to Oura API (catch-all for /api/*)
     if (req.url.startsWith('/api/')) {
         const ouraPath = req.url.replace('/api', '/v2/usercollection');
