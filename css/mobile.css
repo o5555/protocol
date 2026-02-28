@@ -191,8 +191,11 @@ button, a, input, select, textarea, label {
 /* ── League Carousel ── */
 
 #league-swipe-area {
-  overflow: hidden;
   touch-action: pan-y;
+}
+
+#league-clip {
+  overflow: hidden;
 }
 
 #league-track {
@@ -203,6 +206,7 @@ button, a, input, select, textarea, label {
 .league-slide {
   min-width: 100%;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 @keyframes league-peek {
