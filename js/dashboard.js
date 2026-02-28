@@ -628,9 +628,9 @@ const Dashboard = {
       const insight = await this._fetchAiInsight(recentSleep, leagueData, true);
       const slot = document.getElementById('ai-card-slot');
       if (slot && insight) {
-        slot.innerHTML = `
-          <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
-          <p class="text-base text-oura-muted leading-relaxed">${escapeHtml(insight)}</p>`;
+        const temp = document.createElement('div');
+        temp.innerHTML = this._renderAiCard(insight);
+        slot.replaceWith(temp.firstElementChild);
       }
     }, 3000);
   },
@@ -791,6 +791,9 @@ const Dashboard = {
 
       container.innerHTML = html;
 
+      // Content is painted — dismiss splash screen if still showing
+      if (typeof window._dismissSplash === 'function') window._dismissSplash();
+
       // Initialize sparklines (only when showing baseline)
       if (!leagueData || leagueData.participants.length === 0) {
         this.renderSparkline('sparkline-sleep-score', chronologicalSleep.map(d => d.sleep_score), '#c084fc');
@@ -816,12 +819,12 @@ const Dashboard = {
             if (gen !== this._renderGeneration) return; // stale callback — a newer render owns the DOM
             const slot = document.getElementById('ai-card-slot');
             if (slot && insight) {
-              slot.innerHTML = `
-                <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
-                <p class="text-base text-oura-muted leading-relaxed">${escapeHtml(insight)}</p>`;
-            } else if (slot && !insight) {
-              slot.remove();
+              // Replace the loading card with the full tappable AI card
+              const temp = document.createElement('div');
+              temp.innerHTML = this._renderAiCard(insight);
+              slot.replaceWith(temp.firstElementChild);
             }
+            // On failure, leave the loading card — don't remove it
           });
         }
       }

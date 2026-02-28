@@ -550,12 +550,18 @@
         };
 
         // Initialize app when DOM is ready (auth must resolve before app navigates)
+        // Dismiss splash — called by Dashboard.render after first content paint, or here for non-dashboard pages
+        window._dismissSplash = function() {
+            const s = document.getElementById('splash-screen');
+            if (!s) return;
+            s.style.opacity = '0';
+            s.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => s.remove(), 300);
+        };
+
         document.addEventListener('DOMContentLoaded', async () => {
             // Safety: dismiss splash after 5s no matter what
-            const splashTimeout = setTimeout(() => {
-                const s = document.getElementById('splash-screen');
-                if (s) { s.style.opacity = '0'; s.style.transition = 'opacity 0.3s ease'; setTimeout(() => s.remove(), 300); }
-            }, 5000);
+            const splashTimeout = setTimeout(window._dismissSplash, 5000);
             try {
                 await Auth.init();
             } catch (e) {
@@ -563,9 +569,11 @@
             }
             await App.init();
             clearTimeout(splashTimeout);
-            // Dismiss splash after everything is ready — logo pulses until content is loaded
-            const s = document.getElementById('splash-screen');
-            if (s) { s.style.opacity = '0'; s.style.transition = 'opacity 0.3s ease'; setTimeout(() => s.remove(), 300); }
+            // If not on dashboard (auth screen, or other page), dismiss splash now
+            // Dashboard dismisses its own splash after content renders
+            if (App.currentPage !== 'dashboard') {
+                window._dismissSplash();
+            }
         });
     </script>
 
