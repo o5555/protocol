@@ -667,43 +667,6 @@ const Dashboard = {
         `;
       }
 
-      // Last Night summary — show most recent night's data
-      if (lastNight && profile?.oura_token) {
-        const nightDate = new Date(lastNight.date + 'T00:00:00');
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const nightLabel = nightDate >= today ? 'Last Night' :
-          nightDate >= yesterday ? 'Last Night' : nightDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-        const deepHrs = lastNight.deep_sleep_minutes != null ? Math.floor(lastNight.deep_sleep_minutes / 60) : null;
-        const deepMins = lastNight.deep_sleep_minutes != null ? lastNight.deep_sleep_minutes % 60 : null;
-        const deepStr = deepHrs != null ? (deepHrs > 0 ? `${deepHrs}h ${deepMins}m` : `${deepMins}m`) : '--';
-
-        html += `
-        <div class="bg-oura-card rounded-2xl p-5 mb-4 border border-oura-border/30">
-          <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-4">${nightLabel}</div>
-          <div class="grid grid-cols-4 gap-3 text-center">
-            <div>
-              <div class="text-2xl font-bold text-purple-400">${lastNight.sleep_score ?? '--'}</div>
-              <div class="text-[0.6rem] text-oura-muted mt-1">Score</div>
-            </div>
-            <div>
-              <div class="text-2xl font-bold text-orange-400">${lastNight.avg_hr ?? '--'}</div>
-              <div class="text-[0.6rem] text-oura-muted mt-1">Avg HR</div>
-            </div>
-            <div>
-              <div class="text-2xl font-bold text-teal-400">${lastNight.pre_sleep_hr ?? '--'}</div>
-              <div class="text-[0.6rem] text-oura-muted mt-1">Low HR</div>
-            </div>
-            <div>
-              <div class="text-2xl font-bold text-blue-400">${deepStr}</div>
-              <div class="text-[0.6rem] text-oura-muted mt-1">Deep</div>
-            </div>
-          </div>
-        </div>`;
-      }
 
       if (leagueData && leagueData.participants.length > 0) {
         // Store for swipe handler
@@ -839,7 +802,9 @@ const Dashboard = {
         const challengeId = this._habitData?.challenge?.id || 'personal';
         const cacheKey = `ai_insight_${challengeId}_${today}`;
         if (!Cache.get(cacheKey)) {
+          const gen = this._renderGeneration;
           this._fetchAiInsight(recentSleep, leagueData, false).then(insight => {
+            if (gen !== this._renderGeneration) return; // stale callback — a newer render owns the DOM
             const slot = document.getElementById('ai-card-slot');
             if (slot && insight) {
               slot.innerHTML = `
