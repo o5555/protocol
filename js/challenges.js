@@ -1148,10 +1148,10 @@ const Challenges = {
             <div class="mb-6">
               <div class="flex items-center justify-center mb-3">
                 <div class="flex gap-1.5 sm:gap-2 w-full" id="metric-toggle">
-                  <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[36px] bg-oura-subtle text-white" data-metric="score">SLEEP</button>
-                  <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="avghr">AVG HR</button>
-                  <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="hr">LOW HR</button>
-                  <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="deep">DEEP</button>
+                  <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[44px] bg-oura-subtle text-white" data-metric="score">SLEEP</button>
+                  <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="avghr">AVG HR</button>
+                  <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="hr">LOW HR</button>
+                  <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="deep">DEEP</button>
                 </div>
               </div>
               <div class="rounded-2xl p-4 cursor-pointer bg-oura-bg" onclick="Challenges.showMetricDetailModal('${challengeId}')">
@@ -1251,10 +1251,10 @@ const Challenges = {
         <div class="mb-6">
           <div class="flex items-center justify-center mb-3">
             <div class="flex gap-1.5 sm:gap-2 w-full" id="metric-toggle">
-              <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[36px] bg-oura-subtle text-white" data-metric="score">SLEEP</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="avghr">AVG HR</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="hr">LOW HR</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[36px]" data-metric="deep">DEEP</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[44px] bg-oura-subtle text-white" data-metric="score">SLEEP</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="avghr">AVG HR</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="hr">LOW HR</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="deep">DEEP</button>
             </div>
           </div>
           <div class="rounded-2xl p-4 cursor-pointer bg-oura-bg" onclick="Challenges.showMetricDetailModal('${challengeId}')">
