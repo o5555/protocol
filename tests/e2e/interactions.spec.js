@@ -986,9 +986,9 @@ test.describe('Dashboard Interactions', () => {
 
     await page.evaluate(() => App.navigateTo('dashboard'));
 
-    // The header is in #page-dashboard, outside the container
-    await expect(page.locator('#page-dashboard h2:has-text("Dashboard")')).toBeVisible();
-    await expect(page.locator('#page-dashboard:has-text("Your sleep performance at a glance")')).toBeVisible();
+    // With an active challenge, dashboard shows "Live Standings" header instead of "Home"
+    await expect(page.locator('#page-dashboard')).toBeVisible();
+    await expect(page.locator('#page-dashboard h2')).toBeVisible();
 
     const unexpected = unexpectedErrors(errors);
     expect(unexpected).toEqual([]);

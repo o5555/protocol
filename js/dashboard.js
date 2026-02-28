@@ -7,6 +7,10 @@ const Dashboard = {
   // Render generation counter to prevent stale async callbacks from overwriting fresher renders
   _renderGeneration: 0,
 
+  // Habit + AI state
+  _habitData: null,
+  _aiRefreshTimer: null,
+
   // Main render entry point
   async render() {
     const container = document.getElementById('dashboard-container');
@@ -43,6 +47,10 @@ const Dashboard = {
           console.warn('[Dashboard] League data fetch failed:', e);
         }
       }
+
+      // Fetch habit data for active challenge
+      await this._fetchHabitData(activeChallenges, generation);
+      if (generation !== this._renderGeneration) return;
 
       // Cache the data
       Cache.set('dashboard', { profile, activeChallenges, recentSleep, leagueData });
@@ -91,6 +99,8 @@ const Dashboard = {
             leagueData = this._buildLeagueData(r2, currentUser?.id);
           } catch (e) { /* ignore */ }
         }
+        await this._fetchHabitData(activeChallenges, generation);
+        if (generation !== this._renderGeneration) return;
         Cache.set('dashboard', { profile, activeChallenges, recentSleep, leagueData });
         const container = document.getElementById('dashboard-container');
         if (container) this._renderContent(container, { profile, activeChallenges, recentSleep, leagueData });
@@ -135,7 +145,7 @@ const Dashboard = {
     };
   },
 
-  // Render one page of the league scoreboard for a given metric
+  // Render one slide of the league scoreboard for a given metric (no dots — rendered separately)
   _renderLeaguePage(leagueData, metricIndex) {
     const m = this._leagueMetrics[metricIndex];
     const sorted = [...leagueData.participants].sort((a, b) => {
@@ -148,7 +158,7 @@ const Dashboard = {
 
     return `
       <div class="text-center mb-5">
-        <div class="text-xs font-semibold text-oura-muted uppercase tracking-wider">${m.label}</div>
+        <div class="text-sm font-bold text-oura-muted uppercase tracking-wider">${m.label}</div>
       </div>
       <div class="space-y-2">
         ${sorted.map((p, i) => {
@@ -156,7 +166,6 @@ const Dashboard = {
           const name = p.isMe ? 'You' : escapeHtml(p.name.split(' ')[0]);
           const val = p[m.key];
           const isFirst = i === 0 && val != null;
-          // Row styling — highlight "You" row, accent the #1 value
           const rowBg = p.isMe ? 'bg-oura-accent/5 border border-oura-accent/20' : 'bg-oura-subtle';
           const nameColor = p.isMe ? 'text-oura-accent' : 'text-white';
           const valColor = isFirst ? 'text-oura-accent' : 'text-white';
@@ -168,51 +177,412 @@ const Dashboard = {
             <span class="text-xs text-oura-muted ml-1.5 w-8">${m.unit}</span>
           </div>`;
         }).join('')}
-      </div>
-      <!-- Dots -->
-      <div class="flex justify-center gap-2 mt-5">
-        ${this._leagueMetrics.map((_, i) => {
-          const active = i === metricIndex;
-          return `<div class="w-2 h-2 rounded-full transition-colors ${active ? 'bg-oura-accent' : 'bg-oura-border'}"></div>`;
-        }).join('')}
       </div>`;
   },
 
-  // Switch league metric (called by swipe or dot tap)
+  // Render pagination dots with chevron affordances
+  _renderLeagueDots(activeIndex) {
+    const chevL = '<svg class="w-3.5 h-3.5 text-oura-border flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>';
+    const chevR = '<svg class="w-3.5 h-3.5 text-oura-border flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>';
+    const dots = this._leagueMetrics.map((_, i) => {
+      const active = i === activeIndex;
+      const cls = active
+        ? 'w-6 h-2.5 rounded-full bg-oura-accent'
+        : 'w-2.5 h-2.5 rounded-full bg-oura-border';
+      return `<button class="${cls} transition-all" data-dot="${i}" onclick="event.stopPropagation(); Dashboard._switchLeagueMetric(${i})"></button>`;
+    }).join('');
+    return chevL + dots + chevR;
+  },
+
+  // Animate to a specific league metric page (called by swipe, dot tap, or programmatically)
   _switchLeagueMetric(index) {
     if (!this._leagueData) return;
     this._leagueIndex = index;
-    const el = document.getElementById('league-page');
-    if (!el) return;
-    el.innerHTML = this._renderLeaguePage(this._leagueData, index);
+    const track = document.getElementById('league-track');
+    const area = document.getElementById('league-swipe-area');
+    if (!track || !area) return;
+    const slide = track.querySelector('.league-slide');
+    const slideW = slide ? slide.offsetWidth : area.clientWidth;
+    track.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+    track.style.transform = `translateX(${-index * slideW}px)`;
+    // Update dots
+    const dotsEl = document.getElementById('league-dots');
+    if (dotsEl) dotsEl.innerHTML = this._renderLeagueDots(index);
   },
 
-  // Attach swipe handlers to the league container
+  // Attach carousel drag + tap handlers to the league container
   _attachLeagueSwipe() {
-    const el = document.getElementById('league-swipe-area');
-    if (!el) return;
-    let startX = 0, startY = 0, tracking = false;
-    el.addEventListener('touchstart', (e) => {
+    const area = document.getElementById('league-swipe-area');
+    const track = document.getElementById('league-track');
+    if (!area || !track) return;
+
+    const total = this._leagueMetrics.length;
+    let startX = 0, startY = 0, isDragging = false, startTime = 0;
+    let directionLocked = false, isHorizontal = false;
+    this._swipeOccurred = false;
+
+    const getSlideWidth = () => {
+      const slide = track.querySelector('.league-slide');
+      return slide ? slide.offsetWidth : area.clientWidth;
+    };
+
+    // Set initial position (handles re-render when _leagueIndex > 0)
+    track.style.transform = `translateX(${-this._leagueIndex * getSlideWidth()}px)`;
+
+    area.addEventListener('touchstart', (e) => {
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
-      tracking = true;
+      startTime = Date.now();
+      isDragging = true;
+      directionLocked = false;
+      isHorizontal = false;
+      this._swipeOccurred = false;
+      track.style.transition = 'none';
     }, { passive: true });
-    el.addEventListener('touchend', (e) => {
-      if (!tracking) return;
-      tracking = false;
-      const dx = e.changedTouches[0].clientX - startX;
-      const dy = e.changedTouches[0].clientY - startY;
-      // Only register horizontal swipes (more horizontal than vertical, min 40px)
-      if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
-      const total = this._leagueMetrics.length;
-      if (dx < 0) {
-        // Swipe left → next metric
-        this._switchLeagueMetric((this._leagueIndex + 1) % total);
-      } else {
-        // Swipe right → previous metric
-        this._switchLeagueMetric((this._leagueIndex - 1 + total) % total);
+
+    area.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+
+      // Lock direction after sufficient movement
+      if (!directionLocked && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        directionLocked = true;
+        isHorizontal = Math.abs(dx) >= Math.abs(dy);
       }
+      if (!directionLocked || !isHorizontal) return;
+
+      if (Math.abs(dx) > 15) this._swipeOccurred = true;
+
+      const slideW = getSlideWidth();
+      const baseOffset = -this._leagueIndex * slideW;
+      let offset = baseOffset + dx;
+
+      // Rubber-band damping (0.3x) at first/last edges
+      if (this._leagueIndex === 0 && dx > 0) {
+        offset = baseOffset + dx * 0.3;
+      } else if (this._leagueIndex === total - 1 && dx < 0) {
+        offset = baseOffset + dx * 0.3;
+      }
+
+      track.style.transform = `translateX(${offset}px)`;
     }, { passive: true });
+
+    area.addEventListener('touchend', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+
+      // If vertical or no direction locked, snap back
+      if (!isHorizontal) {
+        this._switchLeagueMetric(this._leagueIndex);
+        return;
+      }
+
+      const dx = e.changedTouches[0].clientX - startX;
+      const slideW = getSlideWidth();
+      const threshold = slideW * 0.2;
+      let target = this._leagueIndex;
+
+      if (Math.abs(dx) > threshold) {
+        if (dx < 0 && target < total - 1) target++;
+        else if (dx > 0 && target > 0) target--;
+      }
+
+      this._switchLeagueMetric(target);
+    }, { passive: true });
+
+    // Programmatic click handler with swipe guard
+    area.addEventListener('click', (e) => {
+      // Don't navigate if a swipe just occurred
+      if (this._swipeOccurred) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      // Don't navigate if a dot was tapped (dots have their own handler)
+      if (e.target.closest('[data-dot]')) return;
+      const challengeId = area.dataset.challengeId;
+      if (challengeId) App.navigateTo('challenge-detail', challengeId);
+    });
+
+    // One-time peek animation — hints that the card is swipeable
+    if (!localStorage.getItem('league_peek_shown')) {
+      localStorage.setItem('league_peek_shown', '1');
+      const slideW = getSlideWidth();
+      const baseX = -this._leagueIndex * slideW;
+      setTimeout(() => {
+        track.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+        track.style.transform = `translateX(${baseX - 30}px)`;
+        setTimeout(() => {
+          track.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+          track.style.transform = `translateX(${baseX}px)`;
+        }, 300);
+      }, 600);
+    }
+  },
+
+  // ── Habit Check-in ──
+
+  // Fetch habits + completions for the active challenge
+  async _fetchHabitData(activeChallenges, generation) {
+    this._habitData = null;
+    if (!activeChallenges || activeChallenges.length === 0) return;
+
+    const challenge = activeChallenges[0];
+    // Skip if challenge hasn't started yet
+    if (Challenges.getDayNumber(challenge.start_date) === 0) return;
+
+    try {
+      const client = SupabaseClient.client;
+      const user = await SupabaseClient.getCurrentUser();
+      if (!client || !user) return;
+      if (generation !== this._renderGeneration) return;
+
+      const today = DateUtils.toLocalDateStr(new Date());
+
+      // Fetch protocol habits and today's completions in parallel
+      const [habitsResult, completions] = await Promise.all([
+        client.from('protocol_habits')
+          .select('id, title, sort_order')
+          .eq('protocol_id', challenge.protocol.id)
+          .order('sort_order'),
+        Challenges.getHabitCompletions(challenge.id, user.id, today)
+      ]);
+
+      if (generation !== this._renderGeneration) return;
+
+      let habits = habitsResult.data || [];
+      // Filter by mode (light vs pro)
+      if (challenge.mode === 'light') {
+        const protocol = { ...challenge.protocol, habits };
+        habits = Protocols.getHabitsForMode(protocol, 'light');
+      }
+
+      this._habitData = { challenge, habits, completions, today };
+    } catch (e) {
+      console.warn('[Dashboard] Habit data fetch failed:', e);
+    }
+  },
+
+  // Render the habit check-in section
+  _renderHabitSection() {
+    if (!this._habitData) return '';
+    const { habits, completions } = this._habitData;
+    if (!habits || habits.length === 0) return '';
+
+    const completedSet = new Set(completions);
+    const completedCount = completedSet.size;
+
+    return `
+      <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 mb-3" id="habit-section">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider">Today's Habits</h3>
+          <span id="habit-counter" class="text-xs text-oura-muted">${completedCount} of ${habits.length}</span>
+        </div>
+        <div class="space-y-0 divide-y divide-oura-border/20">
+          ${habits.map(h => {
+            const checked = completedSet.has(h.id);
+            return `
+            <button class="habit-check-row flex items-center gap-3 w-full text-left py-3 min-h-[48px]"
+                    data-habit-id="${h.id}" data-checked="${checked}"
+                    role="checkbox" aria-checked="${checked}" aria-label="${escapeHtml(h.title)}">
+              <div class="w-6 h-6 rounded-lg border ${checked
+                ? 'bg-oura-accent border-oura-accent'
+                : 'border-oura-border'} flex items-center justify-center flex-shrink-0">
+                ${checked ? '<svg class="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>' : ''}
+              </div>
+              <span class="text-sm ${checked ? 'text-oura-muted line-through' : 'text-white'}">${escapeHtml(h.title)}</span>
+            </button>`;
+          }).join('')}
+        </div>
+      </div>`;
+  },
+
+  // Handle habit toggle from dashboard
+  async _handleDashboardHabitToggle(habitId) {
+    if (!this._habitData) return;
+    const { challenge, habits, completions, today } = this._habitData;
+    const row = document.querySelector(`[data-habit-id="${habitId}"]`);
+    if (!row) return;
+
+    const wasChecked = row.dataset.checked === 'true';
+
+    // Optimistic UI update
+    row.dataset.checked = String(!wasChecked);
+    row.setAttribute('aria-checked', String(!wasChecked));
+    const box = row.querySelector('div:first-child');
+    const label = row.querySelector('span');
+    if (!wasChecked) {
+      box.className = 'w-6 h-6 rounded-lg border bg-oura-accent border-oura-accent flex items-center justify-center flex-shrink-0';
+      box.innerHTML = '<svg class="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>';
+      label.className = 'text-sm text-oura-muted line-through';
+    } else {
+      box.className = 'w-6 h-6 rounded-lg border border-oura-border flex items-center justify-center flex-shrink-0';
+      box.innerHTML = '';
+      label.className = 'text-sm text-white';
+    }
+
+    // Update local completions array and counter
+    if (!wasChecked) {
+      completions.push(habitId);
+    } else {
+      const idx = completions.indexOf(habitId);
+      if (idx !== -1) completions.splice(idx, 1);
+    }
+    const counter = document.getElementById('habit-counter');
+    if (counter) counter.textContent = `${new Set(completions).size} of ${habits.length}`;
+
+    try {
+      await Challenges.toggleHabit(challenge.id, habitId, today);
+      // Trigger debounced AI refresh
+      this._scheduleAiRefresh();
+    } catch (err) {
+      console.warn('[Dashboard] Habit toggle failed:', err);
+      // Revert optimistic update
+      row.dataset.checked = String(wasChecked);
+      row.setAttribute('aria-checked', String(wasChecked));
+      if (wasChecked) {
+        box.className = 'w-6 h-6 rounded-lg border bg-oura-accent border-oura-accent flex items-center justify-center flex-shrink-0';
+        box.innerHTML = '<svg class="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>';
+        label.className = 'text-sm text-oura-muted line-through';
+      } else {
+        box.className = 'w-6 h-6 rounded-lg border border-oura-border flex items-center justify-center flex-shrink-0';
+        box.innerHTML = '';
+        label.className = 'text-sm text-white';
+      }
+      // Revert completions array
+      if (wasChecked) {
+        completions.push(habitId);
+      } else {
+        const idx = completions.indexOf(habitId);
+        if (idx !== -1) completions.splice(idx, 1);
+      }
+      if (counter) counter.textContent = `${new Set(completions).size} of ${habits.length}`;
+    }
+  },
+
+  // Attach click handler for habit rows via event delegation
+  _attachHabitListeners(container) {
+    container.addEventListener('click', (e) => {
+      const row = e.target.closest('.habit-check-row');
+      if (row) {
+        e.stopPropagation();
+        this._handleDashboardHabitToggle(row.dataset.habitId);
+      }
+    });
+  },
+
+  // ── AI Coach Insight ──
+
+  // Build context strings for the AI from available data
+  _buildAiContext(recentSleep, leagueData) {
+    let sleepContext = '';
+    if (recentSleep && recentSleep.length > 0) {
+      const last = recentSleep[0]; // most recent night (desc order)
+      const avg = (arr) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+      const scores = recentSleep.filter(d => d.sleep_score).map(d => d.sleep_score);
+      const hrs = recentSleep.filter(d => d.avg_hr).map(d => d.avg_hr);
+      const lows = recentSleep.filter(d => d.pre_sleep_hr).map(d => d.pre_sleep_hr);
+      const deeps = recentSleep.filter(d => d.deep_sleep_minutes).map(d => d.deep_sleep_minutes);
+
+      sleepContext = `Last night: sleep score ${last.sleep_score || 'unknown'}, avg HR ${last.avg_hr || 'unknown'} bpm, lowest HR ${last.pre_sleep_hr || 'unknown'} bpm, deep sleep ${last.deep_sleep_minutes || 'unknown'} min.`;
+      sleepContext += `\n7-day averages: score ${avg(scores.slice(0, 7)) || 'unknown'}, avg HR ${avg(hrs.slice(0, 7)) || 'unknown'}, lowest HR ${avg(lows.slice(0, 7)) || 'unknown'}, deep ${avg(deeps.slice(0, 7)) || 'unknown'} min.`;
+    }
+
+    let habitContext = '';
+    if (this._habitData) {
+      const { habits, completions } = this._habitData;
+      const completedSet = new Set(completions);
+      const done = habits.filter(h => completedSet.has(h.id)).map(h => h.title);
+      const missed = habits.filter(h => !completedSet.has(h.id)).map(h => h.title);
+      habitContext = `Habits completed: ${done.length} of ${habits.length}.`;
+      if (done.length > 0) habitContext += ` Done: ${done.join(', ')}.`;
+      if (missed.length > 0) habitContext += ` Missed: ${missed.join(', ')}.`;
+    }
+
+    let friendContext = '';
+    if (leagueData && leagueData.participants) {
+      const me = leagueData.participants.find(p => p.isMe);
+      const friends = leagueData.participants.filter(p => !p.isMe);
+      if (friends.length > 0 && me) {
+        const avgScore = Math.round(
+          leagueData.participants.reduce((s, p) => s + (p.score || 0), 0) / leagueData.participants.length
+        );
+        const standout = friends.find(f => f.score && f.score >= avgScore + 10);
+        if (standout) {
+          friendContext = `Notable: ${standout.name} scored ${standout.score} (challenge avg ${avgScore}). You scored ${me.score || 'unknown'}.`;
+        }
+      }
+    }
+
+    return { sleepContext, habitContext, friendContext };
+  },
+
+  // Fetch AI insight (cached per challenge per day)
+  async _fetchAiInsight(recentSleep, leagueData, forceRefresh) {
+    const today = DateUtils.toLocalDateStr(new Date());
+    const challengeId = this._habitData?.challenge?.id || 'personal';
+    const cacheKey = `ai_insight_${challengeId}_${today}`;
+
+    if (!forceRefresh) {
+      const cached = Cache.get(cacheKey);
+      if (cached) return cached;
+    }
+
+    const context = this._buildAiContext(recentSleep, leagueData);
+    if (!context.sleepContext && !context.habitContext) return null;
+
+    try {
+      const resp = await fetch('/api/ai/insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(context)
+      });
+      if (!resp.ok) return null;
+      const { insight } = await resp.json();
+      if (insight) Cache.set(cacheKey, insight);
+      return insight;
+    } catch {
+      return null;
+    }
+  },
+
+  // Render AI card with insight text
+  _renderAiCard(insight) {
+    if (!insight) return '';
+    return `
+      <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6" id="ai-card-slot">
+        <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
+        <p class="text-base text-oura-muted leading-relaxed">${escapeHtml(insight)}</p>
+      </div>`;
+  },
+
+  // Render loading placeholder for AI card
+  _renderAiCardLoading() {
+    return `
+      <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6" id="ai-card-slot">
+        <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
+        <p class="text-base text-oura-muted">Getting your daily insight...</p>
+      </div>`;
+  },
+
+  // Debounced AI refresh after habit toggles (3s after last toggle)
+  _scheduleAiRefresh() {
+    clearTimeout(this._aiRefreshTimer);
+    this._aiRefreshTimer = setTimeout(async () => {
+      // Use cached dashboard data for sleep/league context
+      const cached = Cache.get('dashboard');
+      const recentSleep = cached?.recentSleep || [];
+      const leagueData = cached?.leagueData || null;
+
+      const insight = await this._fetchAiInsight(recentSleep, leagueData, true);
+      const slot = document.getElementById('ai-card-slot');
+      if (slot && insight) {
+        slot.innerHTML = `
+          <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
+          <p class="text-base text-oura-muted leading-relaxed">${escapeHtml(insight)}</p>`;
+      }
+    }, 3000);
   },
 
   // Render dashboard content (separated for caching)
@@ -266,7 +636,7 @@ const Dashboard = {
         <div class="mb-4">
           <!-- Page header — replaces "Dashboard" title -->
           <div class="mb-5">
-            <p class="text-oura-muted text-sm mb-1">Live Standings</p>
+            <p class="text-base font-semibold text-oura-muted uppercase tracking-wider mb-1">Live Standings</p>
             <h2 class="text-2xl font-semibold">${escapeHtml(ld.challengeName)}</h2>
             <div class="flex items-center gap-3 mt-2">
               <span class="text-oura-muted text-sm">Day ${ld.dayNumber}/30</span>
@@ -275,10 +645,13 @@ const Dashboard = {
               </div>
             </div>
           </div>
-          <!-- Swipeable scoreboard -->
-          <div id="league-swipe-area" class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 cursor-pointer" onclick="App.navigateTo('challenge-detail', '${ld.challengeId}')">
-            <div id="league-page">
-              ${this._renderLeaguePage(leagueData, this._leagueIndex)}
+          <!-- Swipeable carousel scoreboard -->
+          <div id="league-swipe-area" data-challenge-id="${ld.challengeId}" class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 cursor-pointer">
+            <div id="league-track">
+              ${this._leagueMetrics.map((_, i) => `<div class="league-slide">${this._renderLeaguePage(leagueData, i)}</div>`).join('')}
+            </div>
+            <div id="league-dots" class="flex justify-center items-center gap-2 mt-5">
+              ${this._renderLeagueDots(this._leagueIndex)}
             </div>
           </div>
         </div>`;
@@ -351,6 +724,18 @@ const Dashboard = {
         }
       }
 
+      // Habit check-in section (below league or baseline)
+      html += this._renderHabitSection();
+
+      // AI insight card (below habits) — shows whenever there's sleep data
+      if (recentSleep.length > 0) {
+        const today = DateUtils.toLocalDateStr(new Date());
+        const challengeId = this._habitData?.challenge?.id || 'personal';
+        const cacheKey = `ai_insight_${challengeId}_${today}`;
+        const cachedInsight = Cache.get(cacheKey);
+        html += cachedInsight ? this._renderAiCard(cachedInsight) : this._renderAiCardLoading();
+      }
+
       container.innerHTML = html;
 
       // Initialize sparklines (only when showing baseline)
@@ -362,6 +747,28 @@ const Dashboard = {
       } else {
         // Attach swipe handlers for league scoreboard
         this._attachLeagueSwipe();
+      }
+
+      // Attach habit click handlers
+      this._attachHabitListeners(container);
+
+      // Async: fetch AI insight if not cached
+      if (recentSleep.length > 0) {
+        const today = DateUtils.toLocalDateStr(new Date());
+        const challengeId = this._habitData?.challenge?.id || 'personal';
+        const cacheKey = `ai_insight_${challengeId}_${today}`;
+        if (!Cache.get(cacheKey)) {
+          this._fetchAiInsight(recentSleep, leagueData, false).then(insight => {
+            const slot = document.getElementById('ai-card-slot');
+            if (slot && insight) {
+              slot.innerHTML = `
+                <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
+                <p class="text-base text-oura-muted leading-relaxed">${escapeHtml(insight)}</p>`;
+            } else if (slot && !insight) {
+              slot.remove();
+            }
+          });
+        }
       }
     } catch (error) {
       console.error('Error rendering dashboard:', error);

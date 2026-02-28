@@ -877,6 +877,96 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // AI Coach insight — must be before the Oura proxy catch-all
+    if (req.url === '/api/ai/insight' && req.method === 'POST') {
+        const AI_GATEWAY_TOKEN = (process.env.AI_GATEWAY_TOKEN || '').trim();
+        if (!AI_GATEWAY_TOKEN) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'AI gateway not configured' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { sleepContext, habitContext, friendContext } = body;
+
+            if (!sleepContext && !habitContext) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Missing context' }));
+                return;
+            }
+
+            const systemPrompt = 'You are a supportive sleep coach. Be brief, data-driven, no fluff. ' +
+                'Give 2-3 sentences of personalized feedback based on the user\'s sleep data and habits. ' +
+                'If friend data is provided and notable, include a brief social nudge. ' +
+                'Do not use emoji. Do not use greeting words like "Hey" or "Hi".';
+
+            const userMessage = [sleepContext, habitContext, friendContext]
+                .filter(Boolean)
+                .join('\n\n');
+
+            const payload = JSON.stringify({
+                model: 'anthropic/claude-haiku-4-5',
+                input: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userMessage }
+                ],
+                max_output_tokens: 200
+            });
+
+            const options = {
+                hostname: 'ai-gateway.vercel.sh',
+                path: '/v1/responses',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${AI_GATEWAY_TOKEN}`,
+                    'Content-Length': Buffer.byteLength(payload)
+                }
+            };
+
+            const aiReq = https.request(options, (aiRes) => {
+                let data = '';
+                aiRes.on('data', chunk => data += chunk);
+                aiRes.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(data);
+                        // Vercel AI Gateway Responses API format
+                        const text = parsed.output?.[0]?.content?.[0]?.text
+                            || parsed.choices?.[0]?.message?.content
+                            || '';
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ insight: text }));
+                    } catch {
+                        console.error('[ai] Failed to parse AI response:', data.substring(0, 200));
+                        res.writeHead(502, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Failed to parse AI response' }));
+                    }
+                });
+            });
+
+            aiReq.on('error', (err) => {
+                console.error('[ai] Gateway error:', err.message);
+                res.writeHead(502, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'AI service unavailable' }));
+            });
+
+            aiReq.setTimeout(10000, () => {
+                aiReq.destroy();
+                res.writeHead(504, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'AI request timed out' }));
+            });
+
+            aiReq.write(payload);
+            aiReq.end();
+        } catch (err) {
+            console.error('[ai] Insight error:', err.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
     // Proxy requests to Oura API (catch-all for /api/*)
     if (req.url.startsWith('/api/')) {
         const ouraPath = req.url.replace('/api', '/v2/usercollection');

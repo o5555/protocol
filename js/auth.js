@@ -201,6 +201,7 @@ const Auth = {
   updateUI(user, navigate = true) {
     const authSection = document.getElementById('auth-section');
     const appContent = document.getElementById('app-content');
+    const splash = document.getElementById('splash-screen');
 
     if (user) {
       if (authSection) authSection.classList.add('hidden');
@@ -212,6 +213,13 @@ const Auth = {
       const onboardingSection = document.getElementById('onboarding-section');
       if (onboardingSection) onboardingSection.classList.add('hidden');
       window.dispatchEvent(new CustomEvent('userLoggedOut'));
+    }
+
+    // Dismiss splash screen after auth resolves
+    if (splash) {
+      splash.style.opacity = '0';
+      splash.style.transition = 'opacity 0.3s ease';
+      setTimeout(() => splash.remove(), 300);
     }
   },
 
