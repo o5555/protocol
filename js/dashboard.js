@@ -124,16 +124,27 @@ const Dashboard = {
     const { challenge, sleepData } = result;
     if (!sleepData || sleepData.length === 0) return null;
 
-    const avg = arr => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+    const medianAvg = (values, expectedDays) => {
+      if (values.length === 0) return null;
+      if (expectedDays && values.length < expectedDays) {
+        const sorted = [...values].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        const total = values.reduce((s, v) => s + v, 0) + (expectedDays - values.length) * median;
+        return Math.round(total / expectedDays);
+      }
+      return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+    };
     const participants = sleepData.map(p => {
       const cd = p.challengeData || [];
+      const days = p.challengeDays || cd.length;
       return {
         name: p.user.display_name || p.user.email.split('@')[0],
         isMe: p.user.id === currentUserId,
-        score: avg(cd.filter(d => d.sleep_score).map(d => d.sleep_score)),
-        hr: avg(cd.filter(d => d.avg_hr).map(d => d.avg_hr)),
-        low: avg(cd.filter(d => d.pre_sleep_hr).map(d => d.pre_sleep_hr)),
-        deep: avg(cd.filter(d => d.deep_sleep_minutes).map(d => d.deep_sleep_minutes))
+        score: medianAvg(cd.filter(d => d.sleep_score).map(d => d.sleep_score), days),
+        hr: medianAvg(cd.filter(d => d.avg_hr).map(d => d.avg_hr), days),
+        low: medianAvg(cd.filter(d => d.pre_sleep_hr).map(d => d.pre_sleep_hr), days),
+        deep: medianAvg(cd.filter(d => d.deep_sleep_minutes).map(d => d.deep_sleep_minutes), days)
       };
     });
 
