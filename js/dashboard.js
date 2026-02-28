@@ -124,27 +124,17 @@ const Dashboard = {
     const { challenge, sleepData } = result;
     if (!sleepData || sleepData.length === 0) return null;
 
-    const medianAvg = (values, expectedDays) => {
-      if (values.length === 0) return null;
-      if (expectedDays && values.length < expectedDays) {
-        const sorted = [...values].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-        const total = values.reduce((s, v) => s + v, 0) + (expectedDays - values.length) * median;
-        return Math.round(total / expectedDays);
-      }
-      return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
-    };
     const participants = sleepData.map(p => {
       const cd = p.challengeData || [];
-      const days = p.challengeDays || cd.length;
+      // Most recent night (challengeData is sorted ascending by date)
+      const latest = cd.length > 0 ? cd[cd.length - 1] : {};
       return {
         name: p.user.display_name || p.user.email.split('@')[0],
         isMe: p.user.id === currentUserId,
-        score: medianAvg(cd.filter(d => d.sleep_score).map(d => d.sleep_score), days),
-        hr: medianAvg(cd.filter(d => d.avg_hr).map(d => d.avg_hr), days),
-        low: medianAvg(cd.filter(d => d.pre_sleep_hr).map(d => d.pre_sleep_hr), days),
-        deep: medianAvg(cd.filter(d => d.deep_sleep_minutes).map(d => d.deep_sleep_minutes), days)
+        score: latest.sleep_score ?? null,
+        hr: latest.avg_hr ?? null,
+        low: latest.pre_sleep_hr ?? null,
+        deep: latest.deep_sleep_minutes ?? null
       };
     });
 
@@ -823,8 +813,9 @@ const Dashboard = {
               const temp = document.createElement('div');
               temp.innerHTML = this._renderAiCard(insight);
               slot.replaceWith(temp.firstElementChild);
+            } else if (slot && !insight) {
+              slot.remove();
             }
-            // On failure, leave the loading card — don't remove it
           });
         }
       }
