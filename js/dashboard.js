@@ -550,10 +550,22 @@ const Dashboard = {
   // Render AI card with insight text
   _renderAiCard(insight) {
     if (!insight) return '';
+    const lines = insight.split('\n').map(l => l.trim()).filter(Boolean);
+    const bullets = lines.filter(l => l.startsWith('- '));
+    let body;
+    if (bullets.length > 0) {
+      body = `<ul class="space-y-2">${bullets.map(b =>
+        `<li class="flex gap-2 text-sm text-oura-muted leading-relaxed">
+          <span class="text-oura-accent mt-0.5 flex-shrink-0">&bull;</span>
+          <span>${escapeHtml(b.slice(2))}</span>
+        </li>`).join('')}</ul>`;
+    } else {
+      body = `<p class="text-sm text-oura-muted leading-relaxed">${escapeHtml(insight)}</p>`;
+    }
     return `
       <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6" id="ai-card-slot">
         <h3 class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
-        <p class="text-base text-oura-muted leading-relaxed">${escapeHtml(insight)}</p>
+        ${body}
       </div>`;
   },
 
@@ -646,11 +658,13 @@ const Dashboard = {
             </div>
           </div>
           <!-- Swipeable carousel scoreboard -->
-          <div id="league-swipe-area" data-challenge-id="${ld.challengeId}" class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 cursor-pointer">
-            <div id="league-track">
-              ${this._leagueMetrics.map((_, i) => `<div class="league-slide">${this._renderLeaguePage(leagueData, i)}</div>`).join('')}
+          <div id="league-swipe-area" data-challenge-id="${ld.challengeId}" class="bg-oura-card rounded-2xl border border-oura-border/30 cursor-pointer">
+            <div id="league-clip">
+              <div id="league-track">
+                ${this._leagueMetrics.map((_, i) => `<div class="league-slide p-5 pb-0">${this._renderLeaguePage(leagueData, i)}</div>`).join('')}
+              </div>
             </div>
-            <div id="league-dots" class="flex justify-center items-center gap-2 mt-5">
+            <div id="league-dots" class="flex justify-center items-center gap-2 px-5 py-4">
               ${this._renderLeagueDots(this._leagueIndex)}
             </div>
           </div>

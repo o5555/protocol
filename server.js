@@ -897,9 +897,10 @@ const server = http.createServer(async (req, res) => {
             }
 
             const systemPrompt = 'You are a supportive sleep coach. Be brief, data-driven, no fluff. ' +
-                'Give 2-3 sentences of personalized feedback based on the user\'s sleep data and habits. ' +
-                'If friend data is provided and notable, include a brief social nudge. ' +
-                'Do not use emoji. Do not use greeting words like "Hey" or "Hi".';
+                'Give 2-3 bullet points of personalized feedback based on the user\'s sleep data and habits. ' +
+                'Each bullet should be one short sentence. Start each bullet with "- ". ' +
+                'If friend data is provided and notable, include a brief social nudge as a bullet. ' +
+                'Do not use emoji. Do not use greeting words like "Hey" or "Hi". No intro text before the bullets.';
 
             const userMessage = [sleepContext, habitContext, friendContext]
                 .filter(Boolean)
