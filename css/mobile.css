@@ -215,6 +215,18 @@ button, a, input, select, textarea, label {
   100% { transform: translateX(0); }
 }
 
+/* ── Habit Completion Celebration ── */
+
+@keyframes habit-glow {
+  0% { box-shadow: 0 0 0 0 rgba(0, 200, 160, 0); border-color: rgba(42, 42, 78, 0.3); }
+  40% { box-shadow: 0 0 20px 4px rgba(0, 200, 160, 0.25); border-color: #00c8a0; }
+  100% { box-shadow: 0 0 0 0 rgba(0, 200, 160, 0); border-color: rgba(42, 42, 78, 0.3); }
+}
+
+.habits-complete {
+  animation: habit-glow 0.8s ease-out;
+}
+
 /* ── Page Transitions ── */
 
 @media (prefers-reduced-motion: no-preference) {
