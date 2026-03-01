@@ -896,11 +896,18 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
 
-            const systemPrompt = 'You are a supportive sleep coach. Be brief, data-driven, no fluff. ' +
-                'Give 2-3 bullet points of personalized feedback based on the user\'s sleep data and habits. ' +
-                'Each bullet should be one short sentence. Start each bullet with "- ". ' +
+            const systemPrompt = 'You are a data-driven sleep coach. You receive up to 30 nights of sleep data. ' +
+                'Analyze the FULL dataset to find patterns the user cannot easily see themselves. ' +
+                'Focus on these pattern types:\n' +
+                '1. Bedtime-to-outcome: correlate bedtime times with sleep scores and deep sleep. Quote specific times and numbers from their data.\n' +
+                '2. Silent regressions: is deep sleep declining while the headline score stays stable? Is light sleep replacing deep?\n' +
+                '3. Deep sleep streaks/droughts: consecutive nights above or below their personal average.\n' +
+                '4. HR trends: is resting HR creeping up or down over the past 2-3 weeks?\n' +
+                'Give 2-3 bullet points. Each bullet must reference specific numbers, dates, or time ranges from the data. ' +
+                'Start each bullet with "- ". No generic advice — only insights backed by their actual data. ' +
+                'If habit data is provided, correlate completed/missed habits with that night\'s sleep performance. ' +
                 'If friend data is provided and notable, include a brief social nudge as a bullet. ' +
-                'Do not use emoji. Do not use greeting words like "Hey" or "Hi". No intro text before the bullets.';
+                'Do not use emoji. Do not use greeting words. No intro text before the bullets.';
 
             const userMessage = [sleepContext, habitContext, friendContext]
                 .filter(Boolean)
@@ -912,7 +919,7 @@ const server = http.createServer(async (req, res) => {
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: userMessage }
                 ],
-                max_output_tokens: 200
+                max_output_tokens: 350
             });
 
             const options = {

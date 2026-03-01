@@ -689,7 +689,7 @@ test.describe('Full App Integration (Real Supabase)', () => {
 
           const html = await detailsModal.innerHTML();
           expect(html).toContain('Challenge Details');
-          expect(html).toContain("Today's Habits");
+          expect(html).toContain("Last Night's Habits");
 
           // Close
           await page.evaluate(() => Challenges.closeDetailsModal());

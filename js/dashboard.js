@@ -339,15 +339,38 @@ const Dashboard = {
       if (!client || !user) return;
       if (generation !== this._renderGeneration) return;
 
-      const today = DateUtils.toLocalDateStr(new Date());
+      // Habits reflect last night — users check in the morning after
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const habitDate = DateUtils.toLocalDateStr(yesterday);
 
-      // Fetch protocol habits and today's completions in parallel
+      // Check if yesterday falls within the challenge period
+      const challengeStart = Challenges.parseLocalDate(challenge.start_date);
+      challengeStart.setHours(0, 0, 0, 0);
+      yesterday.setHours(0, 0, 0, 0);
+      if (yesterday < challengeStart) {
+        // First day — no "last night" to check in yet
+        const habitsResult = await client.from('protocol_habits')
+          .select('id, title, sort_order')
+          .eq('protocol_id', challenge.protocol.id)
+          .order('sort_order');
+        if (generation !== this._renderGeneration) return;
+        let habits = habitsResult.data || [];
+        if (challenge.mode === 'light') {
+          const protocol = { ...challenge.protocol, habits };
+          habits = Protocols.getHabitsForMode(protocol, 'light');
+        }
+        this._habitData = { challenge, habits, completions: [], today: habitDate, firstDay: true };
+        return;
+      }
+
+      // Fetch protocol habits and last night's completions in parallel
       const [habitsResult, completions] = await Promise.all([
         client.from('protocol_habits')
           .select('id, title, sort_order')
           .eq('protocol_id', challenge.protocol.id)
           .order('sort_order'),
-        Challenges.getHabitCompletions(challenge.id, user.id, today)
+        Challenges.getHabitCompletions(challenge.id, user.id, habitDate)
       ]);
 
       if (generation !== this._renderGeneration) return;
@@ -359,7 +382,7 @@ const Dashboard = {
         habits = Protocols.getHabitsForMode(protocol, 'light');
       }
 
-      this._habitData = { challenge, habits, completions, today };
+      this._habitData = { challenge, habits, completions, today: habitDate };
     } catch (e) {
       console.warn('[Dashboard] Habit data fetch failed:', e);
     }
@@ -368,8 +391,17 @@ const Dashboard = {
   // Render the habit check-in section
   _renderHabitSection() {
     if (!this._habitData) return '';
-    const { habits, completions } = this._habitData;
+    const { habits, completions, firstDay } = this._habitData;
     if (!habits || habits.length === 0) return '';
+
+    // First day of challenge — no last night to check in
+    if (firstDay) {
+      return `
+        <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 mb-3">
+          <h3 class="text-sm font-bold text-oura-muted uppercase tracking-wider mb-2">Last Night's Habits</h3>
+          <p class="text-sm text-oura-muted">Check in tomorrow morning to log last night's habits.</p>
+        </div>`;
+    }
 
     const completedSet = new Set(completions);
     const completedCount = completedSet.size;
@@ -377,7 +409,7 @@ const Dashboard = {
     return `
       <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 mb-3" id="habit-section">
         <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-bold text-oura-muted uppercase tracking-wider">Today's Habits</h3>
+          <h3 class="text-sm font-bold text-oura-muted uppercase tracking-wider">Last Night's Habits</h3>
           <span id="habit-counter" class="text-xs text-oura-muted">${completedCount} of ${habits.length}</span>
         </div>
         <div class="space-y-0 divide-y divide-oura-border/20">
@@ -498,19 +530,34 @@ const Dashboard = {
 
   // ── AI Coach Insight ──
 
+  // Format bedtime_start ISO string to local time like "22:45"
+  _formatBedtime(isoStr) {
+    if (!isoStr) return null;
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch { return null; }
+  },
+
   // Build context strings for the AI from available data
   _buildAiContext(recentSleep, leagueData) {
     let sleepContext = '';
     if (recentSleep && recentSleep.length > 0) {
-      const last = recentSleep[0]; // most recent night (desc order)
-      const avg = (arr) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
-      const scores = recentSleep.filter(d => d.sleep_score).map(d => d.sleep_score);
-      const hrs = recentSleep.filter(d => d.avg_hr).map(d => d.avg_hr);
-      const lows = recentSleep.filter(d => d.pre_sleep_hr).map(d => d.pre_sleep_hr);
-      const deeps = recentSleep.filter(d => d.deep_sleep_minutes).map(d => d.deep_sleep_minutes);
-
-      sleepContext = `Last night: sleep score ${last.sleep_score || 'unknown'}, avg HR ${last.avg_hr || 'unknown'} bpm, lowest HR ${last.pre_sleep_hr || 'unknown'} bpm, deep sleep ${last.deep_sleep_minutes || 'unknown'} min.`;
-      sleepContext += `\n7-day averages: score ${avg(scores.slice(0, 7)) || 'unknown'}, avg HR ${avg(hrs.slice(0, 7)) || 'unknown'}, lowest HR ${avg(lows.slice(0, 7)) || 'unknown'}, deep ${avg(deeps.slice(0, 7)) || 'unknown'} min.`;
+      // Send full 30-day nightly data so the LLM can find patterns
+      const nights = recentSleep.map(d => {
+        const entry = {
+          date: d.date,
+          score: d.sleep_score,
+          deep: d.deep_sleep_minutes,
+          avgHR: d.avg_hr,
+          lowHR: d.pre_sleep_hr,
+          total: d.total_sleep_minutes
+        };
+        const bt = this._formatBedtime(d.bedtime_start);
+        if (bt) entry.bedtime = bt;
+        return entry;
+      });
+      sleepContext = `Sleep data (last ${nights.length} nights, newest first):\n${JSON.stringify(nights)}`;
     }
 
     let habitContext = '';
@@ -519,7 +566,7 @@ const Dashboard = {
       const completedSet = new Set(completions);
       const done = habits.filter(h => completedSet.has(h.id)).map(h => h.title);
       const missed = habits.filter(h => !completedSet.has(h.id)).map(h => h.title);
-      habitContext = `Habits completed: ${done.length} of ${habits.length}.`;
+      habitContext = `Last night's habits: ${done.length} of ${habits.length} completed.`;
       if (done.length > 0) habitContext += ` Done: ${done.join(', ')}.`;
       if (missed.length > 0) habitContext += ` Missed: ${missed.join(', ')}.`;
     }
@@ -883,7 +930,7 @@ const Dashboard = {
 
     const { data, error } = await client
       .from('sleep_data')
-      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, bedtime_start')
       .eq('user_id', user.id)
       .gte('date', startStr)
       .order('date', { ascending: false });
