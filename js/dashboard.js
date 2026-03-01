@@ -686,11 +686,9 @@ const Dashboard = {
       const leagueData = cached?.leagueData || null;
 
       const insight = await this._fetchAiInsight(recentSleep, leagueData, true);
-      const slot = document.getElementById('ai-card-slot');
-      if (slot && insight) {
-        const temp = document.createElement('div');
-        temp.innerHTML = this._renderAiCard(insight);
-        slot.replaceWith(temp.firstElementChild);
+      const mount = document.getElementById('ai-card-mount');
+      if (mount && insight) {
+        mount.innerHTML = this._renderAiCard(insight);
       }
     }, 3000);
   },
@@ -840,14 +838,11 @@ const Dashboard = {
       // Habit check-in section (below league or baseline)
       html += this._renderHabitSection();
 
-      // AI insight card (below habits) — shows whenever there's sleep data
-      // Use activeChallenges for cache key (not _habitData which may not be populated yet)
+      // AI insight: just reserve a mount point — content managed separately
+      // to survive innerHTML wipes from multi-pass rendering (cache → fresh → sync)
       const aiChallengeId = activeChallenges?.[0]?.id || 'personal';
       if (recentSleep.length > 0) {
-        const today = DateUtils.toLocalDateStr(new Date());
-        const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
-        const cachedInsight = Cache.get(cacheKey);
-        html += cachedInsight ? this._renderAiCard(cachedInsight) : this._renderAiCardLoading();
+        html += '<div id="ai-card-mount"></div>';
       }
 
       container.innerHTML = html;
@@ -869,30 +864,36 @@ const Dashboard = {
       // Attach habit click handlers
       this._attachHabitListeners(container);
 
-      // Async: fetch AI insight if not cached and no fetch already in flight.
-      // _renderContent runs multiple times per render() (cache, fresh, sync).
-      // Without this guard, a fetch from an earlier call resolves, updates the DOM,
-      // then a later innerHTML wipe destroys it — causing a flash on iOS PWA.
-      if (recentSleep.length > 0 && !this._aiFetchInFlight) {
-        const today = DateUtils.toLocalDateStr(new Date());
-        const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
-        if (!Cache.get(cacheKey)) {
-          const gen = this._renderGeneration;
-          this._aiFetchInFlight = true;
-          this._fetchAiInsight(recentSleep, leagueData, false, aiChallengeId).then(insight => {
-            this._aiFetchInFlight = false;
-            if (gen !== this._renderGeneration) return; // stale — a newer render() owns the DOM
-            const slot = document.getElementById('ai-card-slot');
-            if (slot && insight) {
-              const temp = document.createElement('div');
-              temp.innerHTML = this._renderAiCard(insight);
-              slot.replaceWith(temp.firstElementChild);
-            } else if (slot && !insight) {
-              slot.style.transition = 'opacity 0.3s ease';
-              slot.style.opacity = '0';
-              setTimeout(() => slot.remove(), 300);
-            }
-          }).catch(() => { this._aiFetchInFlight = false; });
+      // Populate AI card mount point: cached insight → real card, else skeleton + fetch.
+      // This runs AFTER innerHTML so the mount point is always fresh.
+      // The card is set via mount.innerHTML (not replaceWith) so the mount itself persists
+      // and can be re-populated by later renders without losing content during the wipe.
+      if (recentSleep.length > 0) {
+        const mount = document.getElementById('ai-card-mount');
+        if (mount) {
+          const today = DateUtils.toLocalDateStr(new Date());
+          const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
+          const cachedInsight = Cache.get(cacheKey);
+          if (cachedInsight) {
+            mount.innerHTML = this._renderAiCard(cachedInsight);
+          } else if (!this._aiFetchInFlight) {
+            mount.innerHTML = this._renderAiCardLoading();
+            const gen = this._renderGeneration;
+            this._aiFetchInFlight = true;
+            this._fetchAiInsight(recentSleep, leagueData, false, aiChallengeId).then(insight => {
+              this._aiFetchInFlight = false;
+              if (gen !== this._renderGeneration) return;
+              const m = document.getElementById('ai-card-mount');
+              if (m && insight) {
+                m.innerHTML = this._renderAiCard(insight);
+              } else if (m && !insight) {
+                m.style.transition = 'opacity 0.3s ease';
+                m.style.opacity = '0';
+                setTimeout(() => { if (m) m.innerHTML = ''; m.style.opacity = ''; }, 300);
+              }
+            }).catch(() => { this._aiFetchInFlight = false; });
+          }
+          // If fetch in flight, leave mount empty — the fetch callback will fill it
         }
       }
     } catch (error) {
