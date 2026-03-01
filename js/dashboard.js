@@ -890,9 +890,8 @@ const Dashboard = {
           }).catch(() => { this._aiFetchInFlight = false; });
         }
         // If fetch in flight, don't touch aiContainer — let the running fetch fill it
-      } else if (aiContainer) {
-        // No sleep data — clear any stale AI card
-        aiContainer.innerHTML = '';
+      } else if (aiContainer && !aiContainer.innerHTML.trim()) {
+        // No sleep data AND no card showing — leave empty (don't clear existing cards)
       }
     } catch (error) {
       console.error('Error rendering dashboard:', error);
