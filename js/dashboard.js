@@ -10,6 +10,7 @@ const Dashboard = {
   // Habit + AI state
   _habitData: null,
   _aiRefreshTimer: null,
+  _aiFetchInFlight: false,
 
   // Main render entry point
   async render() {
@@ -868,17 +869,21 @@ const Dashboard = {
       // Attach habit click handlers
       this._attachHabitListeners(container);
 
-      // Async: fetch AI insight if not cached
-      if (recentSleep.length > 0) {
+      // Async: fetch AI insight if not cached and no fetch already in flight.
+      // _renderContent runs multiple times per render() (cache, fresh, sync).
+      // Without this guard, a fetch from an earlier call resolves, updates the DOM,
+      // then a later innerHTML wipe destroys it — causing a flash on iOS PWA.
+      if (recentSleep.length > 0 && !this._aiFetchInFlight) {
         const today = DateUtils.toLocalDateStr(new Date());
         const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
         if (!Cache.get(cacheKey)) {
           const gen = this._renderGeneration;
+          this._aiFetchInFlight = true;
           this._fetchAiInsight(recentSleep, leagueData, false, aiChallengeId).then(insight => {
-            if (gen !== this._renderGeneration) return; // stale callback — a newer render owns the DOM
+            this._aiFetchInFlight = false;
+            if (gen !== this._renderGeneration) return; // stale — a newer render() owns the DOM
             const slot = document.getElementById('ai-card-slot');
             if (slot && insight) {
-              // Replace the loading card with the full tappable AI card
               const temp = document.createElement('div');
               temp.innerHTML = this._renderAiCard(insight);
               slot.replaceWith(temp.firstElementChild);
@@ -887,7 +892,7 @@ const Dashboard = {
               slot.style.opacity = '0';
               setTimeout(() => slot.remove(), 300);
             }
-          });
+          }).catch(() => { this._aiFetchInFlight = false; });
         }
       }
     } catch (error) {
