@@ -597,12 +597,34 @@ const Dashboard = {
       </div>`;
   },
 
-  // Render loading placeholder for AI card
+  // Render skeleton loading placeholder for AI card (Savr-style shimmer)
   _renderAiCardLoading() {
     return `
-      <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6" id="ai-card-slot">
-        <h3 class="text-sm font-bold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
-        <p class="text-base text-oura-muted">Getting your daily insight...</p>
+      <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6 ai-skeleton-card" id="ai-card-slot">
+        <div class="skeleton-bar w-24 h-3 mb-4"></div>
+        <div class="space-y-2.5">
+          <div class="flex gap-2 items-start">
+            <div class="skeleton-bar w-2 h-2 rounded-full mt-1.5 flex-shrink-0"></div>
+            <div class="flex-1 space-y-1.5">
+              <div class="skeleton-bar h-3 w-full"></div>
+              <div class="skeleton-bar h-3 w-3/4"></div>
+            </div>
+          </div>
+          <div class="flex gap-2 items-start">
+            <div class="skeleton-bar w-2 h-2 rounded-full mt-1.5 flex-shrink-0"></div>
+            <div class="flex-1 space-y-1.5">
+              <div class="skeleton-bar h-3 w-full"></div>
+              <div class="skeleton-bar h-3 w-1/2"></div>
+            </div>
+          </div>
+          <div class="flex gap-2 items-start">
+            <div class="skeleton-bar w-2 h-2 rounded-full mt-1.5 flex-shrink-0"></div>
+            <div class="flex-1 space-y-1.5">
+              <div class="skeleton-bar h-3 w-5/6"></div>
+            </div>
+          </div>
+        </div>
+        <div class="skeleton-bar w-28 h-3 mt-4"></div>
       </div>`;
   },
 
@@ -814,7 +836,9 @@ const Dashboard = {
               temp.innerHTML = this._renderAiCard(insight);
               slot.replaceWith(temp.firstElementChild);
             } else if (slot && !insight) {
-              slot.remove();
+              slot.style.transition = 'opacity 0.3s ease';
+              slot.style.opacity = '0';
+              setTimeout(() => slot.remove(), 300);
             }
           });
         }
