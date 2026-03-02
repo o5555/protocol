@@ -879,7 +879,7 @@ const server = http.createServer(async (req, res) => {
 
     // AI Coach insight — must be before the Oura proxy catch-all
     if (req.url === '/api/ai/insight' && req.method === 'POST') {
-        const AI_GATEWAY_TOKEN = (process.env.VERCEL_OIDC_TOKEN || process.env.AI_GATEWAY_TOKEN || '').trim();
+        const AI_GATEWAY_TOKEN = (process.env.AI_GATEWAY_TOKEN || process.env.VERCEL_OIDC_TOKEN || '').trim();
         if (!AI_GATEWAY_TOKEN) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'AI gateway not configured' }));
@@ -991,7 +991,7 @@ const server = http.createServer(async (req, res) => {
 
     // AI Coach chat — conversational follow-up to insight
     if (req.url === '/api/ai/chat' && req.method === 'POST') {
-        const AI_GATEWAY_TOKEN = (process.env.VERCEL_OIDC_TOKEN || process.env.AI_GATEWAY_TOKEN || '').trim();
+        const AI_GATEWAY_TOKEN = (process.env.AI_GATEWAY_TOKEN || process.env.VERCEL_OIDC_TOKEN || '').trim();
         if (!AI_GATEWAY_TOKEN) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'AI gateway not configured' }));
