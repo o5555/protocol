@@ -914,9 +914,9 @@ const server = http.createServer(async (req, res) => {
                 .join('\n\n');
 
             const payload = JSON.stringify({
-                model: 'anthropic/claude-haiku-4-5',
+                model: 'anthropic/claude-haiku-4.5',
+                instructions: systemPrompt,
                 input: [
-                    { role: 'system', content: systemPrompt },
                     { role: 'user', content: userMessage }
                 ],
                 max_output_tokens: 350
@@ -939,14 +939,28 @@ const server = http.createServer(async (req, res) => {
                 aiRes.on('end', () => {
                     try {
                         const parsed = JSON.parse(data);
-                        // Vercel AI Gateway Responses API format
-                        const text = parsed.output?.[0]?.content?.[0]?.text
+                        // Check for error responses from the gateway
+                        if (parsed.error) {
+                            console.error('[ai] Gateway returned error:', JSON.stringify(parsed.error));
+                            res.writeHead(502, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: parsed.error.message || 'AI gateway error' }));
+                            return;
+                        }
+                        // Vercel AI Gateway Responses API format:
+                        // 1. output_text (top-level convenience accessor)
+                        // 2. output[0].content[0].text (nested structure)
+                        // 3. Chat Completions fallback: choices[0].message.content
+                        const text = parsed.output_text
+                            || parsed.output?.[0]?.content?.[0]?.text
                             || parsed.choices?.[0]?.message?.content
                             || '';
+                        if (!text) {
+                            console.error('[ai] Empty insight from gateway. Response keys:', Object.keys(parsed).join(', '), 'Status:', aiRes.statusCode);
+                        }
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ insight: text }));
                     } catch {
-                        console.error('[ai] Failed to parse AI response:', data.substring(0, 200));
+                        console.error('[ai] Failed to parse AI response:', data.substring(0, 500));
                         res.writeHead(502, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'Failed to parse AI response' }));
                     }
@@ -1004,13 +1018,11 @@ const server = http.createServer(async (req, res) => {
                 (sleepContext ? '\n\nUser sleep data: ' + sleepContext : '') +
                 (habitContext ? '\n\nUser habits: ' + habitContext : '');
 
-            const input = [
-                { role: 'system', content: systemPrompt },
-                ...trimmed.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }))
-            ];
+            const input = trimmed.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }));
 
             const payload = JSON.stringify({
-                model: 'anthropic/claude-haiku-4-5',
+                model: 'anthropic/claude-haiku-4.5',
+                instructions: systemPrompt,
                 input,
                 max_output_tokens: 300
             });
@@ -1032,13 +1044,23 @@ const server = http.createServer(async (req, res) => {
                 aiRes.on('end', () => {
                     try {
                         const parsed = JSON.parse(data);
-                        const text = parsed.output?.[0]?.content?.[0]?.text
+                        if (parsed.error) {
+                            console.error('[ai] Chat gateway returned error:', JSON.stringify(parsed.error));
+                            res.writeHead(502, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: parsed.error.message || 'AI gateway error' }));
+                            return;
+                        }
+                        const text = parsed.output_text
+                            || parsed.output?.[0]?.content?.[0]?.text
                             || parsed.choices?.[0]?.message?.content
                             || '';
+                        if (!text) {
+                            console.error('[ai] Empty chat reply. Response keys:', Object.keys(parsed).join(', '), 'Status:', aiRes.statusCode);
+                        }
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ reply: text }));
                     } catch {
-                        console.error('[ai] Failed to parse chat response:', data.substring(0, 200));
+                        console.error('[ai] Failed to parse chat response:', data.substring(0, 500));
                         res.writeHead(502, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'Failed to parse AI response' }));
                     }
