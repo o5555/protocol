@@ -11,6 +11,7 @@ const Dashboard = {
   _habitData: null,
   _aiRefreshTimer: null,
   _aiFetchInFlight: false,
+  _aiFetchFailed: false,  // circuit breaker: skip skeleton after a failed fetch this session
 
   // Main render entry point
   async render() {
@@ -871,8 +872,8 @@ const Dashboard = {
         if (cachedInsight) {
           // Cached insight available — render real card (idempotent)
           aiContainer.innerHTML = this._renderAiCard(cachedInsight);
-        } else if (!this._aiFetchInFlight) {
-          // No cache, no fetch running — show skeleton and start fetch
+        } else if (!this._aiFetchInFlight && !this._aiFetchFailed) {
+          // No cache, no prior failure, no fetch running — show skeleton and start fetch
           aiContainer.innerHTML = this._renderAiCardLoading();
           const gen = this._renderGeneration;
           this._aiFetchInFlight = true;
@@ -881,13 +882,14 @@ const Dashboard = {
             if (gen !== this._renderGeneration) return;
             const ac = document.getElementById('ai-insight-container');
             if (ac && insight) {
+              this._aiFetchFailed = false;
               ac.innerHTML = this._renderAiCard(insight);
-            } else if (ac && !insight) {
-              ac.style.transition = 'opacity 0.3s ease';
-              ac.style.opacity = '0';
-              setTimeout(() => { if (ac) { ac.innerHTML = ''; ac.style.opacity = ''; } }, 300);
+            } else if (ac) {
+              // Fetch returned nothing — remove skeleton silently, skip future attempts this session
+              this._aiFetchFailed = true;
+              ac.innerHTML = '';
             }
-          }).catch(() => { this._aiFetchInFlight = false; });
+          }).catch(() => { this._aiFetchInFlight = false; this._aiFetchFailed = true; });
         }
         // If fetch in flight, don't touch aiContainer — let the running fetch fill it
       } else if (aiContainer && !aiContainer.innerHTML.trim()) {
