@@ -952,19 +952,16 @@ const Dashboard = {
     }
   },
 
-  // Minimum sleep hours to include (5 hours = 300 minutes)
+  // Minimum sleep hours to include (3 hours = 180 minutes)
   MIN_SLEEP_MINUTES: 180,
 
-  // Filter sleep data to only include complete, valid nights
-  // Removes: nights < 5 hours, missing sleep score, missing HR data, missing deep sleep
+  // Filter sleep data to only include nights with basic validity
+  // Only excludes: very short naps (< 3 hours) and nights missing a sleep score
   filterValidNights(data) {
     if (!data || !Array.isArray(data)) return [];
     return data.filter(d =>
       d.total_sleep_minutes >= this.MIN_SLEEP_MINUTES &&
-      d.sleep_score != null &&
-      d.pre_sleep_hr != null &&
-      d.avg_hr != null &&
-      d.deep_sleep_minutes != null
+      d.sleep_score != null
     );
   },
 
