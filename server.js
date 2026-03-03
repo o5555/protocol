@@ -180,7 +180,15 @@ const server = http.createServer(async (req, res) => {
                     sleep_score: scoresByDay[day] || null,
                     avg_hr: primary.average_heart_rate || null,
                     pre_sleep_hr: primary.lowest_heart_rate || null,
-                    bedtime_start: primary.bedtime_start || null
+                    bedtime_start: primary.bedtime_start || null,
+                    hrv: (() => {
+                        const hrvData = primary.heart_rate_variability;
+                        if (!hrvData?.items) return null;
+                        const valid = hrvData.items.filter(v => v != null);
+                        if (valid.length === 0) return null;
+                        return Math.round((valid.reduce((a, b) => a + b, 0) / valid.length) * 10) / 10;
+                    })(),
+                    sleep_efficiency: primary.efficiency ?? null
                 };
             });
 
@@ -636,7 +644,15 @@ const server = http.createServer(async (req, res) => {
                             sleep_score: scoresByDay[day] || null,
                             avg_hr: primary.average_heart_rate || null,
                             pre_sleep_hr: primary.lowest_heart_rate || null,
-                            bedtime_start: primary.bedtime_start || null
+                            bedtime_start: primary.bedtime_start || null,
+                            hrv: (() => {
+                                const hrvData = primary.heart_rate_variability;
+                                if (!hrvData?.items) return null;
+                                const valid = hrvData.items.filter(v => v != null);
+                                if (valid.length === 0) return null;
+                                return Math.round((valid.reduce((a, b) => a + b, 0) / valid.length) * 10) / 10;
+                            })(),
+                            sleep_efficiency: primary.efficiency ?? null
                         };
                     });
 
@@ -903,8 +919,14 @@ const server = http.createServer(async (req, res) => {
                 '2. Silent regressions: is deep sleep declining while the headline score stays stable? Is light sleep replacing deep?\n' +
                 '3. Deep sleep streaks/droughts: consecutive nights above or below their personal average.\n' +
                 '4. HR trends: is resting HR creeping up or down over the past 2-3 weeks?\n' +
-                'Give 2-3 bullet points. Each bullet must reference specific numbers, dates, or time ranges from the data. ' +
+                '5. HRV trends: is HRV improving or declining? Higher HRV generally means better recovery.\n' +
+                '6. Sleep efficiency: flag nights below 85% — this means too much time awake in bed.\n' +
+                '7. Sleep architecture: are deep/REM/light ratios shifting? Declining deep or REM as a share of total sleep is a red flag.\n' +
+                'Give 2-4 bullet points. Each bullet must reference specific numbers, dates, or time ranges from the data. ' +
                 'Start each bullet with "- ". No generic advice — only insights backed by their actual data. ' +
+                'IMPORTANT formatting rule: Start each bullet with a **bold headline** (5-8 words max wrapped in double asterisks) ' +
+                'that names the pattern, then a colon, then ONE concise sentence (under 30 words) with the key numbers. ' +
+                'Keep each bullet to 2 sentences max. Be terse — the user reads this on a phone screen. ' +
                 'If habit data is provided, correlate completed/missed habits with that night\'s sleep performance. ' +
                 'If friend data is provided and notable, include a brief social nudge as a bullet. ' +
                 'Do not use emoji. Do not use greeting words. No intro text before the bullets.';

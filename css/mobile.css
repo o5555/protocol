@@ -46,7 +46,11 @@ button, a, input, select, textarea, label {
   padding-bottom: var(--sab);
 }
 
-/* Safe bottom padding for modals (iPhone notch) */
+/* Safe area padding for modals (iPhone notch / Dynamic Island) */
+.safe-top {
+  padding-top: var(--sat);
+}
+
 .safe-bottom {
   padding-bottom: calc(8px + var(--sab));
 }

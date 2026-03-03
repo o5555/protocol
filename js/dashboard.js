@@ -557,6 +557,10 @@ const Dashboard = {
         };
         const bt = this._formatBedtime(d.bedtime_start);
         if (bt) entry.bedtime = bt;
+        if (d.rem_sleep_minutes != null) entry.rem = d.rem_sleep_minutes;
+        if (d.light_sleep_minutes != null) entry.light = d.light_sleep_minutes;
+        if (d.hrv != null) entry.hrv = d.hrv;
+        if (d.sleep_efficiency != null) entry.eff = d.sleep_efficiency;
         return entry;
       });
       sleepContext = `Sleep data (last ${nights.length} nights, newest first):\n${JSON.stringify(nights)}`;
@@ -627,11 +631,19 @@ const Dashboard = {
     const bullets = lines.filter(l => l.startsWith('- '));
     let body;
     if (bullets.length > 0) {
-      body = `<ul class="space-y-2">${bullets.map(b =>
-        `<li class="flex gap-2 text-sm text-oura-muted leading-relaxed">
+      body = `<ul class="space-y-4">${bullets.map(b => {
+        let text = b.slice(2);
+        // Escape non-bold segments, then wrap **bold** in <strong>
+        const formatted = text.split(/(\*\*.+?\*\*)/).map(seg =>
+          seg.startsWith('**') && seg.endsWith('**')
+            ? `<strong class="text-white font-semibold">${escapeHtml(seg.slice(2, -2))}</strong>`
+            : escapeHtml(seg)
+        ).join('');
+        return `<li class="flex gap-2 text-sm text-oura-muted leading-relaxed">
           <span class="text-oura-accent mt-0.5 flex-shrink-0">&bull;</span>
-          <span>${escapeHtml(b.slice(2))}</span>
-        </li>`).join('')}</ul>`;
+          <span>${formatted}</span>
+        </li>`;
+      }).join('')}</ul>`;
     } else {
       body = `<p class="text-sm text-oura-muted leading-relaxed">${escapeHtml(insight)}</p>`;
     }
@@ -935,7 +947,7 @@ const Dashboard = {
 
     const { data, error } = await client
       .from('sleep_data')
-      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, bedtime_start')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, hrv, sleep_efficiency, bedtime_start')
       .eq('user_id', user.id)
       .gte('date', startStr)
       .order('date', { ascending: false });
@@ -1085,7 +1097,7 @@ const Dashboard = {
 
     const { data, error } = await client
       .from('sleep_data')
-      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, hrv, sleep_efficiency')
       .eq('user_id', user.id)
       .gte('date', startStr)
       .order('date', { ascending: true });
@@ -1343,22 +1355,26 @@ const Dashboard = {
     modal.id = 'ai-chat-modal';
     modal.className = 'fixed inset-0 bg-oura-bg z-50 flex flex-col';
     modal.innerHTML = `
-      <div class="flex items-center gap-3 px-4 pt-safe-top pb-3 border-b border-oura-border/30 bg-oura-card">
-        <button onclick="Dashboard.closeAiChat()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
-        </button>
-        <h3 class="text-lg font-semibold">Sleep Coach</h3>
+      <div class="safe-top bg-oura-card">
+        <div class="flex items-center gap-3 px-4 py-3 border-b border-oura-border/30">
+          <button onclick="Dashboard.closeAiChat()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+          </button>
+          <h3 class="text-lg font-semibold">Sleep Coach</h3>
+        </div>
       </div>
       <div id="ai-chat-messages" class="flex-1 overflow-y-auto px-4 py-4 space-y-3"></div>
-      <form onsubmit="Dashboard.sendChatMessage(event)" class="px-4 pb-safe-bottom pt-3 border-t border-oura-border/30 bg-oura-card">
-        <div class="flex gap-2">
-          <input id="ai-chat-input" type="text" placeholder="Ask about your sleep..." autocomplete="off"
-            class="flex-1 px-4 py-3 bg-oura-bg border border-oura-border rounded-xl text-white text-base placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
-          <button type="submit" class="min-w-[44px] min-h-[44px] flex items-center justify-center bg-oura-accent rounded-xl text-black">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
-          </button>
-        </div>
-      </form>
+      <div class="safe-bottom bg-oura-card border-t border-oura-border/30">
+        <form onsubmit="Dashboard.sendChatMessage(event)" class="px-4 pt-3">
+          <div class="flex gap-2">
+            <input id="ai-chat-input" type="text" placeholder="Ask about your sleep..." autocomplete="off"
+              class="flex-1 px-4 py-3 bg-oura-bg border border-oura-border rounded-xl text-white text-base placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
+            <button type="submit" class="min-w-[44px] min-h-[44px] flex items-center justify-center bg-oura-accent rounded-xl text-black">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
+            </button>
+          </div>
+        </form>
+      </div>
     `;
     document.body.appendChild(modal);
     this._renderChatMessages();
@@ -1380,7 +1396,12 @@ const Dashboard = {
       if (hasBullets) {
         html = lines.map(l => {
           if (l.startsWith('- ')) {
-            return `<div class="flex gap-2"><span class="text-oura-accent flex-shrink-0">&bull;</span><span>${escapeHtml(l.slice(2))}</span></div>`;
+            const formatted = l.slice(2).split(/(\*\*.+?\*\*)/).map(seg =>
+              seg.startsWith('**') && seg.endsWith('**')
+                ? `<strong class="text-white font-semibold">${escapeHtml(seg.slice(2, -2))}</strong>`
+                : escapeHtml(seg)
+            ).join('');
+            return `<div class="flex gap-2"><span class="text-oura-accent flex-shrink-0">&bull;</span><span>${formatted}</span></div>`;
           }
           return `<div>${escapeHtml(l)}</div>`;
         }).join('');
