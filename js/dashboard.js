@@ -714,7 +714,14 @@ const Dashboard = {
     }
     return `
       <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6 cursor-pointer active:bg-oura-subtle transition-colors" id="ai-card-slot" onclick="Dashboard.openAiChat()">
-        <h3 class="text-sm font-bold text-oura-muted uppercase tracking-wider mb-3">Daily Insight</h3>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-bold text-oura-muted uppercase tracking-wider">Daily Insight</h3>
+          <button onclick="event.stopPropagation(); Dashboard.openContextHistory()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-oura-accent transition-colors">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+          </button>
+        </div>
         ${body}
         <div class="flex items-center gap-1.5 mt-3 text-oura-accent text-xs">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" /></svg>
@@ -1735,6 +1742,58 @@ const Dashboard = {
     } catch { /* best-effort */ }
 
     this._dismissToast();
+  },
+
+  async openContextHistory() {
+    const client = SupabaseClient.client;
+    const user = await SupabaseClient.getCurrentUser();
+    if (!client || !user) return;
+
+    const { data } = await client
+      .from('ai_chat_sessions')
+      .select('date, front_matter')
+      .eq('user_id', user.id)
+      .not('front_matter->>context', 'is', null)
+      .neq('front_matter->>context', '')
+      .order('date', { ascending: false })
+      .limit(30);
+
+    this.closeContextHistory();
+
+    const modal = document.createElement('div');
+    modal.id = 'context-history-modal';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50';
+
+    const entries = data && data.length > 0
+      ? data.map(row => {
+          const dateObj = new Date(row.date + 'T00:00:00');
+          const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          return `
+            <div class="py-3 border-b border-oura-border/30 last:border-0">
+              <div class="text-xs text-oura-muted mb-1">${dateStr}</div>
+              <div class="text-sm text-white">${escapeHtml(row.front_matter.context)}</div>
+            </div>`;
+        }).join('')
+      : '<p class="text-sm text-oura-muted py-4">No context entries yet. Add context in the AI chat to track what affects your sleep.</p>';
+
+    modal.innerHTML = `
+      <div class="bg-oura-bg rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg sm:mx-4 p-6 max-h-[85vh] overflow-y-auto safe-bottom">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-bold text-white">Context History</h3>
+          <button onclick="Dashboard.closeContextHistory()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div>${entries}</div>
+      </div>
+    `;
+
+    modal.addEventListener('click', (e) => { if (e.target === modal) this.closeContextHistory(); });
+    document.body.appendChild(modal);
+  },
+
+  closeContextHistory() {
+    document.getElementById('context-history-modal')?.remove();
   }
 };
 
