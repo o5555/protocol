@@ -188,7 +188,19 @@ const server = http.createServer(async (req, res) => {
                         if (valid.length === 0) return null;
                         return Math.round((valid.reduce((a, b) => a + b, 0) / valid.length) * 10) / 10;
                     })(),
-                    sleep_efficiency: primary.efficiency ?? null
+                    sleep_efficiency: primary.efficiency ?? null,
+                    hr_before_sleep: (() => {
+                        const hr = primary.heart_rate;
+                        if (!hr?.items || !hr.interval) return null;
+                        const latency = primary.latency || 900;
+                        const onsetIndex = Math.floor(latency / hr.interval);
+                        const candidates = [];
+                        for (let i = onsetIndex - 1; i >= 0 && candidates.length < 2; i--) {
+                            if (hr.items[i] != null) candidates.push(hr.items[i]);
+                        }
+                        if (candidates.length === 0) return null;
+                        return Math.round(candidates.reduce((a, b) => a + b, 0) / candidates.length);
+                    })()
                 };
             });
 
@@ -652,7 +664,19 @@ const server = http.createServer(async (req, res) => {
                                 if (valid.length === 0) return null;
                                 return Math.round((valid.reduce((a, b) => a + b, 0) / valid.length) * 10) / 10;
                             })(),
-                            sleep_efficiency: primary.efficiency ?? null
+                            sleep_efficiency: primary.efficiency ?? null,
+                            hr_before_sleep: (() => {
+                                const hr = primary.heart_rate;
+                                if (!hr?.items || !hr.interval) return null;
+                                const latency = primary.latency || 900;
+                                const onsetIndex = Math.floor(latency / hr.interval);
+                                const candidates = [];
+                                for (let i = onsetIndex - 1; i >= 0 && candidates.length < 2; i--) {
+                                    if (hr.items[i] != null) candidates.push(hr.items[i]);
+                                }
+                                if (candidates.length === 0) return null;
+                                return Math.round(candidates.reduce((a, b) => a + b, 0) / candidates.length);
+                            })()
                         };
                     });
 
@@ -904,7 +928,7 @@ const server = http.createServer(async (req, res) => {
 
         try {
             const body = await parseBody(req);
-            const { sleepContext, habitContext, friendContext } = body;
+            const { sleepContext, habitContext, friendContext, chatContext } = body;
 
             if (!sleepContext && !habitContext) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -913,6 +937,8 @@ const server = http.createServer(async (req, res) => {
             }
 
             const systemPrompt = 'You are a data-driven sleep coach. You receive up to 30 nights of sleep data. ' +
+                'If user chat context is provided from past conversations, use it to personalize insights. ' +
+                'Reference topics from past conversations when relevant (e.g. travel, stress, alcohol, schedule changes). ' +
                 'Analyze the FULL dataset to find patterns the user cannot easily see themselves. ' +
                 'Focus on these pattern types:\n' +
                 '1. Bedtime-to-outcome: correlate bedtime times with sleep scores and deep sleep. Quote specific times and numbers from their data.\n' +
@@ -931,17 +957,17 @@ const server = http.createServer(async (req, res) => {
                 'If friend data is provided and notable, include a brief social nudge as a bullet. ' +
                 'Do not use emoji. Do not use greeting words. No intro text before the bullets.';
 
-            const userMessage = [sleepContext, habitContext, friendContext]
+            const userMessage = [sleepContext, habitContext, friendContext, chatContext]
                 .filter(Boolean)
                 .join('\n\n');
 
             const payload = JSON.stringify({
-                model: 'anthropic/claude-haiku-4.5',
+                model: 'anthropic/claude-sonnet-4-6',
                 instructions: systemPrompt,
                 input: [
                     { role: 'user', content: userMessage }
                 ],
-                max_output_tokens: 350
+                max_output_tokens: 500
             });
 
             const options = {
@@ -995,7 +1021,7 @@ const server = http.createServer(async (req, res) => {
                 res.end(JSON.stringify({ error: 'AI service unavailable' }));
             });
 
-            aiReq.setTimeout(10000, () => {
+            aiReq.setTimeout(20000, () => {
                 aiReq.destroy();
                 res.writeHead(504, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'AI request timed out' }));
@@ -1043,10 +1069,10 @@ const server = http.createServer(async (req, res) => {
             const input = trimmed.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }));
 
             const payload = JSON.stringify({
-                model: 'anthropic/claude-haiku-4.5',
+                model: 'anthropic/claude-sonnet-4-6',
                 instructions: systemPrompt,
                 input,
-                max_output_tokens: 300
+                max_output_tokens: 400
             });
 
             const options = {
@@ -1095,7 +1121,7 @@ const server = http.createServer(async (req, res) => {
                 res.end(JSON.stringify({ error: 'AI service unavailable' }));
             });
 
-            aiReq.setTimeout(15000, () => {
+            aiReq.setTimeout(25000, () => {
                 aiReq.destroy();
                 res.writeHead(504, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'AI request timed out' }));

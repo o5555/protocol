@@ -999,6 +999,11 @@ const Challenges = {
           this.calcAvg(myData.baselineData.filter(d => d.deep_sleep_minutes).map(d => d.deep_sleep_minutes)),
           this.calcAvg(myData.challengeData.filter(d => d.deep_sleep_minutes).map(d => d.deep_sleep_minutes)),
           false
+        ),
+        presleep: calcImprovement(
+          this.calcAvg(myData.baselineData.filter(d => d.hr_before_sleep).map(d => d.hr_before_sleep)),
+          this.calcAvg(myData.challengeData.filter(d => d.hr_before_sleep).map(d => d.hr_before_sleep)),
+          true
         )
       };
 
@@ -1152,6 +1157,7 @@ const Challenges = {
                   <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="avghr">AVG HR</button>
                   <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="hr">LOW HR</button>
                   <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="deep">DEEP</button>
+                  <button onclick="Challenges.switchMetric('${challengeId}', 'presleep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="presleep">PRE HR</button>
                 </div>
               </div>
               <div class="rounded-2xl p-4 cursor-pointer bg-oura-bg" onclick="Challenges.showMetricDetailModal('${challengeId}')">
@@ -1255,6 +1261,7 @@ const Challenges = {
               <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="avghr">AVG HR</button>
               <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="hr">LOW HR</button>
               <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="deep">DEEP</button>
+              <button onclick="Challenges.switchMetric('${challengeId}', 'presleep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="presleep">PRE HR</button>
             </div>
           </div>
           <div class="rounded-2xl p-4 cursor-pointer bg-oura-bg" onclick="Challenges.showMetricDetailModal('${challengeId}')">
@@ -1476,9 +1483,9 @@ const Challenges = {
   // Render Chart.js line chart on the main challenge detail page (gray baseline → green challenge)
   renderMainChart(userData, challengeStartDate, metric = 'score') {
     const { baselineData, challengeData } = userData;
-    const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes' };
+    const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes', presleep: 'hr_before_sleep' };
     const field = fieldMap[metric] || 'sleep_score';
-    const lowerIsBetter = metric === 'hr' || metric === 'avghr';
+    const lowerIsBetter = metric === 'hr' || metric === 'avghr' || metric === 'presleep';
 
     // Combine all data sorted by date
     const allData = [
@@ -1573,7 +1580,7 @@ const Challenges = {
     const heroContainer = document.getElementById('hero-stat-container');
     if (heroContainer && improvements) {
       const imp = improvements[metric];
-      const labels = { score: 'Your Sleep Score', hr: 'Your Lowest HR', avghr: 'Your Avg HR (Sleep)', deep: 'Your Deep Sleep' };
+      const labels = { score: 'Your Sleep Score', hr: 'Your Lowest HR', avghr: 'Your Avg HR (Sleep)', deep: 'Your Deep Sleep', presleep: 'Your HR Before Sleep' };
 
       if (imp.pct !== null) {
         const direction = imp.direction;
@@ -1601,7 +1608,7 @@ const Challenges = {
     const statsRow = document.getElementById('stats-row-container');
     if (statsRow && improvements) {
       const imp = improvements[metric];
-      const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes' };
+      const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes', presleep: 'hr_before_sleep' };
       const field = fieldMap[metric];
 
       const baselineVals = myData.baselineData.filter(d => d[field]).map(d => d[field]);
@@ -1627,9 +1634,9 @@ const Challenges = {
     const leaderboardContainer = document.getElementById('leaderboard-container');
     if (leaderboardContainer && this._currentChallengeData.sleepData) {
       const { sleepData, currentUserId } = this._currentChallengeData;
-      const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes' };
+      const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes', presleep: 'hr_before_sleep' };
       const field = fieldMap[metric];
-      const lowerIsBetter = metric === 'hr' || metric === 'avghr';
+      const lowerIsBetter = metric === 'hr' || metric === 'avghr' || metric === 'presleep';
 
       const leaderboard = sleepData
         .map(p => {
@@ -1735,10 +1742,11 @@ const Challenges = {
       score: { label: 'Sleep Score', unit: 'pts', color: '#4ade80', field: 'sleep_score' },
       hr: { label: 'Lowest Heart Rate', unit: 'bpm', color: '#2dd4bf', field: 'pre_sleep_hr' },
       avghr: { label: 'Average Heart Rate', unit: 'bpm', color: '#60a5fa', field: 'avg_hr' },
-      deep: { label: 'Deep Sleep', unit: 'min', color: '#c084fc', field: 'deep_sleep_minutes' }
+      deep: { label: 'Deep Sleep', unit: 'min', color: '#c084fc', field: 'deep_sleep_minutes' },
+      presleep: { label: 'HR Before Sleep', unit: 'bpm', color: '#f59e0b', field: 'hr_before_sleep' }
     };
     const config = configs[metric];
-    const lowerIsBetter = metric === 'hr' || metric === 'avghr';
+    const lowerIsBetter = metric === 'hr' || metric === 'avghr' || metric === 'presleep';
 
     // Calculate stats
     const baselineVals = baselineData.filter(d => d[config.field]).map(d => d[config.field]);

@@ -676,6 +676,18 @@ const SleepSync = {
           sleep_score: scoresByDay[day] || null,
           avg_hr: primary.average_heart_rate || null,
           pre_sleep_hr: primary.lowest_heart_rate || null,
+          hr_before_sleep: (() => {
+            const hr = primary.heart_rate;
+            if (!hr?.items || !hr.interval) return null;
+            const latency = primary.latency || 900;
+            const onsetIndex = Math.floor(latency / hr.interval);
+            const candidates = [];
+            for (let i = onsetIndex - 1; i >= 0 && candidates.length < 2; i--) {
+              if (hr.items[i] != null) candidates.push(hr.items[i]);
+            }
+            if (candidates.length === 0) return null;
+            return Math.round(candidates.reduce((a, b) => a + b, 0) / candidates.length);
+          })()
         };
       });
 

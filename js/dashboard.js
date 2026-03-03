@@ -117,7 +117,8 @@ const Dashboard = {
     { key: 'score', label: 'Sleep Score', unit: 'pts', lowerIsBetter: false },
     { key: 'hr',    label: 'Avg Heart Rate', unit: 'bpm', lowerIsBetter: true },
     { key: 'low',   label: 'Lowest Heart Rate', unit: 'bpm', lowerIsBetter: true },
-    { key: 'deep',  label: 'Deep Sleep', unit: 'min', lowerIsBetter: false }
+    { key: 'deep',  label: 'Deep Sleep', unit: 'min', lowerIsBetter: false },
+    { key: 'preSleep', label: 'HR Before Sleep', unit: 'bpm', lowerIsBetter: true }
   ],
   _leagueIndex: 0,
 
@@ -136,7 +137,8 @@ const Dashboard = {
         score: latest.sleep_score ?? null,
         hr: latest.avg_hr ?? null,
         low: latest.pre_sleep_hr ?? null,
-        deep: latest.deep_sleep_minutes ?? null
+        deep: latest.deep_sleep_minutes ?? null,
+        preSleep: latest.hr_before_sleep ?? null
       };
     });
 
@@ -176,7 +178,7 @@ const Dashboard = {
           <div class="flex items-center ${rowBg} rounded-xl px-4 py-3.5">
             <span class="text-sm font-bold text-oura-muted w-6">${rank}</span>
             <span class="flex-1 text-base font-semibold ${nameColor}">${name}</span>
-            <span class="text-2xl font-bold ${valColor}">${val ?? '--'}</span>
+            <span class="text-2xl font-bold ${valColor}">${val != null ? Math.round(val) : '--'}</span>
             <span class="text-xs text-oura-muted ml-1.5 w-8">${m.unit}</span>
           </div>`;
         }).join('')}
@@ -561,6 +563,7 @@ const Dashboard = {
         if (d.light_sleep_minutes != null) entry.light = d.light_sleep_minutes;
         if (d.hrv != null) entry.hrv = d.hrv;
         if (d.sleep_efficiency != null) entry.eff = d.sleep_efficiency;
+        if (d.hr_before_sleep != null) entry.preSleepHR = d.hr_before_sleep;
         return entry;
       });
       sleepContext = `Sleep data (last ${nights.length} nights, newest first):\n${JSON.stringify(nights)}`;
@@ -595,6 +598,34 @@ const Dashboard = {
     return { sleepContext, habitContext, friendContext };
   },
 
+  // Fetch past chat session front matter for AI context
+  async _fetchChatContext(challengeId) {
+    try {
+      const client = SupabaseClient.client;
+      const user = await getCurrentUser();
+      if (!client || !user) return '';
+
+      const realChallengeId = challengeId === 'personal' ? null : challengeId;
+      let query = client.from('ai_chat_sessions')
+        .select('date, front_matter')
+        .eq('user_id', user.id)
+        .neq('front_matter', '{}')
+        .order('date', { ascending: false })
+        .limit(14);
+      query = realChallengeId ? query.eq('challenge_id', realChallengeId) : query.is('challenge_id', null);
+
+      const { data } = await query;
+      if (!data || data.length === 0) return '';
+
+      const lines = data
+        .filter(s => s.front_matter?.context)
+        .map(s => `- ${s.date}: "${s.front_matter.context.slice(0, 100)}"`)
+        .join('\n');
+
+      return lines ? `User context from chat sessions:\n${lines}` : '';
+    } catch { return ''; }
+  },
+
   // Fetch AI insight (cached per challenge per day)
   async _fetchAiInsight(recentSleep, leagueData, forceRefresh, explicitChallengeId) {
     const today = DateUtils.toLocalDateStr(new Date());
@@ -608,6 +639,10 @@ const Dashboard = {
 
     const context = this._buildAiContext(recentSleep, leagueData);
     if (!context.sleepContext && !context.habitContext) return null;
+
+    // Fetch past chat front matter (non-blocking fallback to empty)
+    const chatContext = await this._fetchChatContext(challengeId);
+    if (chatContext) context.chatContext = chatContext;
 
     try {
       const resp = await fetch('/api/ai/insight', {
@@ -918,7 +953,7 @@ const Dashboard = {
   },
 
   // Minimum sleep hours to include (5 hours = 300 minutes)
-  MIN_SLEEP_MINUTES: 300,
+  MIN_SLEEP_MINUTES: 180,
 
   // Filter sleep data to only include complete, valid nights
   // Removes: nights < 5 hours, missing sleep score, missing HR data, missing deep sleep
@@ -947,7 +982,7 @@ const Dashboard = {
 
     const { data, error } = await client
       .from('sleep_data')
-      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, hrv, sleep_efficiency, bedtime_start')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, hrv, sleep_efficiency, bedtime_start, hr_before_sleep')
       .eq('user_id', user.id)
       .gte('date', startStr)
       .order('date', { ascending: false });
@@ -1097,7 +1132,7 @@ const Dashboard = {
 
     const { data, error } = await client
       .from('sleep_data')
-      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, hrv, sleep_efficiency')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, hrv, sleep_efficiency, hr_before_sleep')
       .eq('user_id', user.id)
       .gte('date', startStr)
       .order('date', { ascending: true });
@@ -1321,16 +1356,18 @@ const Dashboard = {
 
   _chatMessages: [],
   _chatContext: null,
+  _lastSavedSessionId: null,
+  _lastSavedFrontMatter: null,
+  _toastDismissTimer: null,
 
-  openAiChat() {
-    // Get current insight from the card
+  async openAiChat() {
     const today = DateUtils.toLocalDateStr(new Date());
     const dashData = Cache.get('dashboard');
-    const challengeId = dashData?.activeChallenges?.[0]?.id || this._habitData?.challenge?.id || 'personal';
-    const chatCacheKey = `ai_chat_${challengeId}_${today}`;
-    const insightCacheKey = `ai_insight_${challengeId}_${today}`;
+    const challengeId = dashData?.activeChallenges?.[0]?.id || this._habitData?.challenge?.id || null;
+    const chatCacheKey = `ai_chat_${challengeId || 'personal'}_${today}`;
+    const insightCacheKey = `ai_insight_${challengeId || 'personal'}_${today}`;
 
-    // Restore from cache or seed with current insight
+    // Restore from localStorage cache first (instant render)
     const cached = Cache.get(chatCacheKey);
     if (cached && cached.length > 0) {
       this._chatMessages = cached;
@@ -1345,10 +1382,27 @@ const Dashboard = {
     this._chatContext = this._buildAiContext(recentSleep, leagueData);
 
     this._renderChatModal();
+
+    // Async: try loading from Supabase (may have more messages from another device)
+    try {
+      const client = SupabaseClient.client;
+      const user = await getCurrentUser();
+      if (client && user) {
+        let query = client.from('ai_chat_sessions')
+          .select('id, messages')
+          .eq('user_id', user.id)
+          .eq('date', today);
+        query = challengeId ? query.eq('challenge_id', challengeId) : query.is('challenge_id', null);
+        const { data } = await query.maybeSingle();
+        if (data && Array.isArray(data.messages) && data.messages.length > this._chatMessages.length) {
+          this._chatMessages = data.messages;
+          this._renderChatMessages();
+        }
+      }
+    } catch { /* localStorage fallback is fine */ }
   },
 
   _renderChatModal() {
-    // Remove existing
     document.getElementById('ai-chat-modal')?.remove();
 
     const modal = document.createElement('div');
@@ -1388,7 +1442,6 @@ const Dashboard = {
       if (m.role === 'user') {
         return `<div class="flex justify-end"><div class="max-w-[80%] px-4 py-2.5 rounded-2xl bg-oura-accent text-black text-sm">${escapeHtml(m.content)}</div></div>`;
       }
-      // AI message — parse bullets
       const text = m.content || '';
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
       const hasBullets = lines.some(l => l.startsWith('- '));
@@ -1411,7 +1464,6 @@ const Dashboard = {
       return `<div class="flex justify-start"><div class="max-w-[80%] px-4 py-2.5 rounded-2xl bg-oura-card border border-oura-border/30 text-sm text-oura-muted leading-relaxed">${html}</div></div>`;
     }).join('');
 
-    // Scroll to bottom
     container.scrollTop = container.scrollHeight;
   },
 
@@ -1423,11 +1475,9 @@ const Dashboard = {
 
     input.value = '';
 
-    // Add user message
     this._chatMessages.push({ role: 'user', content: text });
     this._renderChatMessages();
 
-    // Add thinking placeholder
     this._chatMessages.push({ role: 'assistant', content: 'Thinking...' });
     this._renderChatMessages();
 
@@ -1442,7 +1492,6 @@ const Dashboard = {
         })
       });
 
-      // Remove thinking placeholder
       this._chatMessages.pop();
 
       if (resp.ok) {
@@ -1452,27 +1501,213 @@ const Dashboard = {
         this._chatMessages.push({ role: 'assistant', content: 'Something went wrong. Please try again.' });
       }
     } catch {
-      this._chatMessages.pop(); // remove thinking
+      this._chatMessages.pop();
       this._chatMessages.push({ role: 'assistant', content: 'Could not reach the server. Please try again.' });
     }
 
     this._renderChatMessages();
     this._saveChatToCache();
+    this._saveChatToSupabase(); // fire-and-forget
   },
 
   _saveChatToCache() {
     const today = DateUtils.toLocalDateStr(new Date());
     const challengeId = this._habitData?.challenge?.id || 'personal';
     const key = `ai_chat_${challengeId}_${today}`;
-    // Keep max 20 messages
     const toSave = this._chatMessages.slice(-20);
     Cache.set(key, toSave, 24 * 60 * 60 * 1000);
   },
 
+  async _saveChatToSupabase() {
+    try {
+      const client = SupabaseClient.client;
+      const user = await getCurrentUser();
+      if (!client || !user) return;
+
+      const today = DateUtils.toLocalDateStr(new Date());
+      const dashData = Cache.get('dashboard');
+      const challengeId = dashData?.activeChallenges?.[0]?.id || this._habitData?.challenge?.id || null;
+      const toSave = this._chatMessages.slice(-20);
+
+      const row = {
+        user_id: user.id,
+        challenge_id: challengeId,
+        date: today,
+        messages: toSave,
+        updated_at: new Date().toISOString()
+      };
+
+      await client.from('ai_chat_sessions').upsert(row, {
+        onConflict: 'user_id,challenge_id,date'
+      });
+    } catch { /* non-blocking — localStorage is the offline fallback */ }
+  },
+
+  _buildFrontMatter() {
+    const userMsgs = this._chatMessages
+      .filter(m => m.role === 'user')
+      .map(m => m.content)
+      .join(' ');
+    const context = userMsgs.slice(0, 200);
+
+    const dashData = Cache.get('dashboard');
+    const recentSleep = dashData?.recentSleep || [];
+    const todaySleep = recentSleep[0];
+
+    const fm = { context };
+    if (todaySleep?.sleep_score) fm.sleep_score = todaySleep.sleep_score;
+
+    if (this._habitData) {
+      const { habits, completions } = this._habitData;
+      const completedSet = new Set(completions);
+      fm.habits = {
+        done: habits.filter(h => completedSet.has(h.id)).map(h => h.title),
+        missed: habits.filter(h => !completedSet.has(h.id)).map(h => h.title)
+      };
+    }
+
+    return fm;
+  },
+
+  async _saveFrontMatter(frontMatter) {
+    try {
+      const client = SupabaseClient.client;
+      const user = await getCurrentUser();
+      if (!client || !user) return null;
+
+      const today = DateUtils.toLocalDateStr(new Date());
+      const dashData = Cache.get('dashboard');
+      const challengeId = dashData?.activeChallenges?.[0]?.id || this._habitData?.challenge?.id || null;
+
+      const row = {
+        user_id: user.id,
+        challenge_id: challengeId,
+        date: today,
+        front_matter: frontMatter,
+        updated_at: new Date().toISOString()
+      };
+
+      const { data } = await client.from('ai_chat_sessions').upsert(row, {
+        onConflict: 'user_id,challenge_id,date'
+      }).select('id').maybeSingle();
+
+      return data?.id || null;
+    } catch { return null; }
+  },
+
   closeAiChat() {
+    const hasUserMessages = this._chatMessages.some(m => m.role === 'user');
+
+    if (hasUserMessages) {
+      // Build and save front matter before clearing state
+      const frontMatter = this._buildFrontMatter();
+      this._lastSavedFrontMatter = frontMatter;
+
+      this._saveFrontMatter(frontMatter).then(sessionId => {
+        this._lastSavedSessionId = sessionId;
+      });
+
+      // Show toast after modal closes
+      setTimeout(() => this._showContextSavedToast(frontMatter), 150);
+    }
+
     this._chatMessages = [];
     this._chatContext = null;
     document.getElementById('ai-chat-modal')?.remove();
+  },
+
+  _showContextSavedToast(frontMatter) {
+    document.getElementById('context-toast')?.remove();
+    clearTimeout(this._toastDismissTimer);
+
+    const preview = (frontMatter.context || '').slice(0, 80);
+    const toast = document.createElement('div');
+    toast.id = 'context-toast';
+    toast.className = 'fixed left-4 right-4 bottom-20 z-40 toast-enter';
+    toast.innerHTML = `
+      <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 shadow-lg">
+        <div id="toast-display">
+          <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-oura-accent flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-white">Context saved</p>
+              <p class="text-xs text-oura-muted mt-1 truncate">${escapeHtml(preview)}${preview.length < (frontMatter.context || '').length ? '...' : ''}</p>
+            </div>
+            <button onclick="Dashboard._dismissToast()" class="text-oura-muted hover:text-white flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 -mt-2">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <button onclick="Dashboard._editToastContext()" class="mt-3 text-xs text-oura-accent">Edit context</button>
+        </div>
+        <div id="toast-edit" class="hidden">
+          <textarea id="toast-edit-textarea" rows="3"
+            class="w-full px-3 py-2 bg-oura-bg border border-oura-border rounded-xl text-white text-base placeholder-neutral-600 focus:outline-none focus:border-oura-accent resize-none"></textarea>
+          <div class="flex gap-2 mt-2">
+            <button onclick="Dashboard._saveEditedContext()" class="flex-1 py-2 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black text-sm font-semibold rounded-xl">Save</button>
+            <button onclick="Dashboard._cancelEditContext()" class="flex-1 py-2 text-oura-muted text-sm rounded-xl border border-oura-border">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(toast);
+
+    this._toastDismissTimer = setTimeout(() => this._dismissToast(), 8000);
+  },
+
+  _dismissToast() {
+    clearTimeout(this._toastDismissTimer);
+    const toast = document.getElementById('context-toast');
+    if (!toast) return;
+    toast.classList.remove('toast-enter');
+    toast.classList.add('toast-exit');
+    setTimeout(() => toast.remove(), 250);
+  },
+
+  _editToastContext() {
+    clearTimeout(this._toastDismissTimer);
+    const display = document.getElementById('toast-display');
+    const edit = document.getElementById('toast-edit');
+    const textarea = document.getElementById('toast-edit-textarea');
+    if (!display || !edit || !textarea) return;
+    display.classList.add('hidden');
+    edit.classList.remove('hidden');
+    textarea.value = this._lastSavedFrontMatter?.context || '';
+    textarea.focus();
+  },
+
+  _cancelEditContext() {
+    const display = document.getElementById('toast-display');
+    const edit = document.getElementById('toast-edit');
+    if (!display || !edit) return;
+    edit.classList.add('hidden');
+    display.classList.remove('hidden');
+    this._toastDismissTimer = setTimeout(() => this._dismissToast(), 5000);
+  },
+
+  async _saveEditedContext() {
+    const textarea = document.getElementById('toast-edit-textarea');
+    const newContext = (textarea?.value || '').trim();
+    if (!newContext || !this._lastSavedFrontMatter) {
+      this._dismissToast();
+      return;
+    }
+
+    this._lastSavedFrontMatter.context = newContext;
+
+    try {
+      const client = SupabaseClient.client;
+      const user = await getCurrentUser();
+      if (client && user && this._lastSavedSessionId) {
+        await client.from('ai_chat_sessions')
+          .update({ front_matter: this._lastSavedFrontMatter, updated_at: new Date().toISOString() })
+          .eq('id', this._lastSavedSessionId);
+      } else {
+        // No session ID yet — do a full upsert
+        await this._saveFrontMatter(this._lastSavedFrontMatter);
+      }
+    } catch { /* best-effort */ }
+
+    this._dismissToast();
   }
 };
 

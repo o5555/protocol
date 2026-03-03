@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pc-v34';
+const CACHE_NAME = 'pc-v36';
 
 const APP_SHELL = [
   '/',
