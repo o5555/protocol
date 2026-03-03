@@ -627,14 +627,41 @@ const Dashboard = {
   },
 
   // Fetch AI insight (cached per challenge per day)
+  // Build a short fingerprint of the data that drives AI insights.
+  // If this hasn't changed, there's no reason to call the API again.
+  _buildDataFingerprint(recentSleep, leagueData) {
+    const latest = recentSleep?.[0];
+    const parts = [
+      recentSleep?.length || 0,
+      latest?.date || '',
+      latest?.sleep_score || '',
+      latest?.avg_hr || '',
+      latest?.deep_sleep_minutes || ''
+    ];
+    if (leagueData?.participants) {
+      parts.push(leagueData.participants.map(p => `${p.name}:${p.score}`).join(','));
+    }
+    if (this._habitData) {
+      parts.push(this._habitData.completions?.length || 0);
+    }
+    return parts.join('|');
+  },
+
   async _fetchAiInsight(recentSleep, leagueData, forceRefresh, explicitChallengeId) {
     const today = DateUtils.toLocalDateStr(new Date());
     const challengeId = explicitChallengeId || this._habitData?.challenge?.id || 'personal';
     const cacheKey = `ai_insight_${challengeId}_${today}`;
+    const fingerprintKey = `ai_insight_fp_${challengeId}_${today}`;
+    const currentFingerprint = this._buildDataFingerprint(recentSleep, leagueData);
 
     if (!forceRefresh) {
       const cached = Cache.get(cacheKey);
       if (cached) return cached;
+
+      // Cache was evicted (e.g. iOS memory pressure) but the data hasn't changed
+      // since we last generated an insight — no point calling the API again
+      const lastFingerprint = Cache.get(fingerprintKey);
+      if (lastFingerprint && lastFingerprint === currentFingerprint) return null;
     }
 
     const context = this._buildAiContext(recentSleep, leagueData);
@@ -652,7 +679,10 @@ const Dashboard = {
       });
       if (!resp.ok) return null;
       const { insight } = await resp.json();
-      if (insight) Cache.set(cacheKey, insight);
+      if (insight) {
+        Cache.set(cacheKey, insight);
+        Cache.set(fingerprintKey, currentFingerprint);
+      }
       return insight;
     } catch {
       return null;
