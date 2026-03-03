@@ -1766,12 +1766,23 @@ const Dashboard = {
 
     const entries = data && data.length > 0
       ? data.map(row => {
+          const fm = row.front_matter;
           const dateObj = new Date(row.date + 'T00:00:00');
           const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          let details = '';
+          if (fm.sleep_score) details += `<span class="text-oura-accent">${fm.sleep_score} pts</span>`;
+          if (fm.habits) {
+            const done = fm.habits.done?.length || 0;
+            const missed = fm.habits.missed?.length || 0;
+            if (done || missed) details += `${details ? '<span class="text-oura-border mx-1.5">|</span>' : ''}<span class="text-oura-muted">${done}/${done + missed} habits</span>`;
+          }
           return `
             <div class="py-3 border-b border-oura-border/30 last:border-0">
-              <div class="text-xs text-oura-muted mb-1">${dateStr}</div>
-              <div class="text-sm text-white">${escapeHtml(row.front_matter.context)}</div>
+              <div class="flex items-center justify-between mb-1">
+                <div class="text-xs font-medium text-oura-muted">${dateStr}</div>
+                ${details ? `<div class="text-xs">${details}</div>` : ''}
+              </div>
+              <div class="text-sm text-white">${escapeHtml(fm.context)}</div>
             </div>`;
         }).join('')
       : '<p class="text-sm text-oura-muted py-4">No context entries yet. Add context in the AI chat to track what affects your sleep.</p>';
