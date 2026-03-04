@@ -1037,6 +1037,90 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Clean up raw user context into a tidy note
+    if (req.url === '/api/ai/clean-context' && req.method === 'POST') {
+        const AI_GATEWAY_TOKEN = (process.env.AI_GATEWAY_TOKEN || process.env.VERCEL_OIDC_TOKEN || '').trim();
+        if (!AI_GATEWAY_TOKEN) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'AI gateway not configured' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { rawContext } = body;
+            if (!rawContext || !rawContext.trim()) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Missing rawContext' }));
+                return;
+            }
+
+            const payload = JSON.stringify({
+                model: 'anthropic/claude-haiku-4-5-20251001',
+                instructions: 'You are a note tidier. The user typed quick context about their day into a sleep tracking app chat. ' +
+                    'Clean it into a short, clear note (1-2 sentences max). Fix typos and grammar. ' +
+                    'Keep all factual details (drinks, travel, stress, exercise, meals, etc). ' +
+                    'Do not add information that was not in the original. Do not add greetings or commentary. ' +
+                    'Return ONLY the cleaned note, nothing else.',
+                input: [{ role: 'user', content: rawContext }],
+                max_output_tokens: 150
+            });
+
+            const options = {
+                hostname: 'ai-gateway.vercel.sh',
+                path: '/v1/responses',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${AI_GATEWAY_TOKEN}`,
+                    'Content-Length': Buffer.byteLength(payload)
+                }
+            };
+
+            const aiReq = https.request(options, (aiRes) => {
+                let data = '';
+                aiRes.on('data', chunk => data += chunk);
+                aiRes.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(data);
+                        if (parsed.error) {
+                            res.writeHead(502, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: parsed.error.message || 'AI gateway error' }));
+                            return;
+                        }
+                        const cleaned = parsed.output_text
+                            || parsed.output?.[0]?.content?.[0]?.text
+                            || parsed.choices?.[0]?.message?.content
+                            || '';
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ cleaned: cleaned.trim() || rawContext.trim() }));
+                    } catch {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ cleaned: rawContext.trim() }));
+                    }
+                });
+            });
+
+            aiReq.on('error', () => {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ cleaned: rawContext.trim() }));
+            });
+
+            aiReq.setTimeout(8000, () => {
+                aiReq.destroy();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ cleaned: rawContext.trim() }));
+            });
+
+            aiReq.write(payload);
+            aiReq.end();
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
     // AI Coach chat — conversational follow-up to insight
     if (req.url === '/api/ai/chat' && req.method === 'POST') {
         const AI_GATEWAY_TOKEN = (process.env.AI_GATEWAY_TOKEN || process.env.VERCEL_OIDC_TOKEN || '').trim();

@@ -1633,21 +1633,35 @@ const Dashboard = {
     const hasUserMessages = this._chatMessages.some(m => m.role === 'user');
 
     if (hasUserMessages) {
-      // Build and save front matter before clearing state
       const frontMatter = this._buildFrontMatter();
       this._lastSavedFrontMatter = frontMatter;
-
-      this._saveFrontMatter(frontMatter).then(sessionId => {
-        this._lastSavedSessionId = sessionId;
-      });
-
-      // Show toast after modal closes
-      setTimeout(() => this._showContextSavedToast(frontMatter), 150);
+      this._cleanAndSaveContext(frontMatter);
     }
 
     this._chatMessages = [];
     this._chatContext = null;
     document.getElementById('ai-chat-modal')?.remove();
+  },
+
+  async _cleanAndSaveContext(frontMatter) {
+    if (frontMatter.context) {
+      try {
+        const resp = await fetch('/api/ai/clean-context', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rawContext: frontMatter.context })
+        });
+        if (resp.ok) {
+          const { cleaned } = await resp.json();
+          if (cleaned) frontMatter.context = cleaned;
+        }
+      } catch { /* fall back to raw context */ }
+    }
+
+    this._lastSavedFrontMatter = frontMatter;
+    const sessionId = await this._saveFrontMatter(frontMatter);
+    this._lastSavedSessionId = sessionId;
+    this._showContextSavedToast(frontMatter);
   },
 
   _showContextSavedToast(frontMatter) {
