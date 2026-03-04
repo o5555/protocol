@@ -542,6 +542,41 @@ const Challenges = {
     }
   },
 
+  // Batch save habit completions (delete-all + bulk insert)
+  async saveHabitBatch(challengeId, habitIds, date) {
+    const client = SupabaseClient.client;
+    if (!client) throw new Error('Supabase not initialized');
+
+    const currentUser = await SupabaseClient.getCurrentUser();
+    if (!currentUser) throw new Error('Not authenticated');
+
+    // Delete all existing completions for this user+challenge+date
+    const { error: deleteError } = await client
+      .from('habit_completions')
+      .delete()
+      .eq('challenge_id', challengeId)
+      .eq('user_id', currentUser.id)
+      .eq('completed_date', date);
+
+    if (deleteError) throw deleteError;
+
+    // Insert all checked habits in one call
+    if (habitIds.length > 0) {
+      const rows = habitIds.map(habitId => ({
+        challenge_id: challengeId,
+        habit_id: habitId,
+        user_id: currentUser.id,
+        completed_date: date
+      }));
+
+      const { error: insertError } = await client
+        .from('habit_completions')
+        .insert(rows);
+
+      if (insertError) throw insertError;
+    }
+  },
+
   // Get participant progress for a challenge
   async getParticipantProgress(challengeId) {
     const client = SupabaseClient.client;

@@ -9,7 +9,8 @@ const Dashboard = {
 
   // Habit + AI state
   _habitData: null,
-  _aiRefreshTimer: null,
+  _habitCheckinPending: null,  // Set<habitId> local buffer before confirm
+  _habitCheckinLocked: false,  // true after confirm (prevents re-toggle)
   _aiFetchInFlight: false,
   _aiFetchFailed: false,  // circuit breaker: skip skeleton after a failed fetch this session
 
@@ -17,6 +18,10 @@ const Dashboard = {
   async render() {
     const container = document.getElementById('dashboard-container');
     if (!container) return;
+
+    // Reset local check-in buffer — locked state is re-detected from localStorage
+    this._habitCheckinPending = null;
+    this._habitCheckinLocked = false;
 
     const generation = ++this._renderGeneration;
 
@@ -127,10 +132,21 @@ const Dashboard = {
     const { challenge, sleepData } = result;
     if (!sleepData || sleepData.length === 0) return null;
 
+    // Find the most recent date ANY participant has data for
+    let latestDate = null;
+    for (const p of sleepData) {
+      const cd = p.challengeData || [];
+      if (cd.length > 0) {
+        const last = cd[cd.length - 1].date;
+        if (!latestDate || last > latestDate) latestDate = last;
+      }
+    }
+
     const participants = sleepData.map(p => {
       const cd = p.challengeData || [];
-      // Most recent night (challengeData is sorted ascending by date)
-      const latest = cd.length > 0 ? cd[cd.length - 1] : {};
+      // Only show data from the most recent night — show "--" if participant has no data for that date
+      const latest = latestDate && cd.length > 0 && cd[cd.length - 1].date === latestDate
+        ? cd[cd.length - 1] : {};
       return {
         name: p.user.display_name || p.user.email.split('@')[0],
         isMe: p.user.id === currentUserId,
@@ -392,13 +408,47 @@ const Dashboard = {
     }
   },
 
-  // Render the habit check-in section
+  // ── Habit check-in state helpers ──
+
+  _getCheckinKey(challengeId, date) {
+    return `habit_checkin_${challengeId}_${date}`;
+  },
+
+  _isCheckedIn(challengeId, date) {
+    return !!Cache.get(this._getCheckinKey(challengeId, date));
+  },
+
+  _getCheckinSummary(challengeId, date) {
+    return Cache.get(this._getCheckinKey(challengeId, date));
+  },
+
+  _markCheckedIn(challengeId, date, count, total) {
+    Cache.set(this._getCheckinKey(challengeId, date), { checkedIn: true, count, total });
+  },
+
+  // Collapsed summary line after check-in
+  _renderHabitCollapsed(count, total) {
+    return `
+      <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 mb-3" id="habit-section">
+        <div class="flex items-center gap-3">
+          <div class="w-6 h-6 rounded-lg bg-oura-accent flex items-center justify-center flex-shrink-0">
+            <svg class="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+          </div>
+          <span class="text-sm text-oura-muted">Checked in: ${count} of ${total}</span>
+        </div>
+      </div>`;
+  },
+
+  // Render the habit check-in section — three states:
+  // A) Already checked in (collapsed summary)
+  // B) Pre-check-in (toggles + confirm button)
+  // C) First day (informational message)
   _renderHabitSection() {
     if (!this._habitData) return '';
-    const { habits, completions, firstDay } = this._habitData;
+    const { challenge, habits, completions, firstDay, today } = this._habitData;
     if (!habits || habits.length === 0) return '';
 
-    // First day of challenge — no last night to check in
+    // State C — first day of challenge
     if (firstDay) {
       return `
         <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 mb-3">
@@ -407,8 +457,19 @@ const Dashboard = {
         </div>`;
     }
 
-    const completedSet = new Set(completions);
-    const completedCount = completedSet.size;
+    // State A — already checked in today (localStorage lock)
+    if (this._isCheckedIn(challenge.id, today)) {
+      const summary = this._getCheckinSummary(challenge.id, today);
+      return this._renderHabitCollapsed(summary?.count ?? 0, summary?.total ?? habits.length);
+    }
+
+    // State B — pre-check-in: seed pending set from DB completions on first render
+    if (!this._habitCheckinPending) {
+      this._habitCheckinPending = new Set(completions);
+    }
+
+    const pendingSet = this._habitCheckinPending;
+    const completedCount = pendingSet.size;
 
     return `
       <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 mb-3" id="habit-section">
@@ -418,7 +479,7 @@ const Dashboard = {
         </div>
         <div class="space-y-0 divide-y divide-oura-border/20">
           ${habits.map(h => {
-            const checked = completedSet.has(h.id);
+            const checked = pendingSet.has(h.id);
             return `
             <button class="habit-check-row flex items-center gap-3 w-full text-left py-3 min-h-[48px]"
                     data-habit-id="${h.id}" data-checked="${checked}"
@@ -432,19 +493,30 @@ const Dashboard = {
             </button>`;
           }).join('')}
         </div>
+        <button id="habit-checkin-confirm"
+          class="w-full mt-4 py-3 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all">
+          Check in
+        </button>
       </div>`;
   },
 
-  // Handle habit toggle from dashboard
-  async _handleDashboardHabitToggle(habitId) {
-    if (!this._habitData) return;
-    const { challenge, habits, completions, today } = this._habitData;
+  // Handle habit toggle from dashboard — local only, no DB write
+  _handleDashboardHabitToggle(habitId) {
+    if (!this._habitData || !this._habitCheckinPending) return;
+    const { habits } = this._habitData;
     const row = document.querySelector(`[data-habit-id="${habitId}"]`);
     if (!row) return;
 
     const wasChecked = row.dataset.checked === 'true';
 
-    // Optimistic UI update
+    // Toggle in local pending set
+    if (wasChecked) {
+      this._habitCheckinPending.delete(habitId);
+    } else {
+      this._habitCheckinPending.add(habitId);
+    }
+
+    // Visual checkbox toggle
     row.dataset.checked = String(!wasChecked);
     row.setAttribute('aria-checked', String(!wasChecked));
     const box = row.querySelector('div:first-child');
@@ -459,71 +531,91 @@ const Dashboard = {
       label.className = 'text-sm text-white';
     }
 
-    // Update local completions array and counter
-    if (!wasChecked) {
-      completions.push(habitId);
-    } else {
-      const idx = completions.indexOf(habitId);
-      if (idx !== -1) completions.splice(idx, 1);
-    }
+    // Update counter
     const counter = document.getElementById('habit-counter');
-    const completedCount = new Set(completions).size;
-    if (counter) counter.textContent = `${completedCount} of ${habits.length}`;
-
-    // Celebrate when all habits are checked off
-    if (!wasChecked && completedCount === habits.length) {
-      const section = document.getElementById('habit-section');
-      if (section) {
-        section.classList.remove('habits-complete');
-        void section.offsetWidth; // force reflow to restart animation
-        section.classList.add('habits-complete');
-      }
-      if (counter) {
-        counter.textContent = 'All done';
-        counter.className = 'text-xs text-oura-accent font-semibold';
-      }
-    } else if (counter) {
+    const completedCount = this._habitCheckinPending.size;
+    if (counter) {
+      counter.textContent = `${completedCount} of ${habits.length}`;
       counter.className = 'text-xs text-oura-muted';
-    }
-
-    try {
-      await Challenges.toggleHabit(challenge.id, habitId, today);
-      // Trigger debounced AI refresh
-      this._scheduleAiRefresh();
-    } catch (err) {
-      console.warn('[Dashboard] Habit toggle failed:', err);
-      // Revert optimistic update
-      row.dataset.checked = String(wasChecked);
-      row.setAttribute('aria-checked', String(wasChecked));
-      if (wasChecked) {
-        box.className = 'w-6 h-6 rounded-lg border bg-oura-accent border-oura-accent flex items-center justify-center flex-shrink-0';
-        box.innerHTML = '<svg class="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>';
-        label.className = 'text-sm text-oura-muted line-through';
-      } else {
-        box.className = 'w-6 h-6 rounded-lg border border-oura-border flex items-center justify-center flex-shrink-0';
-        box.innerHTML = '';
-        label.className = 'text-sm text-white';
-      }
-      // Revert completions array
-      if (wasChecked) {
-        completions.push(habitId);
-      } else {
-        const idx = completions.indexOf(habitId);
-        if (idx !== -1) completions.splice(idx, 1);
-      }
-      const revertCount = new Set(completions).size;
-      if (counter) {
-        counter.textContent = `${revertCount} of ${habits.length}`;
-        counter.className = 'text-xs text-oura-muted';
-      }
-      const section = document.getElementById('habit-section');
-      if (section) section.classList.remove('habits-complete');
     }
   },
 
-  // Attach click handler for habit rows via event delegation
+  // Handle "Check in" confirm button
+  async _handleHabitCheckinConfirm() {
+    if (!this._habitData || !this._habitCheckinPending) return;
+    const { challenge, habits, today } = this._habitData;
+    const pending = [...this._habitCheckinPending];
+    const btn = document.getElementById('habit-checkin-confirm');
+
+    // Disable button immediately (prevent double-tap)
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      btn.classList.add('opacity-60');
+    }
+
+    try {
+      // Batch save to DB
+      await Challenges.saveHabitBatch(challenge.id, pending, today);
+
+      // Update local completions to match what was saved
+      this._habitData.completions = pending;
+
+      // Lock check-in in localStorage
+      this._markCheckedIn(challenge.id, today, pending.length, habits.length);
+
+      // Play celebration animation
+      const section = document.getElementById('habit-section');
+      if (section) {
+        section.classList.remove('habits-complete');
+        void section.offsetWidth;
+        section.classList.add('habits-complete');
+      }
+
+      // Collapse to summary after animation
+      setTimeout(() => {
+        const section = document.getElementById('habit-section');
+        if (section) {
+          section.outerHTML = this._renderHabitCollapsed(pending.length, habits.length);
+        }
+      }, 800);
+
+      // One-shot AI refresh
+      this._refreshAiAfterCheckin();
+    } catch (err) {
+      console.warn('[Dashboard] Habit check-in failed:', err);
+      // Re-enable button on error
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Check in';
+        btn.classList.remove('opacity-60');
+      }
+    }
+  },
+
+  // One-shot AI refresh after check-in (no debounce)
+  async _refreshAiAfterCheckin() {
+    const cached = Cache.get('dashboard');
+    const recentSleep = cached?.recentSleep || [];
+    const leagueData = cached?.leagueData || null;
+
+    const insight = await this._fetchAiInsight(recentSleep, leagueData, true);
+    const ac = document.getElementById('ai-insight-container');
+    if (ac && insight) {
+      ac.innerHTML = this._renderAiCard(insight);
+    }
+  },
+
+  // Attach click handlers for habit rows and confirm button via event delegation
   _attachHabitListeners(container) {
     container.addEventListener('click', (e) => {
+      // Confirm button
+      if (e.target.closest('#habit-checkin-confirm')) {
+        e.stopPropagation();
+        this._handleHabitCheckinConfirm();
+        return;
+      }
+      // Habit row toggle
       const row = e.target.closest('.habit-check-row');
       if (row) {
         e.stopPropagation();
@@ -547,8 +639,25 @@ const Dashboard = {
   _buildAiContext(recentSleep, leagueData) {
     let sleepContext = '';
     if (recentSleep && recentSleep.length > 0) {
-      // Send full 30-day nightly data so the LLM can find patterns
-      const nights = recentSleep.map(d => {
+      // Split: LAST NIGHT with full field names (unambiguous for LLM),
+      // then TREND DATA with abbreviated keys to save tokens
+      const lastNight = recentSleep[0];
+      const lastNightObj = {
+        date: lastNight.date,
+        sleep_score: lastNight.sleep_score,
+        total_sleep_minutes: lastNight.total_sleep_minutes,
+        deep_sleep_minutes: lastNight.deep_sleep_minutes,
+        rem_sleep_minutes: lastNight.rem_sleep_minutes,
+        light_sleep_minutes: lastNight.light_sleep_minutes,
+        average_hr: lastNight.avg_hr,
+        lowest_hr: lastNight.pre_sleep_hr,
+        efficiency_score: lastNight.sleep_efficiency_score ?? lastNight.sleep_efficiency,
+        hrv: lastNight.hrv,
+        bedtime: this._formatBedtime(lastNight.bedtime_start),
+        hr_before_sleep: lastNight.hr_before_sleep
+      };
+
+      const trend = recentSleep.slice(1).map(d => {
         const entry = {
           date: d.date,
           score: d.sleep_score,
@@ -562,11 +671,13 @@ const Dashboard = {
         if (d.rem_sleep_minutes != null) entry.rem = d.rem_sleep_minutes;
         if (d.light_sleep_minutes != null) entry.light = d.light_sleep_minutes;
         if (d.hrv != null) entry.hrv = d.hrv;
-        if (d.sleep_efficiency != null) entry.eff = d.sleep_efficiency;
+        if (d.sleep_efficiency_score != null) entry.effScore = d.sleep_efficiency_score;
+        else if (d.sleep_efficiency != null) entry.eff = d.sleep_efficiency;
         if (d.hr_before_sleep != null) entry.preSleepHR = d.hr_before_sleep;
         return entry;
       });
-      sleepContext = `Sleep data (last ${nights.length} nights, newest first):\n${JSON.stringify(nights)}`;
+
+      sleepContext = `LAST NIGHT:\n${JSON.stringify(lastNightObj)}\n\nTREND DATA (${trend.length} prior nights, newest first):\n${JSON.stringify(trend)}`;
     }
 
     let habitContext = '';
@@ -759,23 +870,6 @@ const Dashboard = {
         </div>
         <div class="skeleton-bar w-28 h-3 mt-4"></div>
       </div>`;
-  },
-
-  // Debounced AI refresh after habit toggles (3s after last toggle)
-  _scheduleAiRefresh() {
-    clearTimeout(this._aiRefreshTimer);
-    this._aiRefreshTimer = setTimeout(async () => {
-      // Use cached dashboard data for sleep/league context
-      const cached = Cache.get('dashboard');
-      const recentSleep = cached?.recentSleep || [];
-      const leagueData = cached?.leagueData || null;
-
-      const insight = await this._fetchAiInsight(recentSleep, leagueData, true);
-      const ac = document.getElementById('ai-insight-container');
-      if (ac && insight) {
-        ac.innerHTML = this._renderAiCard(insight);
-      }
-    }, 3000);
   },
 
   // Render dashboard content (separated for caching)
@@ -1016,7 +1110,7 @@ const Dashboard = {
 
     const { data, error } = await client
       .from('sleep_data')
-      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, hrv, sleep_efficiency, bedtime_start, hr_before_sleep')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, hrv, sleep_efficiency, sleep_efficiency_score, bedtime_start, hr_before_sleep')
       .eq('user_id', user.id)
       .gte('date', startStr)
       .order('date', { ascending: false });
@@ -1166,7 +1260,7 @@ const Dashboard = {
 
     const { data, error } = await client
       .from('sleep_data')
-      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, hrv, sleep_efficiency, hr_before_sleep')
+      .select('date, avg_hr, sleep_score, total_sleep_minutes, pre_sleep_hr, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, hrv, sleep_efficiency, sleep_efficiency_score, hr_before_sleep')
       .eq('user_id', user.id)
       .gte('date', startStr)
       .order('date', { ascending: true });
