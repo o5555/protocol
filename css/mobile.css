@@ -249,6 +249,26 @@ button, a, input, select, textarea, label {
   animation: habit-glow 0.8s ease-out;
 }
 
+/* ── Context Saved Toast ── */
+
+@keyframes toast-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes toast-slide-down {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(100%); opacity: 0; }
+}
+
+.toast-enter {
+  animation: toast-slide-up 0.3s ease-out forwards;
+}
+
+.toast-exit {
+  animation: toast-slide-down 0.25s ease-in forwards;
+}
+
 /* ── Page Transitions ── */
 
 @media (prefers-reduced-motion: no-preference) {

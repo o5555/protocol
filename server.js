@@ -144,10 +144,14 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
 
-            // Build daily sleep score lookup
+            // Build daily sleep score + efficiency contributor lookup
             const scoresByDay = {};
+            const efficiencyScoreByDay = {};
             for (const d of (dailySleepData.data || [])) {
                 scoresByDay[d.day] = d.score;
+                if (d.contributors?.efficiency != null) {
+                    efficiencyScoreByDay[d.day] = d.contributors.efficiency;
+                }
             }
 
             // Transform sleep data for Supabase
@@ -189,6 +193,7 @@ const server = http.createServer(async (req, res) => {
                         return Math.round((valid.reduce((a, b) => a + b, 0) / valid.length) * 10) / 10;
                     })(),
                     sleep_efficiency: primary.efficiency ?? null,
+                    sleep_efficiency_score: efficiencyScoreByDay[day] ?? null,
                     hr_before_sleep: (() => {
                         const hr = primary.heart_rate;
                         if (!hr?.items || !hr.interval) return null;
@@ -620,10 +625,14 @@ const server = http.createServer(async (req, res) => {
                         continue;
                     }
 
-                    // Build daily sleep score lookup
+                    // Build daily sleep score + efficiency contributor lookup
                     const scoresByDay = {};
+                    const efficiencyScoreByDay = {};
                     for (const d of (dailySleepData.data || [])) {
                         scoresByDay[d.day] = d.score;
+                        if (d.contributors?.efficiency != null) {
+                            efficiencyScoreByDay[d.day] = d.contributors.efficiency;
+                        }
                     }
 
                     // Group by date and SUM durations across all sessions,
@@ -665,6 +674,7 @@ const server = http.createServer(async (req, res) => {
                                 return Math.round((valid.reduce((a, b) => a + b, 0) / valid.length) * 10) / 10;
                             })(),
                             sleep_efficiency: primary.efficiency ?? null,
+                            sleep_efficiency_score: efficiencyScoreByDay[day] ?? null,
                             hr_before_sleep: (() => {
                                 const hr = primary.heart_rate;
                                 if (!hr?.items || !hr.interval) return null;
@@ -937,6 +947,8 @@ const server = http.createServer(async (req, res) => {
             }
 
             const systemPrompt = 'You are a data-driven sleep coach. You receive up to 30 nights of sleep data. ' +
+                'The data has two sections: LAST NIGHT (with full field names) and TREND DATA (abbreviated keys for the remaining nights). ' +
+                'CRITICAL: When mentioning last night\'s numbers, quote EXACTLY the values from the LAST NIGHT section. Do not average, round, or estimate — copy the numbers verbatim. ' +
                 'If user chat context is provided from past conversations, use it to personalize insights. ' +
                 'Reference topics from past conversations when relevant (e.g. travel, stress, alcohol, schedule changes). ' +
                 'Analyze the FULL dataset to find patterns the user cannot easily see themselves. ' +
@@ -946,7 +958,7 @@ const server = http.createServer(async (req, res) => {
                 '3. Deep sleep streaks/droughts: consecutive nights above or below their personal average.\n' +
                 '4. HR trends: is resting HR creeping up or down over the past 2-3 weeks?\n' +
                 '5. HRV trends: is HRV improving or declining? Higher HRV generally means better recovery.\n' +
-                '6. Sleep efficiency: flag nights below 85% — this means too much time awake in bed.\n' +
+                '6. Sleep efficiency: flag nights with efficiency_score below 85 — this means too much time awake in bed. Use efficiency_score (the Oura contributor score, 0-100) not raw efficiency %.\n' +
                 '7. Sleep architecture: are deep/REM/light ratios shifting? Declining deep or REM as a share of total sleep is a red flag.\n' +
                 'Give 2-4 bullet points. Each bullet must reference specific numbers, dates, or time ranges from the data. ' +
                 'Start each bullet with "- ". No generic advice — only insights backed by their actual data. ' +

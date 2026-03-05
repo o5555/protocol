@@ -147,10 +147,13 @@ const Dashboard = {
       // Only show data from the most recent night — show "--" if participant has no data for that date
       const latest = latestDate && cd.length > 0 && cd[cd.length - 1].date === latestDate
         ? cd[cd.length - 1] : {};
+      // Compute actual challenge average across all nights (for AI context)
+      const challengeAvgs = Comparison.calcAverages(cd);
       return {
         name: p.user.display_name || p.user.email.split('@')[0],
         isMe: p.user.id === currentUserId,
         score: latest.sleep_score ?? null,
+        challengeAvg: challengeAvgs.score,
         hr: latest.avg_hr ?? null,
         low: latest.pre_sleep_hr ?? null,
         deep: latest.deep_sleep_minutes ?? null,
@@ -346,8 +349,10 @@ const Dashboard = {
 
   // Fetch habits + completions for the active challenge
   async _fetchHabitData(activeChallenges, generation) {
-    this._habitData = null;
-    if (!activeChallenges || activeChallenges.length === 0) return;
+    if (!activeChallenges || activeChallenges.length === 0) {
+      this._habitData = null;
+      return;
+    }
 
     const challenge = activeChallenges[0];
     // Skip if challenge hasn't started yet
@@ -608,6 +613,9 @@ const Dashboard = {
 
   // Attach click handlers for habit rows and confirm button via event delegation
   _attachHabitListeners(container) {
+    // Guard: only attach once per container element (_renderContent is called up to 3x)
+    if (container._habitListenerAttached) return;
+    container._habitListenerAttached = true;
     container.addEventListener('click', (e) => {
       // Confirm button
       if (e.target.closest('#habit-checkin-confirm')) {
@@ -626,12 +634,15 @@ const Dashboard = {
 
   // ── AI Coach Insight ──
 
-  // Format bedtime_start ISO string to local time like "22:45"
+  // Extract local bedtime HH:MM from Oura ISO string (e.g. "2026-02-14T23:00:00-06:00" → "23:00")
+  // Uses the time as-written in the ISO string, which is the user's local time where they slept.
+  // Do NOT convert via new Date().toLocaleTimeString() — that shifts to the browser's current
+  // timezone, which is wrong when the user has traveled.
   _formatBedtime(isoStr) {
     if (!isoStr) return null;
     try {
-      const d = new Date(isoStr);
-      return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const match = isoStr.match(/T(\d{2}:\d{2})/);
+      return match ? match[1] : null;
     } catch { return null; }
   },
 
@@ -696,12 +707,16 @@ const Dashboard = {
       const me = leagueData.participants.find(p => p.isMe);
       const friends = leagueData.participants.filter(p => !p.isMe);
       if (friends.length > 0 && me) {
-        const avgScore = Math.round(
-          leagueData.participants.reduce((s, p) => s + (p.score || 0), 0) / leagueData.participants.length
-        );
-        const standout = friends.find(f => f.score && f.score >= avgScore + 10);
-        if (standout) {
-          friendContext = `Notable: ${standout.name} scored ${standout.score} (challenge avg ${avgScore}). You scored ${me.score || 'unknown'}.`;
+        // Use actual challenge averages (all nights), not just latest night scores
+        const withAvg = leagueData.participants.filter(p => p.challengeAvg != null);
+        if (withAvg.length > 0) {
+          const challengeAvg = Math.round(withAvg.reduce((s, p) => s + p.challengeAvg, 0) / withAvg.length);
+          const myAvg = me.challengeAvg;
+          const friendSummary = friends
+            .filter(f => f.challengeAvg != null)
+            .map(f => `${f.name}: avg ${f.challengeAvg}, last night ${f.score ?? 'no data'}`)
+            .join('; ');
+          friendContext = `Challenge "${leagueData.challengeName}" day ${leagueData.dayNumber}. Group avg: ${challengeAvg}. Your avg: ${myAvg ?? 'unknown'}, last night: ${me.score ?? 'no data'}. Friends: ${friendSummary}.`;
         }
       }
     }
