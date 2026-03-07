@@ -22,6 +22,9 @@ const Dashboard = {
     // Reset local check-in buffer — locked state is re-detected from localStorage
     this._habitCheckinPending = null;
     this._habitCheckinLocked = false;
+    // Reset AI flags so failures from a previous visit don't block retries
+    this._aiFetchFailed = false;
+    this._aiCardRenderedInsight = null;  // track rendered insight to skip redundant DOM writes
 
     const generation = ++this._renderGeneration;
 
@@ -462,10 +465,18 @@ const Dashboard = {
         </div>`;
     }
 
-    // State A — already checked in today (localStorage lock)
-    if (this._isCheckedIn(challenge.id, today)) {
+    // State A — already checked in today (localStorage lock OR DB completions)
+    const lockedIn = this._isCheckedIn(challenge.id, today);
+    const dbConfirmed = completions.length > 0;
+    if (lockedIn || dbConfirmed) {
       const summary = this._getCheckinSummary(challenge.id, today);
-      return this._renderHabitCollapsed(summary?.count ?? 0, summary?.total ?? habits.length);
+      const count = summary?.count ?? completions.length;
+      const total = summary?.total ?? habits.length;
+      // Self-heal: re-establish localStorage if evicted but DB has completions
+      if (!lockedIn && dbConfirmed) {
+        this._markCheckedIn(challenge.id, today, count, total);
+      }
+      return this._renderHabitCollapsed(count, total);
     }
 
     // State B — pre-check-in: seed pending set from DB completions on first render
@@ -600,14 +611,21 @@ const Dashboard = {
 
   // One-shot AI refresh after check-in (no debounce)
   async _refreshAiAfterCheckin() {
-    const cached = Cache.get('dashboard');
-    const recentSleep = cached?.recentSleep || [];
-    const leagueData = cached?.leagueData || null;
+    if (this._aiFetchInFlight) return;  // don't stack concurrent fetches
+    this._aiFetchInFlight = true;
+    try {
+      const cached = Cache.get('dashboard');
+      const recentSleep = cached?.recentSleep || [];
+      const leagueData = cached?.leagueData || null;
 
-    const insight = await this._fetchAiInsight(recentSleep, leagueData, true);
-    const ac = document.getElementById('ai-insight-container');
-    if (ac && insight) {
-      ac.innerHTML = this._renderAiCard(insight);
+      const insight = await this._fetchAiInsight(recentSleep, leagueData, true);
+      const ac = document.getElementById('ai-insight-container');
+      if (ac && insight) {
+        this._aiCardRenderedInsight = insight;
+        ac.innerHTML = this._renderAiCard(insight);
+      }
+    } finally {
+      this._aiFetchInFlight = false;
     }
   },
 
@@ -1063,11 +1081,15 @@ const Dashboard = {
         const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
         const cachedInsight = Cache.get(cacheKey);
         if (cachedInsight) {
-          // Cached insight available — render real card (idempotent)
-          aiContainer.innerHTML = this._renderAiCard(cachedInsight);
+          // Skip DOM write if we already rendered this exact insight this cycle
+          if (this._aiCardRenderedInsight !== cachedInsight) {
+            this._aiCardRenderedInsight = cachedInsight;
+            aiContainer.innerHTML = this._renderAiCard(cachedInsight);
+          }
         } else if (!this._aiFetchInFlight && !this._aiFetchFailed) {
           // No cache, no prior failure, no fetch running — show skeleton and start fetch
           aiContainer.innerHTML = this._renderAiCardLoading();
+          this._aiCardRenderedInsight = null;
           const gen = this._renderGeneration;
           this._aiFetchInFlight = true;
           this._fetchAiInsight(recentSleep, leagueData, false, aiChallengeId).then(insight => {
@@ -1076,9 +1098,10 @@ const Dashboard = {
             const ac = document.getElementById('ai-insight-container');
             if (ac && insight) {
               this._aiFetchFailed = false;
+              this._aiCardRenderedInsight = insight;
               ac.innerHTML = this._renderAiCard(insight);
             } else if (ac) {
-              // Fetch returned nothing — remove skeleton silently, skip future attempts this session
+              // Fetch returned nothing — remove skeleton silently, skip future attempts this render
               this._aiFetchFailed = true;
               ac.innerHTML = '';
             }
