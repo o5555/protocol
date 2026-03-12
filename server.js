@@ -103,6 +103,7 @@ const server = http.createServer(async (req, res) => {
 
             const ouraPath = `/v2/usercollection/sleep?start_date=${startDate}&end_date=${endDate}`;
             const ouraDailyPath = `/v2/usercollection/daily_sleep?start_date=${startDate}&end_date=${endDate}`;
+            const ouraHrPath = `/v2/usercollection/heartrate?start_datetime=${startDate}T00:00:00&end_datetime=${endDate}T23:59:59`;
 
             // Helper to fetch from Oura API
             const fetchOura = (apiPath) => new Promise((resolve, reject) => {
@@ -132,11 +133,13 @@ const server = http.createServer(async (req, res) => {
                 req.end();
             });
 
-            // Fetch sleep sessions and daily sleep scores in parallel
-            const [ouraData, dailySleepData] = await Promise.all([
+            // Fetch sleep sessions, daily sleep scores, and individual HR in parallel
+            const [ouraData, dailySleepData, hrData] = await Promise.all([
                 fetchOura(ouraPath),
-                fetchOura(ouraDailyPath).catch(() => ({ data: [] }))
+                fetchOura(ouraDailyPath).catch(() => ({ data: [] })),
+                fetchOura(ouraHrPath).catch(() => ({ data: [] }))
             ]);
+            const individualHrReadings = (hrData.data || []).filter(r => r.bpm && r.timestamp);
 
             if (!ouraData.data || ouraData.data.length === 0) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -195,16 +198,26 @@ const server = http.createServer(async (req, res) => {
                     sleep_efficiency: primary.efficiency ?? null,
                     sleep_efficiency_score: efficiencyScoreByDay[day] ?? null,
                     hr_before_sleep: (() => {
+                        if (!primary.bedtime_start) return null;
+                        const latency = primary.latency || 900;
+                        const bedStartMs = new Date(primary.bedtime_start).getTime();
+                        const onsetMs = bedStartMs + latency * 1000;
+                        // Use individual HR readings (timestamped) for accuracy
+                        const preOnset = individualHrReadings.filter(r => {
+                            const t = new Date(r.timestamp).getTime();
+                            return t >= bedStartMs && t < onsetMs;
+                        });
+                        if (preOnset.length > 0) {
+                            return preOnset[preOnset.length - 1].bpm;
+                        }
+                        // Fallback: use sleep session's 5-min HR items
                         const hr = primary.heart_rate;
                         if (!hr?.items || !hr.interval) return null;
-                        const latency = primary.latency || 900;
                         const onsetIndex = Math.floor(latency / hr.interval);
-                        const candidates = [];
-                        for (let i = onsetIndex - 1; i >= 0 && candidates.length < 2; i--) {
-                            if (hr.items[i] != null) candidates.push(hr.items[i]);
+                        for (let i = Math.min(onsetIndex - 1, hr.items.length - 1); i >= 0; i--) {
+                            if (hr.items[i] != null) return hr.items[i];
                         }
-                        if (candidates.length === 0) return null;
-                        return Math.round(candidates.reduce((a, b) => a + b, 0) / candidates.length);
+                        return null;
                     })()
                 };
             });
@@ -612,12 +625,16 @@ const server = http.createServer(async (req, res) => {
 
                     console.log(`[cron-sync] Syncing user ${userId}: ${startDate} to ${endDate}`);
 
-                    // Fetch sleep sessions and daily sleep scores in parallel
-                    const [ouraData, dailySleepData] = await Promise.all([
+                    // Fetch sleep sessions, daily sleep scores, and individual HR in parallel
+                    const [ouraData, dailySleepData, cronHrData] = await Promise.all([
                         fetchOura(`/v2/usercollection/sleep?start_date=${startDate}&end_date=${endDate}`, ouraToken),
                         fetchOura(`/v2/usercollection/daily_sleep?start_date=${startDate}&end_date=${endDate}`, ouraToken)
+                            .catch(() => ({ data: [] })),
+                        fetchOura(`/v2/usercollection/heartrate?start_datetime=${startDate}T00:00:00&end_datetime=${endDate}T23:59:59`, ouraToken)
                             .catch(() => ({ data: [] }))
                     ]);
+
+                    const cronIndividualHr = (cronHrData.data || []).filter(r => r.bpm && r.timestamp);
 
                     if (!ouraData.data || ouraData.data.length === 0) {
                         console.log(`[cron-sync] No sleep data for user ${userId}`);
@@ -676,16 +693,24 @@ const server = http.createServer(async (req, res) => {
                             sleep_efficiency: primary.efficiency ?? null,
                             sleep_efficiency_score: efficiencyScoreByDay[day] ?? null,
                             hr_before_sleep: (() => {
+                                if (!primary.bedtime_start) return null;
+                                const latency = primary.latency || 900;
+                                const bedStartMs = new Date(primary.bedtime_start).getTime();
+                                const onsetMs = bedStartMs + latency * 1000;
+                                const preOnset = cronIndividualHr.filter(r => {
+                                    const t = new Date(r.timestamp).getTime();
+                                    return t >= bedStartMs && t < onsetMs;
+                                });
+                                if (preOnset.length > 0) {
+                                    return preOnset[preOnset.length - 1].bpm;
+                                }
                                 const hr = primary.heart_rate;
                                 if (!hr?.items || !hr.interval) return null;
-                                const latency = primary.latency || 900;
                                 const onsetIndex = Math.floor(latency / hr.interval);
-                                const candidates = [];
-                                for (let i = onsetIndex - 1; i >= 0 && candidates.length < 2; i--) {
-                                    if (hr.items[i] != null) candidates.push(hr.items[i]);
+                                for (let i = Math.min(onsetIndex - 1, hr.items.length - 1); i >= 0; i--) {
+                                    if (hr.items[i] != null) return hr.items[i];
                                 }
-                                if (candidates.length === 0) return null;
-                                return Math.round(candidates.reduce((a, b) => a + b, 0) / candidates.length);
+                                return null;
                             })()
                         };
                     });

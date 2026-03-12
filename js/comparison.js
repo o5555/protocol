@@ -617,13 +617,11 @@ const SleepSync = {
       // Fetch from Oura API via server proxy (avoids CORS issues)
       const baseUrl = '/api';
 
-      const [sleepResponse, dailySleepResponse] = await Promise.all([
-        fetch(`${baseUrl}/sleep?start_date=${startStr}&end_date=${endStr}`, {
-          headers: { 'Authorization': `Bearer ${profile.oura_token}` }
-        }),
-        fetch(`${baseUrl}/daily_sleep?start_date=${startStr}&end_date=${endStr}`, {
-          headers: { 'Authorization': `Bearer ${profile.oura_token}` }
-        }).catch(() => null)
+      const ouraHeaders = { 'Authorization': `Bearer ${profile.oura_token}` };
+      const [sleepResponse, dailySleepResponse, hrResponse] = await Promise.all([
+        fetch(`${baseUrl}/sleep?start_date=${startStr}&end_date=${endStr}`, { headers: ouraHeaders }),
+        fetch(`${baseUrl}/daily_sleep?start_date=${startStr}&end_date=${endStr}`, { headers: ouraHeaders }).catch(() => null),
+        fetch(`${baseUrl}/heartrate?start_datetime=${startStr}T00:00:00&end_datetime=${endStr}T23:59:59`, { headers: ouraHeaders }).catch(() => null)
       ]);
 
       if (!sleepResponse.ok) {
@@ -638,6 +636,15 @@ const SleepSync = {
         const dailyData = await dailySleepResponse.json();
         for (const d of (dailyData.data || [])) {
           scoresByDay[d.day] = d.score;
+        }
+      }
+
+      // Build individual HR readings lookup for pre-sleep HR
+      const individualHrReadings = [];
+      if (hrResponse?.ok) {
+        const hrData = await hrResponse.json();
+        for (const r of (hrData.data || [])) {
+          if (r.bpm && r.timestamp) individualHrReadings.push(r);
         }
       }
 
@@ -677,16 +684,27 @@ const SleepSync = {
           avg_hr: primary.average_heart_rate || null,
           pre_sleep_hr: primary.lowest_heart_rate || null,
           hr_before_sleep: (() => {
+            if (!primary.bedtime_start) return null;
+            const latency = primary.latency || 900;
+            const bedStartMs = new Date(primary.bedtime_start).getTime();
+            const onsetMs = bedStartMs + latency * 1000;
+            // Use individual HR readings (timestamped) for accuracy
+            const preOnset = individualHrReadings.filter(r => {
+              const t = new Date(r.timestamp).getTime();
+              return t >= bedStartMs && t < onsetMs;
+            });
+            if (preOnset.length > 0) {
+              // Last reading before sleep onset — matches Oura app
+              return preOnset[preOnset.length - 1].bpm;
+            }
+            // Fallback: use sleep session's 5-min HR items
             const hr = primary.heart_rate;
             if (!hr?.items || !hr.interval) return null;
-            const latency = primary.latency || 900;
             const onsetIndex = Math.floor(latency / hr.interval);
-            const candidates = [];
-            for (let i = onsetIndex - 1; i >= 0 && candidates.length < 2; i--) {
-              if (hr.items[i] != null) candidates.push(hr.items[i]);
+            for (let i = Math.min(onsetIndex - 1, hr.items.length - 1); i >= 0; i--) {
+              if (hr.items[i] != null) return hr.items[i];
             }
-            if (candidates.length === 0) return null;
-            return Math.round(candidates.reduce((a, b) => a + b, 0) / candidates.length);
+            return null;
           })()
         };
       });
