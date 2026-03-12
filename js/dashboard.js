@@ -135,21 +135,14 @@ const Dashboard = {
     const { challenge, sleepData } = result;
     if (!sleepData || sleepData.length === 0) return null;
 
-    // Find the most recent date ANY participant has data for
-    let latestDate = null;
-    for (const p of sleepData) {
-      const cd = p.challengeData || [];
-      if (cd.length > 0) {
-        const last = cd[cd.length - 1].date;
-        if (!latestDate || last > latestDate) latestDate = last;
-      }
-    }
-
     const participants = sleepData.map(p => {
       const cd = p.challengeData || [];
-      // Only show data from the most recent night — show "--" if participant has no data for that date
-      const latest = latestDate && cd.length > 0 && cd[cd.length - 1].date === latestDate
-        ? cd[cd.length - 1] : {};
+      // Use participant's most recent night with a sleep score
+      // (skip entries from incomplete syncs where score is still null)
+      let latest = {};
+      for (let i = cd.length - 1; i >= 0; i--) {
+        if (cd[i].sleep_score != null) { latest = cd[i]; break; }
+      }
       // Compute actual challenge average across all nights (for AI context)
       const challengeAvgs = Comparison.calcAverages(cd);
       return {
@@ -1080,14 +1073,18 @@ const Dashboard = {
         const today = DateUtils.toLocalDateStr(new Date());
         const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
         const cachedInsight = Cache.get(cacheKey);
+        // Check if today's sleep data is present — don't generate new insights
+        // with stale data before Oura sync completes. recentSleep is sorted
+        // descending by date, so [0] is the most recent night.
+        const hasTodayData = recentSleep[0]?.date === today;
         if (cachedInsight) {
           // Skip DOM write if we already rendered this exact insight this cycle
           if (this._aiCardRenderedInsight !== cachedInsight) {
             this._aiCardRenderedInsight = cachedInsight;
             aiContainer.innerHTML = this._renderAiCard(cachedInsight);
           }
-        } else if (!this._aiFetchInFlight && !this._aiFetchFailed) {
-          // No cache, no prior failure, no fetch running — show skeleton and start fetch
+        } else if (!this._aiFetchInFlight && !this._aiFetchFailed && hasTodayData) {
+          // No cache, no prior failure, no fetch running, today's data is in — show skeleton and start fetch
           aiContainer.innerHTML = this._renderAiCardLoading();
           this._aiCardRenderedInsight = null;
           const gen = this._renderGeneration;
