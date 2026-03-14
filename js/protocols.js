@@ -230,8 +230,18 @@ const Protocols = {
       this._renderListContent(container, cachedData);
     } else {
       container.innerHTML = `
-        <div class="text-center py-10 text-oura-muted text-sm">Loading protocols...</div>
-      `;
+        <div class="space-y-3">
+          ${[1,2,3].map(() => `
+          <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+            <div class="flex items-center gap-3">
+              <div class="skeleton-bar w-11 h-11 rounded-xl flex-shrink-0"></div>
+              <div class="flex-1">
+                <div class="skeleton-bar h-4 w-28 mb-1.5"></div>
+                <div class="skeleton-bar h-3 w-40"></div>
+              </div>
+            </div>
+          </div>`).join('')}
+        </div>`;
     }
 
     // Fetch fresh data (in background if we have cache)
@@ -304,8 +314,28 @@ const Protocols = {
       this._renderDetailContent(container, cachedData);
     } else {
       container.innerHTML = `
-        <div class="text-center py-10 text-oura-muted text-sm">Loading protocol...</div>
-      `;
+        <div class="space-y-4">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="skeleton-bar w-16 h-5"></div>
+          </div>
+          <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="skeleton-bar w-12 h-12 rounded-xl flex-shrink-0"></div>
+              <div class="flex-1">
+                <div class="skeleton-bar h-5 w-36 mb-1.5"></div>
+                <div class="skeleton-bar h-3 w-48"></div>
+              </div>
+            </div>
+            <div class="skeleton-bar h-3 w-full mb-1.5"></div>
+            <div class="skeleton-bar h-3 w-3/4"></div>
+          </div>
+          <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+            <div class="skeleton-bar w-20 h-4 mb-3"></div>
+            <div class="space-y-2">
+              ${[1,2,3].map(() => `<div class="skeleton-bar h-3 w-full"></div>`).join('')}
+            </div>
+          </div>
+        </div>`;
     }
 
     // Fetch fresh data (in background if we have cache)
