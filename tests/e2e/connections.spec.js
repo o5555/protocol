@@ -25,7 +25,7 @@ async function mockSupabase(page) {
       select: () => mockQuery, eq: () => mockQuery, neq: () => mockQuery,
       gte: () => mockQuery, lte: () => mockQuery, or: () => mockQuery,
       order: () => mockQuery,
-      single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: null, onboarding_step: 4 }, error: null }),
+      single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: null, onboarding_step: 2 }, error: null }),
       maybeSingle: () => Promise.resolve({ data: null, error: null }),
       insert: () => Promise.resolve({ data: {}, error: null }),
       update: () => mockQuery, delete: () => mockQuery,
@@ -33,7 +33,7 @@ async function mockSupabase(page) {
     };
     SupabaseClient.client.from = (table) => {
       if (table === 'profiles') {
-        return { ...mockQuery, select: () => ({ ...mockQuery, eq: () => ({ ...mockQuery, neq: () => ({ ...mockQuery, single: () => Promise.resolve({ data: mockFriend, error: null }) }), single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: null, onboarding_step: 4 }, error: null }), order: () => Promise.resolve({ data: [], error: null }) }), or: () => Promise.resolve({ data: [], error: null }), order: () => Promise.resolve({ data: [], error: null }), neq: () => ({ ...mockQuery, single: () => Promise.resolve({ data: mockFriend, error: null }) }) }) };
+        return { ...mockQuery, select: () => ({ ...mockQuery, eq: () => ({ ...mockQuery, neq: () => ({ ...mockQuery, single: () => Promise.resolve({ data: mockFriend, error: null }) }), single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: null, onboarding_step: 2 }, error: null }), order: () => Promise.resolve({ data: [], error: null }) }), or: () => Promise.resolve({ data: [], error: null }), order: () => Promise.resolve({ data: [], error: null }), neq: () => ({ ...mockQuery, single: () => Promise.resolve({ data: mockFriend, error: null }) }) }) };
       }
       if (table === 'friendships') {
         return { ...mockQuery, select: () => ({ ...mockQuery, eq: () => ({ ...mockQuery, eq: () => Promise.resolve({ data: [], error: null }), or: () => Promise.resolve({ data: [], error: null }) }), or: () => ({ ...mockQuery, single: () => Promise.resolve({ data: null, error: { code: 'PGRST116' } }), maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }),
@@ -54,7 +54,7 @@ async function mockSupabase(page) {
       return mockQuery;
     };
     SupabaseClient.client.rpc = () => Promise.resolve({ data: [], error: null });
-    Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: null, onboarding_step: 4 });
+    Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: null, onboarding_step: 2 });
     if (typeof Cache !== 'undefined') { Cache.get = () => null; Cache.set = () => {}; Cache.clear = () => {}; }
     if (typeof Challenges !== 'undefined') { Challenges.getInvitations = async () => []; Challenges.getActiveChallenges = async () => []; Challenges.getMyChallenges = async () => []; }
     Friends.getPendingRequests = async () => [];

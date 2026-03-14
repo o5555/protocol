@@ -227,7 +227,7 @@ const Auth = {
   async checkOnboarding(user, navigate = true) {
     try {
       const profile = await this.getProfile();
-      if (!profile || profile.onboarding_step < 5) {
+      if (!profile || profile.onboarding_step < 3) {
         Onboarding.start(profile || { onboarding_step: 0 });
       } else {
         const appContent = document.getElementById('app-content');

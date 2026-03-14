@@ -11,6 +11,8 @@ const Dashboard = {
   _habitData: null,
   _habitCheckinPending: null,  // Set<habitId> local buffer before confirm
   _habitCheckinLocked: false,  // true after confirm (prevents re-toggle)
+  _overlayPending: false,    // true while habit overlay is visible — suppresses AI rendering
+  _overlaySkippedToday: false, // true after Skip — prevents re-showing overlay this session
   _aiFetchInFlight: false,
   _aiFetchFailed: false,  // circuit breaker: skip skeleton after a failed fetch this session
 
@@ -22,6 +24,8 @@ const Dashboard = {
     // Reset local check-in buffer — locked state is re-detected from localStorage
     this._habitCheckinPending = null;
     this._habitCheckinLocked = false;
+    this._overlayPending = false;  // Reset per render; set true again if overlay triggers
+    // Note: _overlaySkippedToday is NOT reset here — it persists across tab switches
     // Reset AI flags so failures from a previous visit don't block retries
     this._aiFetchFailed = false;
     this._aiCardRenderedInsight = null;  // track rendered insight to skip redundant DOM writes
@@ -64,8 +68,18 @@ const Dashboard = {
       // Cache the data
       Cache.set('dashboard', { profile, activeChallenges, recentSleep, leagueData });
 
+      // Check if habit overlay should be shown (before rendering content)
+      if (this._shouldShowOverlay()) {
+        this._overlayPending = true;  // Suppress AI in _renderContent
+      }
+
       // Re-render with fresh data
       this._renderContent(container, { profile, activeChallenges, recentSleep, leagueData });
+
+      // Show overlay AFTER content renders (so dashboard loads behind it)
+      if (this._overlayPending && !document.getElementById('habit-overlay-wrapper')) {
+        this._showOverlay();
+      }
 
       // Background sync: pull latest Oura data, then re-render if new data arrived
       if (profile?.oura_token && typeof SleepSync !== 'undefined') {
@@ -424,6 +438,254 @@ const Dashboard = {
 
   _markCheckedIn(challengeId, date, count, total) {
     Cache.set(this._getCheckinKey(challengeId, date), { checkedIn: true, count, total });
+  },
+
+  // ── Habit overlay methods ──
+
+  // Check if the habit overlay should be shown
+  _shouldShowOverlay() {
+    if (this._overlaySkippedToday) return false;
+    if (!this._habitData) return false;
+    const { challenge, habits, firstDay, today } = this._habitData;
+    if (!challenge || !habits || habits.length === 0) return false;
+    if (firstDay) return false;
+    // Already checked in (localStorage or DB)
+    if (this._isCheckedIn(challenge.id, today)) return false;
+    if (this._habitData.completions?.length > 0) return false;
+    return true;
+  },
+
+  // Render the full-screen habit check-in overlay HTML
+  // Note: habits in _habitData are already filtered by challenge mode (light/pro) via _fetchHabitData
+  _renderOverlay() {
+    const { challenge, habits, completions, today } = this._habitData;
+    const pendingSet = this._overlayPendingSet || new Set(completions || []);
+    this._overlayPendingSet = pendingSet;
+
+    // Format yesterday's date for display
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const dateStr = yesterday.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+    return `
+      <div id="habit-overlay" class="fixed inset-0 bg-oura-bg z-50 flex flex-col safe-area-overlay">
+        <div class="flex-1 flex flex-col px-6 pt-8 pb-4 sm:max-w-md sm:mx-auto w-full">
+          <div class="mb-8">
+            <h2 class="text-2xl font-semibold text-white mb-1">Yesterday's Habits</h2>
+            <p class="text-oura-muted text-sm">${dateStr}</p>
+          </div>
+          <div class="flex-1 overflow-y-auto">
+            <div class="space-y-0 divide-y divide-oura-border/20">
+              ${habits.map(h => {
+                const checked = pendingSet.has(h.id);
+                return `
+                <button class="overlay-habit-row flex items-center gap-3 w-full text-left py-4 min-h-[52px]"
+                        data-habit-id="${h.id}" data-checked="${checked}"
+                        role="checkbox" aria-checked="${checked}" aria-label="${escapeHtml(h.title)}">
+                  <div class="w-7 h-7 rounded-lg border ${checked
+                    ? 'bg-oura-accent border-oura-accent'
+                    : 'border-oura-border'} flex items-center justify-center flex-shrink-0">
+                    ${checked ? '<svg class="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>' : ''}
+                  </div>
+                  <span class="text-base ${checked ? 'text-oura-muted line-through' : 'text-white'}">${escapeHtml(h.title)}</span>
+                </button>`;
+              }).join('')}
+            </div>
+          </div>
+          <div class="pt-4 pb-2">
+            <button id="overlay-confirm"
+              class="w-full py-3.5 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all text-base">
+              Confirm
+            </button>
+            <button id="overlay-skip" class="w-full py-3 text-oura-muted text-sm mt-1">
+              Skip for now
+            </button>
+          </div>
+        </div>
+      </div>`;
+  },
+
+  // Show the habit check-in overlay and attach listeners
+  _showOverlay() {
+    this._overlayPending = true;
+    this._overlayPendingSet = new Set(this._habitData.completions || []);
+
+    // Insert overlay into the DOM
+    const overlayHtml = this._renderOverlay();
+    const overlayWrapper = document.createElement('div');
+    overlayWrapper.id = 'habit-overlay-wrapper';
+    overlayWrapper.innerHTML = overlayHtml;
+    document.body.appendChild(overlayWrapper);
+
+    // Attach event listeners via delegation
+    overlayWrapper.addEventListener('click', (e) => {
+      if (e.target.closest('#overlay-confirm')) {
+        e.stopPropagation();
+        this._handleOverlayConfirm();
+        return;
+      }
+      if (e.target.closest('#overlay-skip')) {
+        e.stopPropagation();
+        this._handleOverlaySkip();
+        return;
+      }
+      const row = e.target.closest('.overlay-habit-row');
+      if (row) {
+        e.stopPropagation();
+        this._handleOverlayToggle(row);
+      }
+    });
+  },
+
+  // Toggle a habit in the overlay (local only — same pattern as dashboard toggle)
+  _handleOverlayToggle(row) {
+    const habitId = row.dataset.habitId;
+    const wasChecked = row.dataset.checked === 'true';
+
+    if (wasChecked) {
+      this._overlayPendingSet.delete(habitId);
+    } else {
+      this._overlayPendingSet.add(habitId);
+    }
+
+    row.dataset.checked = String(!wasChecked);
+    row.setAttribute('aria-checked', String(!wasChecked));
+    const box = row.querySelector('div:first-child');
+    const label = row.querySelector('span');
+    if (!wasChecked) {
+      box.className = 'w-7 h-7 rounded-lg border bg-oura-accent border-oura-accent flex items-center justify-center flex-shrink-0';
+      box.innerHTML = '<svg class="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>';
+      label.className = 'text-base text-oura-muted line-through';
+    } else {
+      box.className = 'w-7 h-7 rounded-lg border border-oura-border flex items-center justify-center flex-shrink-0';
+      box.innerHTML = '';
+      label.className = 'text-base text-white';
+    }
+  },
+
+  // Animate out and remove the overlay from DOM
+  _dismissOverlay() {
+    const overlay = document.getElementById('habit-overlay');
+    if (overlay) {
+      overlay.style.transition = 'opacity 200ms ease-out';
+      overlay.style.opacity = '0';
+      setTimeout(() => {
+        const wrapper = document.getElementById('habit-overlay-wrapper');
+        if (wrapper) wrapper.remove();
+      }, 200);
+    } else {
+      const wrapper = document.getElementById('habit-overlay-wrapper');
+      if (wrapper) wrapper.remove();
+    }
+    this._overlayPending = false;
+  },
+
+  // Handle overlay Confirm — save habits, dismiss, trigger AI
+  async _handleOverlayConfirm() {
+    const { challenge, habits, today } = this._habitData;
+    const pending = [...this._overlayPendingSet];
+    const btn = document.getElementById('overlay-confirm');
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      btn.classList.add('opacity-60');
+    }
+
+    try {
+      await Challenges.saveHabitBatch(challenge.id, pending, today);
+
+      // Update local habit data
+      this._habitData.completions = pending;
+      this._habitCheckinPending = new Set(pending);
+
+      // Lock check-in in localStorage
+      this._markCheckedIn(challenge.id, today, pending.length, habits.length);
+
+      // Dismiss overlay
+      this._dismissOverlay();
+
+      // Re-render dashboard habit section as collapsed
+      const container = document.getElementById('dashboard-container');
+      if (container) {
+        const section = container.querySelector('#habit-section');
+        if (section) {
+          section.outerHTML = this._renderHabitCollapsed(pending.length, habits.length);
+        }
+      }
+
+      // Trigger AI insight now that habits are confirmed
+      // Uses existing _refreshAiAfterCheckin which does forceRefresh=true
+      this._refreshAiAfterCheckin();
+    } catch (err) {
+      console.warn('[Dashboard] Overlay habit save failed:', err);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Confirm';
+        btn.classList.remove('opacity-60');
+      }
+      // Show error feedback
+      const overlay = document.getElementById('habit-overlay');
+      if (overlay) {
+        let toast = overlay.querySelector('.overlay-error');
+        if (!toast) {
+          toast = document.createElement('div');
+          toast.className = 'overlay-error text-red-400 text-sm text-center py-2';
+          const skipBtn = document.getElementById('overlay-skip');
+          if (skipBtn) skipBtn.before(toast);
+        }
+        toast.textContent = "Couldn't save your habits. Try again.";
+      }
+    }
+  },
+
+  // Handle overlay Skip — dismiss without saving, allow AI to generate without habits
+  _handleOverlaySkip() {
+    this._overlaySkippedToday = true;
+    this._dismissOverlay();
+
+    // Trigger AI rendering now (without habit data)
+    const cached = Cache.get('dashboard');
+    if (cached) {
+      // AI rendering was suppressed; now trigger it
+      this._triggerAiAfterOverlay(cached.recentSleep, cached.leagueData, cached.activeChallenges);
+    }
+  },
+
+  // Run AI insight rendering after overlay resolves (confirm or skip)
+  _triggerAiAfterOverlay(recentSleep, leagueData, activeChallenges) {
+    const aiChallengeId = activeChallenges?.[0]?.id || 'personal';
+    const aiContainer = document.getElementById('ai-insight-container');
+    if (!aiContainer || !recentSleep || recentSleep.length === 0) return;
+
+    const today = DateUtils.toLocalDateStr(new Date());
+    const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
+    const cachedInsight = Cache.get(cacheKey);
+    const hasTodayData = recentSleep[0]?.date === today;
+
+    if (cachedInsight) {
+      this._aiCardRenderedInsight = cachedInsight;
+      aiContainer.innerHTML = this._renderAiCard(cachedInsight);
+    } else if (!this._aiFetchInFlight && !this._aiFetchFailed && hasTodayData) {
+      aiContainer.innerHTML = this._renderAiCardLoading();
+      this._aiCardRenderedInsight = null;
+      const gen = this._renderGeneration;
+      this._aiFetchInFlight = true;
+      this._fetchAiInsight(recentSleep, leagueData, false, aiChallengeId).then(insight => {
+        this._aiFetchInFlight = false;
+        if (gen !== this._renderGeneration) return;
+        const ac = document.getElementById('ai-insight-container');
+        if (ac && insight) {
+          this._aiFetchFailed = false;
+          this._aiCardRenderedInsight = insight;
+          ac.innerHTML = this._renderAiCard(insight);
+        } else if (ac) {
+          this._aiFetchFailed = true;
+          ac.innerHTML = '';
+        }
+      }).catch(() => { this._aiFetchInFlight = false; this._aiFetchFailed = true; });
+    }
+    // Note: waiting states (shimmer/bedtime) will be added in a later task
   },
 
   // Collapsed summary line after check-in
@@ -926,7 +1188,7 @@ const Dashboard = {
         html += `
           <div class="text-center mb-6 pt-4">
             <h2 class="text-2xl font-bold mb-2">Welcome to Protocol Circle</h2>
-            <p class="text-oura-muted text-sm">Get started by connecting your Oura Ring and joining a challenge.</p>
+            <p class="text-oura-muted text-sm">Connect your Oura Ring and create a challenge to get started.</p>
           </div>
           <div class="space-y-3 mb-6">
             <button onclick="Account.showOuraTokenModal()" class="w-full bg-oura-card rounded-2xl p-5 border border-oura-border/30 text-left">
@@ -947,8 +1209,8 @@ const Dashboard = {
                   <svg class="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M18.75 4.236c.982.143 1.954.317 2.916.52A6.003 6.003 0 0 1 16.27 9.728M18.75 4.236V4.5c0 2.108-.966 3.99-2.48 5.228m0 0a6.023 6.023 0 0 1-2.021 1.247m0 0A6.015 6.015 0 0 1 12 11.25a6.015 6.015 0 0 1-2.27-.475m4.54 0a6.023 6.023 0 0 0 2.021 1.247m-6.561 0a6.023 6.023 0 0 1-2.021 1.247" /></svg>
                 </div>
                 <div class="flex-1">
-                  <p class="font-semibold mb-0.5">Start a Challenge</p>
-                  <p class="text-sm text-oura-muted">Pick a protocol and compete with friends</p>
+                  <p class="font-semibold mb-0.5">Create a Challenge</p>
+                  <p class="text-sm text-oura-muted">Pick a protocol and invite friends to compete</p>
                 </div>
                 <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
               </div>
@@ -1051,8 +1313,8 @@ const Dashboard = {
                 <svg class="w-5 h-5 text-oura-accent" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
               </div>
               <div class="flex-1">
-                <p class="font-semibold text-sm">Start a Challenge</p>
-                <p class="text-xs text-oura-muted mt-0.5">Pick a protocol and compete with friends for 30 days</p>
+                <p class="font-semibold text-sm">Create a Challenge</p>
+                <p class="text-xs text-oura-muted mt-0.5">Pick a protocol and invite friends to compete</p>
               </div>
               <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
             </div>
@@ -1120,7 +1382,7 @@ const Dashboard = {
       // sibling container, the AI card persists across all re-renders.
       const aiChallengeId = activeChallenges?.[0]?.id || 'personal';
       const aiContainer = document.getElementById('ai-insight-container');
-      if (aiContainer && recentSleep.length > 0) {
+      if (aiContainer && recentSleep.length > 0 && !this._overlayPending) {
         const today = DateUtils.toLocalDateStr(new Date());
         const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
         const cachedInsight = Cache.get(cacheKey);

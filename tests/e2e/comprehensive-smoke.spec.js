@@ -54,7 +54,7 @@ async function mockSupabase(page) {
           data: {
             display_name: 'Test User',
             oura_token: 'fake-token',
-            onboarding_step: 4,
+            onboarding_step: 2,
           },
           error: null,
         }),
@@ -77,7 +77,7 @@ async function mockSupabase(page) {
               data: {
                 display_name: 'Test User',
                 oura_token: 'fake-token',
-                onboarding_step: 4,
+                onboarding_step: 2,
               },
               error: null,
             }),
@@ -96,7 +96,7 @@ async function mockSupabase(page) {
       Promise.resolve({
         display_name: 'Test User',
         oura_token: 'fake-token',
-        onboarding_step: 4,
+        onboarding_step: 2,
       });
   });
 }

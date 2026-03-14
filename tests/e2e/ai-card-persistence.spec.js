@@ -81,7 +81,7 @@ async function mockSupabaseWithSleepData(page, sleepData) {
       Promise.resolve({
         display_name: 'Test User',
         oura_token: null, // no Oura token so _backgroundSync is skipped
-        onboarding_step: 4,
+        onboarding_step: 2,
       });
 
     // Mock Challenges to return no active challenges
@@ -131,7 +131,7 @@ async function mockSupabaseWithSleepData(page, sleepData) {
           data: {
             display_name: 'Test User',
             oura_token: null,
-            onboarding_step: 4,
+            onboarding_step: 2,
           },
           error: null,
         }),
@@ -155,7 +155,7 @@ async function mockSupabaseWithSleepData(page, sleepData) {
               data: {
                 display_name: 'Test User',
                 oura_token: null,
-                onboarding_step: 4,
+                onboarding_step: 2,
               },
               error: null,
             }),
@@ -753,7 +753,7 @@ test.describe('AI Insight Card Persistence', () => {
         profile: {
           display_name: 'Test User',
           oura_token: 'fake-token-for-sync', // Enable background sync path
-          onboarding_step: 4,
+          onboarding_step: 2,
         },
         activeChallenges: [],
         recentSleep: data,
@@ -765,7 +765,7 @@ test.describe('AI Insight Card Persistence', () => {
         Promise.resolve({
           display_name: 'Test User',
           oura_token: 'fake-token-for-sync',
-          onboarding_step: 4,
+          onboarding_step: 2,
         });
 
       // Mock SleepSync.syncNow to return success with count > 0

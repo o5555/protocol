@@ -136,30 +136,15 @@ test.describe('Onboarding', () => {
     await expect(page.locator('#onboarding-token-status')).toBeAttached();
   });
 
-  test('step 2 - pick a challenge shows protocol list', async ({ page }) => {
+  test('step 2 - completion screen shows Go to Dashboard', async ({ page }) => {
     await showOnboardingStep(page, 2);
-    await expect(page.locator('#onboarding-protocols')).toBeVisible();
+    // Step 2 checks for invites async, then shows Complete
+    await expect(page.getByText('Go to Dashboard')).toBeVisible({ timeout: 5000 });
   });
 
-  test('step 2 - challenge form is initially hidden', async ({ page }) => {
+  test('step 2 - shows celebration message', async ({ page }) => {
     await showOnboardingStep(page, 2);
-    await expect(page.locator('#onboarding-challenge-form')).toBeHidden();
-  });
-
-  test('step 3 - add a friend has email input and invite button', async ({ page }) => {
-    await showOnboardingStep(page, 3);
-    await expect(page.locator('#onboarding-friend-email')).toBeVisible();
-    await expect(page.locator('#onboarding-invite-btn')).toBeVisible();
-  });
-
-  test('step 4 - completion screen shows Go to Dashboard', async ({ page }) => {
-    await showOnboardingStep(page, 4);
-    await expect(page.getByText('Go to Dashboard')).toBeVisible();
-  });
-
-  test('step 4 - shows celebration message', async ({ page }) => {
-    await showOnboardingStep(page, 4);
-    await expect(page.getByText("You're All Set!")).toBeVisible();
+    await expect(page.getByText("You're All Set!")).toBeVisible({ timeout: 5000 });
   });
 
   test('full step sequence renders each step correctly', async ({ page }) => {
@@ -171,17 +156,9 @@ test.describe('Onboarding', () => {
     await page.evaluate(() => window.Onboarding.renderStep(1));
     await expect(page.locator('#onboarding-token')).toBeVisible();
 
-    // Step 2 — Pick a Challenge
+    // Step 2 — Complete (checks for invites, then shows completion)
     await page.evaluate(() => window.Onboarding.renderStep(2));
-    await expect(page.locator('#onboarding-protocols')).toBeVisible();
-
-    // Step 3 — Add a Friend
-    await page.evaluate(() => window.Onboarding.renderStep(3));
-    await expect(page.locator('#onboarding-friend-email')).toBeVisible();
-
-    // Step 4 — Completion
-    await page.evaluate(() => window.Onboarding.renderStep(4));
-    await expect(page.getByText('Go to Dashboard')).toBeVisible();
+    await expect(page.getByText('Go to Dashboard')).toBeVisible({ timeout: 5000 });
   });
 });
 

@@ -94,7 +94,7 @@ async function mockSupabase(page) {
         return { ...mockQuery, select: () => ({ ...mockQuery, eq: () => ({ ...mockQuery, eq: () => ({ ...mockQuery, eq: () => Promise.resolve({ data: [], error: null }) }) }) }) };
       }
       if (table === 'profiles') {
-        return { ...mockQuery, select: () => ({ ...mockQuery, eq: () => ({ ...mockQuery, single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 4 }, error: null }), order: () => Promise.resolve({ data: [], error: null }) }), or: () => Promise.resolve({ data: [], error: null }), order: () => Promise.resolve({ data: [], error: null }) }) };
+        return { ...mockQuery, select: () => ({ ...mockQuery, eq: () => ({ ...mockQuery, single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 2 }, error: null }), order: () => Promise.resolve({ data: [], error: null }) }), or: () => Promise.resolve({ data: [], error: null }), order: () => Promise.resolve({ data: [], error: null }) }) };
       }
       if (table === 'friendships') {
         return { ...mockQuery, select: () => ({ ...mockQuery, eq: () => ({ ...mockQuery, eq: () => Promise.resolve({ data: [], error: null }), or: () => Promise.resolve({ data: [], error: null }) }), or: () => ({ ...mockQuery, single: () => Promise.resolve({ data: null, error: { code: 'PGRST116' } }) }) }),
@@ -109,7 +109,7 @@ async function mockSupabase(page) {
       }
       return mockQuery;
     };
-    Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 4 });
+    Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 2 });
     if (typeof SleepSync !== 'undefined') SleepSync.syncNow = async () => ({ success: true, synced: 1 });
     if (typeof Comparison !== 'undefined') {
       Comparison.renderForChallenge = async () => {};
@@ -827,50 +827,9 @@ test.describe('Onboarding Step Interactions', () => {
     expect(unexpected).toEqual([]);
   });
 
-  test('Step 2 (Pick Challenge) — protocols container visible, cards render', async ({ page }) => {
+  test('Step 2 (Complete) — shows "You\'re All Set!" and Go to Dashboard button', async ({ page }) => {
     const errors = collectErrors(page);
     await showOnboardingStep(page, 2);
-    await mockSupabase(page);
-
-    // Protocols container should be visible
-    const protocolsContainer = page.locator('#onboarding-protocols');
-    await expect(protocolsContainer).toBeVisible({ timeout: 5000 });
-
-    // Wait for protocols to load
-    await page.waitForFunction(() => {
-      const el = document.getElementById('onboarding-protocols');
-      return el && !el.textContent.includes('Loading protocols');
-    }, { timeout: 5000 }).catch(() => {});
-
-    // Protocol cards should be present (from mock data)
-    const cards = protocolsContainer.locator('.onboarding-protocol-card');
-    const count = await cards.count();
-    expect(count).toBeGreaterThanOrEqual(0); // May have rendered from mock
-
-    const unexpected = unexpectedErrors(errors);
-    expect(unexpected).toEqual([]);
-  });
-
-  test('Step 3 (Add Friend) — email input and invite button visible', async ({ page }) => {
-    const errors = collectErrors(page);
-    await showOnboardingStep(page, 3);
-    await mockSupabase(page);
-
-    // Friend email input should be visible
-    const emailInput = page.locator('#onboarding-friend-email');
-    await expect(emailInput).toBeVisible({ timeout: 5000 });
-
-    // Invite button should be visible
-    const inviteBtn = page.locator('#onboarding-invite-btn');
-    await expect(inviteBtn).toBeVisible();
-
-    const unexpected = unexpectedErrors(errors);
-    expect(unexpected).toEqual([]);
-  });
-
-  test('Step 4 (Complete) — shows "You\'re All Set!" and Go to Dashboard button', async ({ page }) => {
-    const errors = collectErrors(page);
-    await showOnboardingStep(page, 4);
     await mockSupabase(page);
 
     // "You're All Set!" text should be visible

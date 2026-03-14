@@ -173,7 +173,7 @@ async function mockSupabase(page) {
             eq: () => ({
               ...mockQuery,
               single: () => Promise.resolve({
-                data: { display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 4 },
+                data: { display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 2 },
                 error: null
               }),
               order: () => Promise.resolve({ data: [], error: null })
@@ -247,7 +247,7 @@ async function mockSupabase(page) {
     // Also mock via rpc for friend search
     SupabaseClient.client.rpc = () => Promise.resolve({ data: [], error: null });
 
-    Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 4 });
+    Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 2 });
 
     if (typeof SleepSync !== 'undefined') SleepSync.syncNow = async () => ({ success: true, synced: 1, count: 0 });
     if (typeof Comparison !== 'undefined') {

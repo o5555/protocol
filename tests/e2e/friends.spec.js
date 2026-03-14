@@ -26,7 +26,7 @@ async function mockSupabase(page) {
       select: () => mockQuery, eq: () => mockQuery, neq: () => mockQuery,
       gte: () => mockQuery, lte: () => mockQuery, or: () => mockQuery,
       order: () => mockQuery,
-      single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: null, onboarding_step: 4 }, error: null }),
+      single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: null, onboarding_step: 2 }, error: null }),
       insert: () => Promise.resolve({ data: {}, error: null }),
       update: () => mockQuery, delete: () => mockQuery,
       then: (fn) => Promise.resolve({ data: [], error: null }).then(fn),
@@ -44,7 +44,7 @@ async function mockSupabase(page) {
                 ...mockQuery,
                 single: () => Promise.resolve({ data: mockFriend, error: null })
               }),
-              single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: null, onboarding_step: 4 }, error: null }),
+              single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: null, onboarding_step: 2 }, error: null }),
               order: () => Promise.resolve({ data: [], error: null }),
             }),
             or: () => Promise.resolve({ data: [], error: null }),
@@ -104,7 +104,7 @@ async function mockSupabase(page) {
       }
       return mockQuery;
     };
-    Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: null, onboarding_step: 4 });
+    Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: null, onboarding_step: 2 });
     // Mock Cache
     if (typeof Cache !== 'undefined') {
       Cache.get = () => null;

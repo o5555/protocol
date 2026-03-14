@@ -30,7 +30,7 @@ async function mockSupabase(page) {
       select: () => mockQuery, eq: () => mockQuery, neq: () => mockQuery,
       gte: () => mockQuery, lte: () => mockQuery, or: () => mockQuery,
       order: () => mockQuery,
-      single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 4 }, error: null }),
+      single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 2 }, error: null }),
       insert: () => Promise.resolve({ data: {}, error: null }),
       update: () => mockQuery, delete: () => mockQuery,
       then: (fn) => Promise.resolve({ data: [], error: null }).then(fn),
@@ -39,13 +39,13 @@ async function mockSupabase(page) {
       ...mockQuery,
       select: () => ({
         ...mockQuery,
-        eq: () => ({ ...mockQuery, eq: () => Promise.resolve({ data: [], error: null }), order: () => Promise.resolve({ data: [], error: null }), single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 4 }, error: null }) }),
+        eq: () => ({ ...mockQuery, eq: () => Promise.resolve({ data: [], error: null }), order: () => Promise.resolve({ data: [], error: null }), single: () => Promise.resolve({ data: { display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 2 }, error: null }) }),
         or: () => Promise.resolve({ data: [], error: null }),
         order: () => Promise.resolve({ data: [], error: null }),
         neq: () => ({ ...mockQuery, single: () => Promise.resolve({ data: null, error: { code: 'PGRST116' } }) }),
       }),
     });
-    Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 4 });
+    Auth.getProfile = () => Promise.resolve({ display_name: 'Test User', oura_token: 'fake-token', onboarding_step: 2 });
     if (typeof Challenges !== 'undefined') Challenges.getInvitations = async () => [];
     if (typeof Friends !== 'undefined') { Friends.getPendingRequests = async () => []; Friends.getFriends = async () => []; }
     if (typeof Cache !== 'undefined') { Cache.get = () => null; Cache.set = () => {}; Cache.clear = () => {}; }
