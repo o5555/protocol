@@ -38,7 +38,31 @@ const Dashboard = {
       this._renderContent(container, cachedData);
     } else {
       // Show minimal loading state to prevent flash of empty/wrong content
-      container.innerHTML = '<div class="py-10 text-center text-oura-muted text-sm">Loading...</div>';
+      container.innerHTML = `
+        <div class="space-y-4">
+          <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+            <div class="skeleton-bar w-32 h-4 mb-4"></div>
+            <div class="space-y-3">
+              ${[1,2,3].map(() => `
+              <div class="flex items-center gap-3">
+                <div class="skeleton-bar w-8 h-8 rounded-full flex-shrink-0"></div>
+                <div class="flex-1">
+                  <div class="skeleton-bar h-3 w-24 mb-1.5"></div>
+                  <div class="skeleton-bar h-3 w-16"></div>
+                </div>
+                <div class="skeleton-bar h-5 w-12"></div>
+              </div>`).join('')}
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            ${[1,2,3,4].map(() => `
+            <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30">
+              <div class="skeleton-bar h-3 w-20 mb-2"></div>
+              <div class="skeleton-bar h-6 w-14 mb-1"></div>
+              <div class="skeleton-bar h-2 w-full"></div>
+            </div>`).join('')}
+          </div>
+        </div>`;
     }
 
     // Fetch fresh data (in background if we have cache)
