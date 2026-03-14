@@ -28,7 +28,7 @@ const Dashboard = {
     // Note: _overlaySkippedToday is NOT reset here — it persists across tab switches
     // Reset AI flags so failures from a previous visit don't block retries
     this._aiFetchFailed = false;
-    this._aiCardRenderedInsight = null;  // track rendered insight to skip redundant DOM writes
+    // Note: _aiCardRenderedInsight is NOT reset here — prevents visual flash on tab switch
 
     const generation = ++this._renderGeneration;
 
@@ -914,7 +914,7 @@ const Dashboard = {
       const recentSleep = cached?.recentSleep || [];
       const leagueData = cached?.leagueData || null;
 
-      const insight = await this._fetchAiInsight(recentSleep, leagueData, true);
+      const insight = await this._fetchAiInsight(recentSleep, leagueData, false);
       const ac = document.getElementById('ai-insight-container');
       if (ac && insight) {
         this._aiCardRenderedInsight = insight;
@@ -1174,15 +1174,25 @@ const Dashboard = {
     const fingerprintKey = `ai_insight_fp_${challengeId}_${today}`;
     const currentFingerprint = this._buildDataFingerprint(recentSleep, leagueData);
 
-    if (!forceRefresh) {
-      const cached = Cache.get(cacheKey);
-      if (cached) return cached;
+    // STICKY: Once today's insight is generated, always return it for the rest of the day.
+    // No fingerprint invalidation, no force refresh bypass — the insight is final.
+    // Only regenerates the next calendar day when the cache key changes.
+    const cached = Cache.get(cacheKey);
+    if (cached) return cached;
 
-      // Cache was evicted (e.g. iOS memory pressure) but the data hasn't changed
-      // since we last generated an insight — no point calling the API again
-      const lastFingerprint = Cache.get(fingerprintKey);
-      if (lastFingerprint && lastFingerprint === currentFingerprint) return null;
-    }
+    // Also check localStorage directly (survives Cache TTL eviction on iOS)
+    try {
+      const stored = localStorage.getItem(cacheKey);
+      if (stored) {
+        Cache.set(cacheKey, stored);  // Re-hydrate the Cache module
+        return stored;
+      }
+    } catch { /* localStorage unavailable */ }
+
+    // Cache was evicted and no localStorage backup — check fingerprint
+    // If data hasn't changed since last generation, skip the API call
+    const lastFingerprint = Cache.get(fingerprintKey);
+    if (lastFingerprint && lastFingerprint === currentFingerprint) return null;
 
     const context = this._buildAiContext(recentSleep, leagueData);
     if (!context.sleepContext && !context.habitContext) return null;
@@ -1202,6 +1212,8 @@ const Dashboard = {
       if (insight) {
         Cache.set(cacheKey, insight);
         Cache.set(fingerprintKey, currentFingerprint);
+        // Also persist in localStorage directly — survives Cache TTL eviction on iOS
+        try { localStorage.setItem(cacheKey, insight); } catch { /* full */ }
       }
       return insight;
     } catch {
