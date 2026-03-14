@@ -289,8 +289,18 @@ const Friends = {
       this._renderContent(container, cachedData);
     } else {
       container.innerHTML = `
-        <div class="text-center py-10 text-oura-muted text-sm">Loading friends...</div>
-      `;
+        <div class="space-y-3">
+          ${[1,2,3].map(() => `
+          <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30">
+            <div class="flex items-center gap-3">
+              <div class="skeleton-bar w-10 h-10 rounded-full flex-shrink-0"></div>
+              <div class="flex-1">
+                <div class="skeleton-bar h-4 w-24 mb-1.5"></div>
+                <div class="skeleton-bar h-3 w-32"></div>
+              </div>
+            </div>
+          </div>`).join('')}
+        </div>`;
     }
 
     // Fetch fresh data (in background if we have cache)
