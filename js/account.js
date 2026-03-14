@@ -17,8 +17,27 @@ const Account = {
       this._renderContent(container, cachedData);
     } else {
       container.innerHTML = `
-        <div class="text-center py-10 text-oura-muted text-sm">Loading account...</div>
-      `;
+        <div class="space-y-4">
+          <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+            <div class="flex items-center gap-4">
+              <div class="skeleton-bar w-14 h-14 rounded-full flex-shrink-0"></div>
+              <div class="flex-1">
+                <div class="skeleton-bar h-5 w-28 mb-1.5"></div>
+                <div class="skeleton-bar h-3 w-36"></div>
+              </div>
+            </div>
+          </div>
+          <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+            <div class="skeleton-bar w-24 h-4 mb-4"></div>
+            <div class="space-y-3">
+              ${[1,2,3].map(() => `
+              <div class="flex items-center justify-between">
+                <div class="skeleton-bar h-3 w-28"></div>
+                <div class="skeleton-bar h-3 w-16"></div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </div>`;
     }
 
     // Fetch fresh data (in background if we have cache)
