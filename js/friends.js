@@ -289,17 +289,24 @@ const Friends = {
       this._renderContent(container, cachedData);
     } else {
       container.innerHTML = `
-        <div class="space-y-3">
-          ${[1,2,3].map(() => `
-          <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30">
-            <div class="flex items-center gap-3">
-              <div class="skeleton-bar w-10 h-10 rounded-full flex-shrink-0"></div>
-              <div class="flex-1">
-                <div class="skeleton-bar h-4 w-24 mb-1.5"></div>
+        <div class="bg-oura-card rounded-2xl p-6 mb-6">
+          <div class="skeleton-bar h-5 w-24 mb-4"></div>
+          <div class="flex gap-2">
+            <div class="flex-1 skeleton-bar h-12 rounded-xl"></div>
+            <div class="skeleton-bar h-12 w-24 rounded-lg"></div>
+          </div>
+        </div>
+        <div class="bg-oura-card rounded-2xl p-6">
+          <div class="skeleton-bar h-5 w-20 mb-4"></div>
+          <div class="space-y-3">
+            ${[1,2,3].map(() => `
+            <div class="flex items-center justify-between p-3 bg-oura-subtle rounded-lg">
+              <div>
+                <div class="skeleton-bar h-3.5 w-24 mb-1.5"></div>
                 <div class="skeleton-bar h-3 w-32"></div>
               </div>
-            </div>
-          </div>`).join('')}
+            </div>`).join('')}
+          </div>
         </div>`;
     }
 
