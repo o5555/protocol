@@ -618,8 +618,11 @@ const Dashboard = {
       }
 
       // Trigger AI insight now that habits are confirmed
-      // Uses existing _refreshAiAfterCheckin which does forceRefresh=true
-      this._refreshAiAfterCheckin();
+      // Use _triggerAiAfterOverlay which handles waiting states when sleep data isn't synced
+      const cached = Cache.get('dashboard');
+      if (cached) {
+        this._triggerAiAfterOverlay(cached.recentSleep, cached.leagueData, cached.activeChallenges);
+      }
     } catch (err) {
       console.warn('[Dashboard] Overlay habit save failed:', err);
       if (btn) {
@@ -1536,14 +1539,11 @@ const Dashboard = {
               ac.innerHTML = '';
             }
           }).catch(() => { this._aiFetchInFlight = false; this._aiFetchFailed = true; });
-        }
-        // If fetch in flight, don't touch aiContainer — let the running fetch fill it
-      } else if (aiContainer && recentSleep.length > 0 && !this._overlayPending) {
-        // Sleep data exists but no today data and no cached insight — show waiting state
-        const hasTodayData = recentSleep[0]?.date === DateUtils.toLocalDateStr(new Date());
-        if (!hasTodayData && !this._aiFetchInFlight) {
+        } else if (!hasTodayData && !this._aiFetchInFlight) {
+          // Today's data hasn't synced yet — show waiting state (shimmer or bedtime message)
           aiContainer.innerHTML = this._renderAiWaitingState(recentSleep);
         }
+        // If fetch in flight, don't touch aiContainer — let the running fetch fill it
       }
     } catch (error) {
       console.error('Error rendering dashboard:', error);
