@@ -378,12 +378,28 @@ const Onboarding = {
       console.error('Error completing onboarding:', error);
     }
 
+    // Pre-fetch fresh profile and cache dashboard data so the dashboard
+    // renders correctly on first paint (avoids flash of wrong welcome state)
+    Cache.clear('dashboard');
+    Cache.clear('account');
+
+    try {
+      const [profile, activeChallenges] = await Promise.all([
+        Auth.getProfile(),
+        Challenges.getActiveChallenges().catch(() => [])
+      ]);
+      const recentSleep = await Dashboard.getRecentSleepData().catch(() => []);
+      Cache.set('dashboard', { profile, activeChallenges, recentSleep, leagueData: null });
+    } catch (e) {
+      // Non-critical — dashboard will fetch its own data
+    }
+
     // Hide onboarding, show app
     document.getElementById('onboarding-section')?.classList.add('hidden');
     document.getElementById('app-content')?.classList.remove('hidden');
     document.querySelector('.bottom-nav')?.classList.remove('hidden');
 
-    // Navigate to dashboard
+    // Navigate to dashboard (will render instantly from cache we just set)
     App.navigateTo('dashboard');
   }
 };
