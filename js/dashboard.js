@@ -36,6 +36,9 @@ const Dashboard = {
     const cachedData = Cache.get('dashboard');
     if (cachedData) {
       this._renderContent(container, cachedData);
+    } else {
+      // Show minimal loading state to prevent flash of empty/wrong content
+      container.innerHTML = '<div class="py-10 text-center text-oura-muted text-sm">Loading...</div>';
     }
 
     // Fetch fresh data (in background if we have cache)
@@ -1173,9 +1176,10 @@ const Dashboard = {
       let html = '';
       const headerEl = document.getElementById('dashboard-header');
 
-      // Hide static "Dashboard" header when league table is showing
+      // Hide static "Dashboard" header when league table or welcome state is showing
+      const isNewUser = !profile?.oura_token && activeChallenges.length === 0;
       if (headerEl) {
-        if (leagueData && leagueData.participants.length > 0) {
+        if ((leagueData && leagueData.participants.length > 0) || isNewUser) {
           headerEl.style.display = 'none';
         } else {
           headerEl.style.display = '';
@@ -1183,7 +1187,6 @@ const Dashboard = {
       }
 
       // Welcome state for new users — no token AND no active challenge
-      const isNewUser = !profile?.oura_token && activeChallenges.length === 0;
       if (isNewUser) {
         html += `
           <div class="text-center mb-6 pt-4">
