@@ -687,8 +687,10 @@ const Dashboard = {
           ac.innerHTML = '';
         }
       }).catch(() => { this._aiFetchInFlight = false; this._aiFetchFailed = true; });
+    } else if (!hasTodayData) {
+      // Sleep data not yet synced — show shimmer or bedtime waiting state
+      aiContainer.innerHTML = this._renderAiWaitingState(recentSleep);
     }
-    // Note: waiting states (shimmer/bedtime) will be added in a later task
   },
 
   // Collapsed summary line after check-in
@@ -945,6 +947,74 @@ const Dashboard = {
     } catch { return null; }
   },
 
+  // Calculate the user's bedtime window from historical sleep data.
+  // Returns { start: hours (0-23.99), end: hours (0-23.99) } in local-time-of-sleep.
+  // "start" = avg bedtime minus 1 hour, "end" = avg wake time plus 2 hours.
+  // If fewer than 7 nights of data, falls back to 22:00 - 09:00.
+  _calcBedtimeWindow(recentSleep) {
+    const FALLBACK = { start: 22, end: 9 };
+    if (!recentSleep || recentSleep.length < 7) return FALLBACK;
+
+    // Cap at 30 days per spec
+    const sleepWindow = recentSleep.slice(0, 30);
+
+    // Collect bedtime hours and derived wake hours from valid nights
+    const bedtimeHours = [];
+    const wakeHours = [];
+
+    for (const night of sleepWindow) {
+      if (!night.bedtime_start || !night.total_sleep_minutes) continue;
+      const btMatch = night.bedtime_start.match(/T(\d{2}):(\d{2})/);
+      if (!btMatch) continue;
+
+      const btH = parseInt(btMatch[1], 10);
+      const btM = parseInt(btMatch[2], 10);
+      const bedtimeDecimal = btH + btM / 60;
+      bedtimeHours.push(bedtimeDecimal);
+
+      // Derive wake time = bedtime + sleep duration
+      const wakeDecimal = (bedtimeDecimal + night.total_sleep_minutes / 60) % 24;
+      wakeHours.push(wakeDecimal);
+    }
+
+    if (bedtimeHours.length < 7) return FALLBACK;
+
+    // Circular mean for bedtime (handles 23:00 + 01:00 correctly)
+    const avgBedtime = this._circularMeanHours(bedtimeHours);
+    const avgWake = this._circularMeanHours(wakeHours);
+
+    // Window: bedtime - 1hr to wake + 2hr
+    const start = (avgBedtime - 1 + 24) % 24;
+    const end = (avgWake + 2) % 24;
+    return { start, end };
+  },
+
+  // Circular mean for hours (0-23.99) — handles midnight crossover
+  _circularMeanHours(hours) {
+    let sinSum = 0, cosSum = 0;
+    for (const h of hours) {
+      const rad = (h / 24) * 2 * Math.PI;
+      sinSum += Math.sin(rad);
+      cosSum += Math.cos(rad);
+    }
+    let avgRad = Math.atan2(sinSum / hours.length, cosSum / hours.length);
+    if (avgRad < 0) avgRad += 2 * Math.PI;
+    return (avgRad / (2 * Math.PI)) * 24;
+  },
+
+  // Check if the current time falls within the bedtime window
+  _isInBedtimeWindow(recentSleep) {
+    const { start, end } = this._calcBedtimeWindow(recentSleep);
+    const now = new Date();
+    const currentHour = now.getHours() + now.getMinutes() / 60;
+
+    // Handle midnight crossover (e.g., start=21, end=11 spans midnight)
+    if (start > end) {
+      return currentHour >= start || currentHour < end;
+    }
+    return currentHour >= start && currentHour < end;
+  },
+
   // Build context strings for the AI from available data
   _buildAiContext(recentSleep, leagueData) {
     let sleepContext = '';
@@ -1184,6 +1254,29 @@ const Dashboard = {
         </div>
         <div class="skeleton-bar w-28 h-3 mt-4"></div>
       </div>`;
+  },
+
+  // Render "Waiting for your sleep data" card — shown during bedtime window
+  _renderAiWaitingForSleep() {
+    return `
+      <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-6" id="ai-card-slot">
+        <div class="flex items-center gap-3">
+          <div class="relative w-5 h-5 flex-shrink-0">
+            <div class="absolute inset-0 rounded-full border-2 border-oura-border"></div>
+            <div class="absolute inset-0 rounded-full border-2 border-oura-accent border-t-transparent animate-spin"></div>
+          </div>
+          <span class="text-sm text-oura-muted">Waiting for your sleep data</span>
+        </div>
+      </div>`;
+  },
+
+  // Render the appropriate waiting state based on time of day
+  _renderAiWaitingState(recentSleep) {
+    if (this._isInBedtimeWindow(recentSleep)) {
+      return this._renderAiWaitingForSleep();
+    }
+    // Daytime: show shimmer skeleton
+    return this._renderAiCardLoading();
   },
 
   // Render dashboard content (separated for caching)
@@ -1445,8 +1538,12 @@ const Dashboard = {
           }).catch(() => { this._aiFetchInFlight = false; this._aiFetchFailed = true; });
         }
         // If fetch in flight, don't touch aiContainer — let the running fetch fill it
-      } else if (aiContainer && !aiContainer.innerHTML.trim()) {
-        // No sleep data AND no card showing — leave empty (don't clear existing cards)
+      } else if (aiContainer && recentSleep.length > 0 && !this._overlayPending) {
+        // Sleep data exists but no today data and no cached insight — show waiting state
+        const hasTodayData = recentSleep[0]?.date === DateUtils.toLocalDateStr(new Date());
+        if (!hasTodayData && !this._aiFetchInFlight) {
+          aiContainer.innerHTML = this._renderAiWaitingState(recentSleep);
+        }
       }
     } catch (error) {
       console.error('Error rendering dashboard:', error);
