@@ -158,7 +158,7 @@ test.describe('Challenges Page — Behavioral Tests', () => {
     await page.click('button[data-page="challenges"]');
     await page.waitForSelector('button:has-text("Start New Challenge")', { timeout: 5000 });
 
-    // Open the create-challenge modal directly (the list button now navigates to protocols)
+    // Open the create-challenge modal directly (the list button calls showCreateModal)
     await page.evaluate(() => Challenges.showCreateModal());
 
     // Verify modal appears
@@ -193,7 +193,7 @@ test.describe('Challenges Page — Behavioral Tests', () => {
     await page.click('button[data-page="challenges"]');
     await page.waitForSelector('button:has-text("Start New Challenge")', { timeout: 5000 });
 
-    // Open the create-challenge modal directly (the list button now navigates to protocols)
+    // Open the create-challenge modal directly (the list button calls showCreateModal)
     await page.evaluate(() => Challenges.showCreateModal());
     await page.waitForSelector('#create-challenge-modal', { timeout: 5000 });
 

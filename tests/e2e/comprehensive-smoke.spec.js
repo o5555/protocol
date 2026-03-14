@@ -336,8 +336,8 @@ test.describe('Navigation stress', () => {
     await showApp(page);
   });
 
-  test('all 4 bottom nav tabs load their pages', async ({ page }) => {
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+  test('all 3 bottom nav tabs load their pages', async ({ page }) => {
+    const tabs = ['dashboard', 'challenges', 'account'];
     for (const tab of tabs) {
       await page.locator(`.nav-btn[data-page="${tab}"]`).click();
       await expect(page.locator(`#page-${tab}`)).toBeVisible();
@@ -346,7 +346,7 @@ test.describe('Navigation stress', () => {
 
   test('rapid tab switching (12 rapid clicks) does not crash', async ({ page }) => {
     const errors = collectErrors(page);
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     // Fire 12 rapid clicks cycling through tabs
     for (let i = 0; i < 12; i++) {
@@ -354,7 +354,7 @@ test.describe('Navigation stress', () => {
       await page.locator(`.nav-btn[data-page="${tab}"]`).click();
     }
 
-    // Last iteration: i=11, tabs[11 % 4] = tabs[3] = 'account'
+    // Last iteration: i=11, tabs[11 % 3] = tabs[2] = 'account'
     const lastTab = tabs[11 % tabs.length];
     await expect(page.locator(`#page-${lastTab}`)).toBeVisible();
 
@@ -369,7 +369,7 @@ test.describe('Navigation stress', () => {
   });
 
   test('active state highlights the correct nav button', async ({ page }) => {
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     for (const tab of tabs) {
       await page.locator(`.nav-btn[data-page="${tab}"]`).click();
@@ -394,7 +394,7 @@ test.describe('Navigation stress', () => {
     // Mock Supabase so pages that call Supabase don't produce auth errors
     await mockSupabase(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
     for (const tab of tabs) {
       await page.locator(`.nav-btn[data-page="${tab}"]`).click();
       // Small wait to let any async rendering settle
@@ -656,7 +656,7 @@ test.describe('Console error sweep', () => {
     await showApp(page);
     await mockSupabase(page);
 
-    const pages = ['dashboard', 'protocols', 'challenges', 'account'];
+    const pages = ['dashboard', 'challenges', 'account'];
     for (const p of pages) {
       await page.evaluate((pageName) => App.navigateTo(pageName), p);
       // Give each page time to render and fire any async calls

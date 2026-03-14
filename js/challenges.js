@@ -752,26 +752,7 @@ const Challenges = {
     const container = document.getElementById('challenges-container');
     if (!container) return;
 
-    container.innerHTML = `
-      <div class="space-y-3">
-        ${[1,2].map(() => `
-        <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
-          <div class="flex items-center gap-4">
-            <div class="skeleton-bar w-16 h-16 rounded-xl flex-shrink-0"></div>
-            <div class="flex-1 min-w-0">
-              <div class="skeleton-bar h-4 w-36 mb-2"></div>
-              <div class="skeleton-bar h-3 w-24"></div>
-            </div>
-            <div class="text-right flex-shrink-0">
-              <div class="skeleton-bar h-3 w-12 mb-1.5 ml-auto"></div>
-              <div class="skeleton-bar h-2.5 w-16"></div>
-            </div>
-          </div>
-        </div>`).join('')}
-        <div class="py-4 border-2 border-dashed border-oura-border rounded-2xl flex items-center justify-center">
-          <div class="skeleton-bar h-3 w-32"></div>
-        </div>
-      </div>`;
+    container.innerHTML = '<div class="text-center py-10 text-oura-muted text-sm">Loading...</div>';
 
     try {
       const allChallenges = await this.getMyChallenges();
@@ -780,16 +761,21 @@ const Challenges = {
       const activeChallenges = allChallenges.filter(c => c.status === 'accepted' && (c.isActive || c.daysRemaining > 0));
       const completedChallenges = allChallenges.filter(c => c.status === 'accepted' && !c.isActive && c.daysRemaining === 0 && !dismissed.includes(c.id));
 
-      // Single active challenge, no invitations, no completed → go straight to detail
-      // But not if the user just navigated back from challenge-detail (avoid redirect loop)
+      // Branch 1: Single active, no invitations, no completed → auto-redirect
       if (activeChallenges.length === 1 && invitations.length === 0 && completedChallenges.length === 0 && !this._skipSmartRedirect) {
         App.navigateTo('challenge-detail', activeChallenges[0].id);
         return;
       }
       this._skipSmartRedirect = false;
 
-      // Otherwise show the full list
-      this.renderList();
+      // Branch 2: Has active challenges OR invitations → show list view
+      if (activeChallenges.length > 0 || invitations.length > 0) {
+        this.renderList();
+        return;
+      }
+
+      // Branch 3: No active challenges, no invitations → protocol discovery
+      this._renderDiscoveryView(container, { completedChallenges });
     } catch (error) {
       console.error('Error in smart view:', error);
       container.innerHTML = `
@@ -798,6 +784,77 @@ const Challenges = {
         </div>
       `;
     }
+  },
+
+  // Render protocol discovery view (no active challenges)
+  async _renderDiscoveryView(container, { completedChallenges }) {
+    // Build completed summaries HTML
+    const summariesHtml = completedChallenges.length > 0 ? `
+      <div class="space-y-3 mb-6">
+        ${completedChallenges.map(c => this._renderSummaryCard(c)).join('')}
+      </div>
+    ` : '';
+
+    // Show header + summaries + skeleton while loading protocols
+    const cachedProtocols = Cache.get('protocols_list');
+
+    container.innerHTML = `
+      <div class="mb-6">
+        <h2 class="text-2xl font-semibold mb-1">Challenge</h2>
+        <p class="text-oura-muted text-sm">Pick a protocol to start your challenge</p>
+      </div>
+      ${summariesHtml}
+      <div id="discovery-protocols">
+        ${cachedProtocols ? this._renderProtocolCards(cachedProtocols) : '<div class="text-center py-10 text-oura-muted text-sm">Loading protocols...</div>'}
+      </div>
+    `;
+
+    // Fetch fresh protocols (in background if cached)
+    try {
+      const protocols = await Protocols.getAll();
+      Cache.set('protocols_list', protocols);
+      const protocolsContainer = document.getElementById('discovery-protocols');
+      if (protocolsContainer) {
+        protocolsContainer.innerHTML = this._renderProtocolCards(protocols);
+      }
+    } catch (error) {
+      console.error('Error loading protocols for discovery:', error);
+      const protocolsContainer = document.getElementById('discovery-protocols');
+      if (protocolsContainer && !cachedProtocols) {
+        protocolsContainer.innerHTML = '<div class="text-center py-6 text-oura-muted text-sm">Failed to load protocols.</div>';
+      }
+    }
+  },
+
+  // Render protocol cards for discovery view
+  _renderProtocolCards(protocols) {
+    return `
+      <div class="space-y-3">
+        ${protocols.map(protocol => {
+          const initials = Protocols.getInitials(protocol.name);
+          return `
+          <div onclick="App.navigateTo('protocol-detail', '${protocol.id}')"
+            class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors border border-oura-border/30">
+            <div class="flex items-center gap-4">
+              <div class="protocol-icon w-14 h-14 rounded-xl flex items-center justify-center text-base font-semibold text-white flex-shrink-0">
+                ${initials}
+              </div>
+              <div class="flex-1 min-w-0">
+                <h3 class="text-lg font-semibold">${escapeHtml(protocol.name)}</h3>
+                <p class="text-oura-muted text-sm mt-1 line-clamp-2">${escapeHtml(protocol.description || 'Custom protocol')}</p>
+              </div>
+              <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        `}).join('')}
+      </div>
+      <button onclick="Protocols.showCreateModal()"
+        class="w-full mt-4 py-4 min-h-[48px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2">
+        + Create Your Own Protocol
+      </button>
+    `;
   },
 
   // Full challenges list (with stale-while-revalidate caching)
@@ -950,7 +1007,7 @@ const Challenges = {
       ` : ''}
 
       <!-- Start Challenge button -->
-      <button onclick="App.navigateTo('protocols')"
+      <button onclick="Challenges.showCreateModal()"
         class="w-full py-4 min-h-[48px] border-2 border-dashed border-oura-border rounded-2xl text-oura-muted hover:border-oura-accent hover:text-oura-accent transition-colors flex items-center justify-center gap-2">
         + Start New Challenge
       </button>

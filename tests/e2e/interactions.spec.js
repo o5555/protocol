@@ -142,29 +142,34 @@ function unexpectedErrors(errors) {
 
 test.describe('Protocol Interactions', () => {
 
-  test('Navigate to protocols page and verify protocol cards render', async ({ page }) => {
+  test('Navigate to challenges page and verify protocol cards render in discovery view', async ({ page }) => {
     const errors = collectErrors(page);
     await showApp(page);
     await mockSupabase(page);
 
-    await page.click('button[data-page="protocols"]');
+    // Override to show no active challenges so we get the protocol discovery view
+    await page.evaluate(() => {
+      Challenges.getMyChallenges = async () => [];
+    });
 
-    const protocolsPage = page.locator('#page-protocols');
-    await expect(protocolsPage).toBeVisible();
+    await page.click('button[data-page="challenges"]');
 
-    // Wait for protocols to load (no longer shows "Loading protocols...")
+    const challengesPage = page.locator('#page-challenges');
+    await expect(challengesPage).toBeVisible();
+
+    // Wait for protocol discovery to render inside challenges container
     await page.waitForFunction(() => {
-      const el = document.getElementById('protocols-container');
-      return el && !el.textContent.includes('Loading protocols');
+      const el = document.getElementById('discovery-protocols');
+      return el && !el.textContent.includes('Loading');
     }, { timeout: 5000 });
 
-    // Verify 2 mock protocol cards rendered
-    const cards = protocolsPage.locator('#protocols-container .bg-oura-card[onclick]');
+    // Verify protocol cards rendered in the discovery view
+    const cards = challengesPage.locator('#discovery-protocols [onclick*="protocol-detail"]');
     await expect(cards).toHaveCount(2);
 
     // Verify protocol names appear
-    await expect(protocolsPage.locator('text=Sleep Protocol')).toBeVisible();
-    await expect(protocolsPage.locator('text=Morning Routine')).toBeVisible();
+    await expect(challengesPage.locator('text=Sleep Protocol')).toBeVisible();
+    await expect(challengesPage.locator('text=Morning Routine')).toBeVisible();
 
     const unexpected = unexpectedErrors(errors);
     expect(unexpected).toEqual([]);
@@ -175,14 +180,19 @@ test.describe('Protocol Interactions', () => {
     await showApp(page);
     await mockSupabase(page);
 
-    await page.click('button[data-page="protocols"]');
+    // Override to show no active challenges so we get the protocol discovery view
+    await page.evaluate(() => {
+      Challenges.getMyChallenges = async () => [];
+    });
+
+    await page.click('button[data-page="challenges"]');
     await page.waitForFunction(() => {
-      const el = document.getElementById('protocols-container');
-      return el && !el.textContent.includes('Loading protocols');
+      const el = document.getElementById('discovery-protocols');
+      return el && !el.textContent.includes('Loading');
     }, { timeout: 5000 });
 
-    // Click the first protocol card (Sleep Protocol)
-    await page.click('#protocols-container .bg-oura-card[onclick]');
+    // Click the first protocol card (Sleep Protocol) in the discovery view
+    await page.click('#discovery-protocols [onclick*="protocol-detail"]');
 
     // Verify protocol-detail page is visible
     const detailPage = page.locator('#page-protocol-detail');
@@ -222,10 +232,15 @@ test.describe('Protocol Interactions', () => {
     expect(unexpected).toEqual([]);
   });
 
-  test('Click Back button on protocol detail returns to protocols list', async ({ page }) => {
+  test('Click Back button on protocol detail returns to challenges page', async ({ page }) => {
     const errors = collectErrors(page);
     await showApp(page);
     await mockSupabase(page);
+
+    // Override so renderSmartView shows discovery view (not smart-redirect)
+    await page.evaluate(() => {
+      Challenges.getMyChallenges = async () => [];
+    });
 
     await page.evaluate(() => App.navigateTo('protocol-detail', 'proto-1'));
     await page.waitForFunction(() => {
@@ -238,8 +253,8 @@ test.describe('Protocol Interactions', () => {
     await expect(backBtn).toBeVisible();
     await backBtn.click();
 
-    // Verify we're back on the protocols list page
-    await expect(page.locator('#page-protocols')).toBeVisible({ timeout: 5000 });
+    // Verify we're back on the challenges page (protocol-detail back now goes to challenges)
+    await expect(page.locator('#page-challenges')).toBeVisible({ timeout: 5000 });
 
     const unexpected = unexpectedErrors(errors);
     expect(unexpected).toEqual([]);

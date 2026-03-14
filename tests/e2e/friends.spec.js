@@ -255,7 +255,7 @@ test.describe('Navigation', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     for (const tab of tabs) {
       // Click the nav button
@@ -280,7 +280,7 @@ test.describe('Navigation', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['protocols', 'challenges', 'account', 'dashboard'];
+    const tabs = ['challenges', 'account', 'dashboard'];
 
     for (const tab of tabs) {
       await page.click(`.nav-btn[data-page="${tab}"]`);
@@ -302,7 +302,7 @@ test.describe('Navigation', () => {
 
   test('Back navigation from detail page', async ({ page }) => {
     const errors = collectErrors(page);
-    await setupApp(page, 'protocols');
+    await setupApp(page, 'challenges');
 
     // Navigate to protocol detail via App.navigateTo
     await page.evaluate(() => App.navigateTo('protocol-detail', 'some-id'));
@@ -310,8 +310,8 @@ test.describe('Navigation', () => {
 
     // Verify protocol detail page is visible
     await expect(page.locator('#page-protocol-detail')).toBeVisible();
-    // Verify protocols list page is hidden
-    await expect(page.locator('#page-protocols')).toBeHidden();
+    // Verify challenges page is hidden
+    await expect(page.locator('#page-challenges')).toBeHidden();
 
     // Try to click the back button in the detail page
     const backBtn = page.locator('#page-protocol-detail button:has-text("Back")').first();
@@ -320,13 +320,13 @@ test.describe('Navigation', () => {
     if (backBtnExists) {
       await backBtn.click();
     } else {
-      // Use nav button to go back to protocols
-      await page.click('.nav-btn[data-page="protocols"]');
+      // Use nav button to go back to challenges
+      await page.click('.nav-btn[data-page="challenges"]');
     }
     await page.waitForTimeout(300);
 
-    // Verify return to protocols page
-    await expect(page.locator('#page-protocols')).toBeVisible();
+    // Verify return to challenges page (protocol-detail back now goes to challenges)
+    await expect(page.locator('#page-challenges')).toBeVisible();
     await expect(page.locator('#page-protocol-detail')).toBeHidden();
 
     expect(unexpectedErrors(errors)).toEqual([]);
@@ -336,7 +336,7 @@ test.describe('Navigation', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     // Rapidly cycle through all tabs 3 times with minimal delays
     for (let round = 0; round < 3; round++) {
@@ -365,7 +365,7 @@ test.describe('Navigation', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     // Navigate to every page and pause to let async rendering settle
     for (const tab of tabs) {

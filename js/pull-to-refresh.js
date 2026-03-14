@@ -13,7 +13,7 @@ const PullToRefresh = {
   // Cache keys to clear per page
   _cacheKeys: {
     'dashboard': ['dashboard'],
-    'challenges': ['challenges_list'],
+    'challenges': ['challenges_list', 'protocols_list'],
     'challenge-detail': (id) => ['challenge_detail_' + id, 'comparison_' + id],
     'protocols': ['protocols_list'],
     'protocol-detail': (id) => ['protocol_detail_' + id],

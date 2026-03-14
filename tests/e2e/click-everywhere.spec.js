@@ -329,7 +329,7 @@ test.describe('Click all bottom nav buttons', () => {
 
   test('clicking each nav button switches to correct page', async ({ page }) => {
     const errors = collectErrors(page);
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     for (const tab of tabs) {
       const btn = page.locator(`.nav-btn[data-page="${tab}"]`);
@@ -349,7 +349,7 @@ test.describe('Click all bottom nav buttons', () => {
   });
 
   test('active nav button gets accent class', async ({ page }) => {
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     for (const tab of tabs) {
       await page.locator(`.nav-btn[data-page="${tab}"]`).click();
@@ -489,22 +489,28 @@ test.describe('Click every element on Dashboard', () => {
 });
 
 // =============================================================================
-// 4. Click every element on Protocols page
+// 4. Click every element on Protocol Discovery (inside Challenges page)
 // =============================================================================
 
-test.describe('Click every element on Protocols page', () => {
+test.describe('Click every element on Protocol Discovery view', () => {
   test.beforeEach(async ({ page }) => {
     await showApp(page);
     await mockSupabase(page);
-    await page.evaluate(() => App.navigateTo('protocols'));
-    await waitForLoaded(page, 'protocols-container');
+    // Override to show no active challenges so we get the protocol discovery view
+    await page.evaluate(() => {
+      Challenges.getActiveChallenges = async () => [];
+      Challenges.getCompletedChallenges = async () => [];
+      Challenges.getInvitations = async () => [];
+    });
+    await page.evaluate(() => App.navigateTo('challenges'));
+    await waitForLoaded(page, 'challenges-container');
   });
 
   test('click protocol cards to navigate to detail', async ({ page }) => {
     const errors = collectErrors(page);
 
-    // Click the first protocol card
-    const protocolCard = page.locator('#protocols-container [onclick*="protocol-detail"]').first();
+    // Protocol cards now render inside challenges-container in the discovery view
+    const protocolCard = page.locator('#challenges-container [onclick*="protocol-detail"]').first();
     if (await protocolCard.isVisible().catch(() => false)) {
       await protocolCard.click();
       await expect(page.locator('#page-protocol-detail')).toBeVisible();
@@ -517,7 +523,7 @@ test.describe('Click every element on Protocols page', () => {
   test('click Create Your Own Protocol button opens modal', async ({ page }) => {
     const errors = collectErrors(page);
 
-    const createBtn = page.locator('#protocols-container button', { hasText: 'Create Your Own Protocol' });
+    const createBtn = page.locator('#challenges-container button', { hasText: 'Create Your Own Protocol' });
     if (await createBtn.isVisible().catch(() => false)) {
       await createBtn.click();
 
@@ -535,16 +541,21 @@ test.describe('Click every element on Protocols page', () => {
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 
-  test('click each protocol card in the list', async ({ page }) => {
-    const cards = page.locator('#protocols-container [onclick*="protocol-detail"]');
+  test('click each protocol card in the discovery view', async ({ page }) => {
+    const cards = page.locator('#challenges-container [onclick*="protocol-detail"]');
     const count = await cards.count();
 
     for (let i = 0; i < count; i++) {
-      // Navigate back to protocols for each card
-      await page.evaluate(() => App.navigateTo('protocols'));
-      await waitForLoaded(page, 'protocols-container');
+      // Navigate back to challenges (discovery view) for each card
+      await page.evaluate(() => {
+        Challenges.getActiveChallenges = async () => [];
+        Challenges.getCompletedChallenges = async () => [];
+        Challenges.getInvitations = async () => [];
+        App.navigateTo('challenges');
+      });
+      await waitForLoaded(page, 'challenges-container');
 
-      const card = page.locator('#protocols-container [onclick*="protocol-detail"]').nth(i);
+      const card = page.locator('#challenges-container [onclick*="protocol-detail"]').nth(i);
       if (await card.isVisible().catch(() => false)) {
         await card.click();
         await expect(page.locator('#page-protocol-detail')).toBeVisible();
@@ -565,13 +576,14 @@ test.describe('Click every element on Protocol Detail', () => {
     await waitForLoaded(page, 'protocol-detail-container');
   });
 
-  test('click Back button navigates to protocols list', async ({ page }) => {
+  test('click Back button navigates to challenges page', async ({ page }) => {
     const errors = collectErrors(page);
 
     const backBtn = page.locator('#protocol-detail-container button', { hasText: 'Back' });
     await expect(backBtn).toBeVisible();
     await backBtn.click();
-    await expect(page.locator('#page-protocols')).toBeVisible();
+    // Protocol-detail back button now navigates to challenges (not protocols)
+    await expect(page.locator('#page-challenges')).toBeVisible();
 
     expect(unexpectedErrors(errors)).toEqual([]);
   });
@@ -624,8 +636,8 @@ test.describe('Click every element on Challenges page', () => {
     const startBtn = page.locator('#challenges-container button', { hasText: 'Start New Challenge' });
     if (await startBtn.isVisible().catch(() => false)) {
       await startBtn.click();
-      // Should navigate to protocols page
-      await expect(page.locator('#page-protocols')).toBeVisible();
+      // Should open the create challenge modal (no longer navigates to protocols)
+      await page.waitForTimeout(500);
     }
 
     expect(unexpectedErrors(errors)).toEqual([]);
@@ -691,10 +703,9 @@ test.describe('Click every element on Challenge Detail', () => {
     if (await backBtn.isVisible().catch(() => false)) {
       await backBtn.click();
       await page.waitForTimeout(300);
-      // Should navigate to protocols or challenges
-      const onProtocols = await page.locator('#page-protocols').isVisible().catch(() => false);
+      // Should navigate to challenges page
       const onChallenges = await page.locator('#page-challenges').isVisible().catch(() => false);
-      expect(onProtocols || onChallenges).toBeTruthy();
+      expect(onChallenges).toBeTruthy();
     }
 
     expect(unexpectedErrors(errors)).toEqual([]);
@@ -766,7 +777,8 @@ test.describe('Click every element on Challenge Detail', () => {
     const browseBtn = page.locator('#challenge-detail-container button', { hasText: 'Browse Protocols' });
     if (await browseBtn.isVisible().catch(() => false)) {
       await browseBtn.click();
-      await expect(page.locator('#page-protocols')).toBeVisible();
+      // Browse Protocols now navigates to challenges page (protocol discovery view)
+      await expect(page.locator('#page-challenges')).toBeVisible();
     }
 
     expect(unexpectedErrors(errors)).toEqual([]);
@@ -1156,10 +1168,16 @@ test.describe('Modal click tests', () => {
   test('Create Protocol modal: open, interact with steps, close', async ({ page }) => {
     const errors = collectErrors(page);
 
-    await page.evaluate(() => App.navigateTo('protocols'));
-    await waitForLoaded(page, 'protocols-container');
+    // Protocol discovery is now inside challenges page when no active challenges
+    await page.evaluate(() => {
+      Challenges.getActiveChallenges = async () => [];
+      Challenges.getCompletedChallenges = async () => [];
+      Challenges.getInvitations = async () => [];
+      App.navigateTo('challenges');
+    });
+    await waitForLoaded(page, 'challenges-container');
 
-    const createBtn = page.locator('#protocols-container button', { hasText: 'Create Your Own Protocol' });
+    const createBtn = page.locator('#challenges-container button', { hasText: 'Create Your Own Protocol' });
     if (await createBtn.isVisible().catch(() => false)) {
       await createBtn.click();
 
@@ -1221,7 +1239,7 @@ test.describe('Click stress test', () => {
     await showApp(page);
     await mockSupabase(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     // Rapidly cycle through tabs 20 times
     for (let i = 0; i < 20; i++) {
@@ -1231,7 +1249,7 @@ test.describe('Click stress test', () => {
       await page.waitForTimeout(50);
     }
 
-    // After 20 clicks: i=19, tabs[19 % 4] = tabs[3] = 'account'
+    // After 20 clicks: i=19, tabs[19 % 3] = tabs[1] = 'challenges'
     const lastTab = tabs[19 % tabs.length];
     await page.waitForTimeout(500); // Let async rendering settle
 
@@ -1257,7 +1275,7 @@ test.describe('Click stress test', () => {
     await showApp(page);
     await mockSupabase(page);
 
-    const pages = ['dashboard', 'protocols', 'challenges', 'account', 'friends'];
+    const pages = ['dashboard', 'challenges', 'account', 'friends'];
 
     // Rapidly navigate programmatically 20 times
     for (let i = 0; i < 20; i++) {

@@ -264,7 +264,7 @@ test.describe('Account Page - Rendering & Content', () => {
     await expect(accountBtn).toHaveClass(/text-oura-accent/);
 
     // Other tabs should NOT be highlighted
-    for (const tab of ['dashboard', 'protocols', 'challenges']) {
+    for (const tab of ['dashboard', 'challenges']) {
       const btn = page.locator(`.nav-btn[data-page="${tab}"]`);
       await expect(btn).not.toHaveClass(/text-oura-accent/);
     }
@@ -725,25 +725,7 @@ test.describe('Navigation - Sequential Tab Cycling', () => {
     await expect(page.locator('.nav-btn[data-page="dashboard"]')).toHaveClass(/text-oura-accent/);
 
     // All other pages hidden
-    for (const other of ['protocols', 'challenges', 'account']) {
-      await expect(page.locator(`#page-${other}`)).toBeHidden();
-      await expect(page.locator(`.nav-btn[data-page="${other}"]`)).not.toHaveClass(/text-oura-accent/);
-    }
-
-    expect(unexpectedErrors(errors)).toEqual([]);
-  });
-
-  test('Protocols tab shows protocols with correct highlighting', async ({ page }) => {
-    const errors = collectErrors(page);
-    await setupApp(page);
-
-    await page.click('.nav-btn[data-page="protocols"]');
-    await page.waitForTimeout(300);
-
-    await expect(page.locator('#page-protocols')).toBeVisible();
-    await expect(page.locator('.nav-btn[data-page="protocols"]')).toHaveClass(/text-oura-accent/);
-
-    for (const other of ['dashboard', 'challenges', 'account']) {
+    for (const other of ['challenges', 'account']) {
       await expect(page.locator(`#page-${other}`)).toBeHidden();
       await expect(page.locator(`.nav-btn[data-page="${other}"]`)).not.toHaveClass(/text-oura-accent/);
     }
@@ -761,7 +743,7 @@ test.describe('Navigation - Sequential Tab Cycling', () => {
     await expect(page.locator('#page-challenges')).toBeVisible();
     await expect(page.locator('.nav-btn[data-page="challenges"]')).toHaveClass(/text-oura-accent/);
 
-    for (const other of ['dashboard', 'protocols', 'account']) {
+    for (const other of ['dashboard', 'account']) {
       await expect(page.locator(`#page-${other}`)).toBeHidden();
       await expect(page.locator(`.nav-btn[data-page="${other}"]`)).not.toHaveClass(/text-oura-accent/);
     }
@@ -779,7 +761,7 @@ test.describe('Navigation - Sequential Tab Cycling', () => {
     await expect(page.locator('#page-account')).toBeVisible();
     await expect(page.locator('.nav-btn[data-page="account"]')).toHaveClass(/text-oura-accent/);
 
-    for (const other of ['dashboard', 'protocols', 'challenges']) {
+    for (const other of ['dashboard', 'challenges']) {
       await expect(page.locator(`#page-${other}`)).toBeHidden();
       await expect(page.locator(`.nav-btn[data-page="${other}"]`)).not.toHaveClass(/text-oura-accent/);
     }
@@ -790,11 +772,11 @@ test.describe('Navigation - Sequential Tab Cycling', () => {
 
 test.describe('Navigation - Full Cycle', () => {
 
-  test('cycling Home -> Protocols -> Challenges -> Account works correctly', async ({ page }) => {
+  test('cycling Home -> Challenges -> Account works correctly', async ({ page }) => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     for (const tab of tabs) {
       await page.click(`.nav-btn[data-page="${tab}"]`);
@@ -818,11 +800,11 @@ test.describe('Navigation - Full Cycle', () => {
     expect(unexpectedErrors(errors)).toEqual([]);
   });
 
-  test('reverse cycle Account -> Challenges -> Protocols -> Home works', async ({ page }) => {
+  test('reverse cycle Account -> Challenges -> Home works', async ({ page }) => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['account', 'challenges', 'protocols', 'dashboard'];
+    const tabs = ['account', 'challenges', 'dashboard'];
 
     for (const tab of tabs) {
       await page.click(`.nav-btn[data-page="${tab}"]`);
@@ -839,7 +821,7 @@ test.describe('Navigation - Full Cycle', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     for (const tab of tabs) {
       await page.click(`.nav-btn[data-page="${tab}"]`);
@@ -867,7 +849,7 @@ test.describe('Navigation - Full Cycle', () => {
   test('bottom nav remains visible throughout all transitions', async ({ page }) => {
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     for (const tab of tabs) {
       await page.click(`.nav-btn[data-page="${tab}"]`);
@@ -885,7 +867,7 @@ test.describe('Navigation - Error Accumulation', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     // Full forward cycle
     for (const tab of tabs) {
@@ -913,7 +895,7 @@ test.describe('Navigation - Error Accumulation', () => {
   test('App.currentPage tracks correctly through navigation', async ({ page }) => {
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     for (const tab of tabs) {
       await page.click(`.nav-btn[data-page="${tab}"]`);
@@ -928,7 +910,7 @@ test.describe('Navigation - Error Accumulation', () => {
     const errors = collectErrors(page);
     await setupApp(page);
 
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account'];
+    const tabs = ['dashboard', 'challenges', 'account'];
 
     // 20 rapid clicks
     for (let i = 0; i < 20; i++) {
@@ -937,7 +919,7 @@ test.describe('Navigation - Error Accumulation', () => {
       await page.waitForTimeout(50);
     }
 
-    // Last click: i=19, tabs[19%4] = tabs[3] = 'account'
+    // Last click: i=19, tabs[19%3] = tabs[1] = 'challenges'
     const lastTab = tabs[19 % tabs.length];
     await page.waitForTimeout(500);
 

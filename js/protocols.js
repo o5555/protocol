@@ -378,7 +378,7 @@ const Protocols = {
     const initials = this.getInitials(protocol.name);
     container.innerHTML = `
       <div class="bg-oura-card rounded-2xl p-6 mb-6">
-        <button onclick="App.navigateTo('protocols')" class="min-h-[44px] inline-flex items-center text-oura-muted hover:text-white mb-4">
+        <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-muted hover:text-white mb-4">
           &larr; Back
         </button>
         <div class="flex items-start gap-4">
@@ -445,7 +445,7 @@ const Protocols = {
       // Invalidate caches since we deleted a protocol
       Cache.clear('protocols_list');
       Cache.clear('protocol_detail_' + protocolId);
-      App.navigateTo('protocols');
+      App.navigateTo('challenges');
     } catch (error) {
       console.error('Error deleting protocol:', error);
       App.showToast('Failed to delete protocol: ' + error.message, 'error');

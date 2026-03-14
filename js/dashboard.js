@@ -1360,7 +1360,7 @@ const Dashboard = {
                 <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
               </div>
             </button>
-            <button onclick="App.navigateTo('protocols')" class="w-full bg-oura-card rounded-2xl p-5 border border-oura-border/30 text-left">
+            <button onclick="App.navigateTo('challenges')" class="w-full bg-oura-card rounded-2xl p-5 border border-oura-border/30 text-left">
               <div class="flex items-center gap-4">
                 <div class="w-12 h-12 rounded-full bg-purple-500/15 flex items-center justify-center flex-shrink-0">
                   <svg class="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M18.75 4.236c.982.143 1.954.317 2.916.52A6.003 6.003 0 0 1 16.27 9.728M18.75 4.236V4.5c0 2.108-.966 3.99-2.48 5.228m0 0a6.023 6.023 0 0 1-2.021 1.247m0 0A6.015 6.015 0 0 1 12 11.25a6.015 6.015 0 0 1-2.27-.475m4.54 0a6.023 6.023 0 0 0 2.021 1.247m-6.561 0a6.023 6.023 0 0 1-2.021 1.247" /></svg>
@@ -1464,7 +1464,7 @@ const Dashboard = {
         // Start a challenge CTA (when no active challenges)
         if (activeChallenges.length === 0 && profile?.oura_token) {
           html += `
-          <button onclick="App.navigateTo('protocols')" class="w-full bg-oura-card rounded-2xl p-5 mb-4 border border-oura-border/30 border-dashed text-left">
+          <button onclick="App.navigateTo('challenges')" class="w-full bg-oura-card rounded-2xl p-5 mb-4 border border-oura-border/30 border-dashed text-left">
             <div class="flex items-center gap-4">
               <div class="w-10 h-10 rounded-full bg-oura-accent/15 flex items-center justify-center flex-shrink-0">
                 <svg class="w-5 h-5 text-oura-accent" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>

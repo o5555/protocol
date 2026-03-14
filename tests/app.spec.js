@@ -342,8 +342,8 @@ test.describe('Navigation', () => {
     await expect(page.locator('#page-friends')).toBeVisible();
   });
 
-  test('full tab cycle: dashboard -> protocols -> challenges -> account -> dashboard', async ({ page }) => {
-    const tabs = ['dashboard', 'protocols', 'challenges', 'account', 'dashboard'];
+  test('full tab cycle: dashboard -> challenges -> account -> dashboard', async ({ page }) => {
+    const tabs = ['dashboard', 'challenges', 'account', 'dashboard'];
     for (const tab of tabs) {
       await page.locator(`.nav-btn[data-page="${tab}"]`).click();
       await expect(page.locator(`#page-${tab}`)).toBeVisible();
