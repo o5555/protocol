@@ -17,25 +17,37 @@ const Account = {
       this._renderContent(container, cachedData);
     } else {
       container.innerHTML = `
-        <div class="space-y-4">
-          <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
-            <div class="flex items-center gap-4">
-              <div class="skeleton-bar w-14 h-14 rounded-full flex-shrink-0"></div>
-              <div class="flex-1">
-                <div class="skeleton-bar h-5 w-28 mb-1.5"></div>
-                <div class="skeleton-bar h-3 w-36"></div>
-              </div>
+        <div class="bg-oura-card rounded-2xl p-6 mb-4">
+          <div class="flex items-center gap-4 mb-6">
+            <div class="skeleton-bar w-16 h-16 rounded-full flex-shrink-0"></div>
+            <div class="flex-1">
+              <div class="skeleton-bar h-5 w-24 mb-1.5"></div>
+              <div class="skeleton-bar h-3 w-40"></div>
             </div>
           </div>
-          <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
-            <div class="skeleton-bar w-24 h-4 mb-4"></div>
-            <div class="space-y-3">
-              ${[1,2,3].map(() => `
-              <div class="flex items-center justify-between">
-                <div class="skeleton-bar h-3 w-28"></div>
-                <div class="skeleton-bar h-3 w-16"></div>
-              </div>`).join('')}
+          <div class="skeleton-bar h-11 w-full rounded-lg"></div>
+        </div>
+        <div class="bg-oura-card rounded-2xl p-6 mb-4">
+          <div class="skeleton-bar h-3 w-16 mb-4"></div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="skeleton-bar w-10 h-10 rounded-full flex-shrink-0"></div>
+              <div>
+                <div class="skeleton-bar h-3.5 w-20 mb-1"></div>
+                <div class="skeleton-bar h-2.5 w-24"></div>
+              </div>
             </div>
+            <div class="skeleton-bar h-9 w-16 rounded-lg"></div>
+          </div>
+        </div>
+        <div class="bg-oura-card rounded-2xl p-6 mb-4">
+          <div class="skeleton-bar h-3 w-14 mb-4"></div>
+          <div class="space-y-3">
+            ${[1,2].map(() => `
+            <div class="flex items-center justify-between p-3 bg-oura-subtle rounded-lg">
+              <div class="skeleton-bar h-3 w-24"></div>
+              <div class="skeleton-bar w-5 h-5"></div>
+            </div>`).join('')}
           </div>
         </div>`;
     }
