@@ -7,6 +7,14 @@ const Challenges = {
   // Generation counter for stale-while-revalidate in renderList
   _listGeneration: 0,
 
+  // Skip auto-redirect to detail when user clicks Back from challenge-detail
+  _skipSmartRedirect: false,
+
+  // In-flight deduplication for getMyChallenges
+  _myChallengesPromise: null,
+  _myChallengesTimestamp: 0,
+  _MY_CHALLENGES_TTL: 3000, // 3 seconds — dedup rapid successive calls
+
   // Create a new challenge
   async create({ protocolId, name, friendIds, mode, startDate: customStartDate }) {
     const client = SupabaseClient.client;
@@ -78,8 +86,31 @@ const Challenges = {
     return challenge;
   },
 
-  // Get challenges for current user
+  // Get challenges for current user (deduplicates rapid successive calls)
   async getMyChallenges() {
+    const now = Date.now();
+    // Return in-flight or recently-resolved promise to avoid duplicate API calls
+    if (this._myChallengesPromise && (now - this._myChallengesTimestamp) < this._MY_CHALLENGES_TTL) {
+      return this._myChallengesPromise;
+    }
+    this._myChallengesTimestamp = now;
+    this._myChallengesPromise = this._fetchMyChallenges();
+    // Clear the promise reference after it resolves/rejects so future calls re-fetch
+    this._myChallengesPromise.finally(() => {
+      // Only clear if this is still the same promise (not replaced by a newer call)
+      if (this._myChallengesTimestamp === now) {
+        // Keep the result cached for the TTL window, then clear
+        setTimeout(() => {
+          if (this._myChallengesTimestamp === now) {
+            this._myChallengesPromise = null;
+          }
+        }, this._MY_CHALLENGES_TTL);
+      }
+    });
+    return this._myChallengesPromise;
+  },
+
+  async _fetchMyChallenges() {
     const client = SupabaseClient.client;
     if (!client) throw new Error('Supabase not initialized');
 
@@ -160,10 +191,10 @@ const Challenges = {
   // Render a summary card for a completed challenge
   _renderSummaryCard(challenge) {
     return `
-      <div class="rounded-2xl overflow-hidden" style="background: linear-gradient(135deg, #0f1a2e 0%, #1a1035 100%); border: 1px solid rgba(168, 85, 247, 0.2);">
+      <div class="rounded-2xl overflow-hidden bg-gradient-to-br from-[#0f1a2e] to-[#1a1035] border border-purple-500/20">
         <div onclick="App.navigateTo('challenge-detail', '${challenge.id}')" class="p-5 cursor-pointer">
           <div class="flex items-center justify-between mb-3">
-            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/15 text-purple-400">
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -179,7 +210,7 @@ const Challenges = {
         </div>
         <div class="px-5 pb-4">
           <button onclick="event.stopPropagation(); Challenges.dismissSummary('${challenge.id}')"
-            class="w-full py-2.5 min-h-[44px] rounded-xl text-sm font-medium text-oura-muted hover:text-white transition-colors" style="background: rgba(255,255,255,0.05);">
+            class="w-full py-2.5 min-h-[44px] rounded-xl text-sm font-medium text-oura-muted hover:text-white transition-colors bg-white/5">
             Dismiss
           </button>
         </div>
@@ -355,7 +386,7 @@ const Challenges = {
       App.navigateTo('challenges');
     } catch (error) {
       console.error('Error deleting challenge:', error);
-      alert('Failed to delete challenge: ' + error.message);
+      App.showToast('Failed to delete challenge: ' + error.message, 'error');
     }
   },
 
@@ -393,7 +424,7 @@ const Challenges = {
       App.navigateTo('challenges');
     } catch (error) {
       console.error('Error leaving challenge:', error);
-      alert('Failed to leave challenge: ' + error.message);
+      App.showToast('Failed to leave challenge: ' + error.message, 'error');
     }
   },
 
@@ -446,7 +477,7 @@ const Challenges = {
   async handleFreshStart(challengeId) {
     const dateInput = document.getElementById('fresh-start-date');
     if (!dateInput || !dateInput.value) {
-      alert('Please pick a start date');
+      App.showToast('Please pick a start date', 'error');
       return;
     }
 
@@ -470,7 +501,7 @@ const Challenges = {
       await this.renderDetail(challengeId);
     } catch (error) {
       console.error('Error with Fresh Start:', error);
-      alert('Failed to restart challenge: ' + error.message);
+      App.showToast('Failed to restart challenge: ' + error.message, 'error');
 
       if (btn) {
         btn.disabled = false;
@@ -670,9 +701,9 @@ const Challenges = {
         <div class="text-xs text-oura-muted uppercase tracking-widest mb-3">Protocol Habits</div>
         <div class="space-y-2">
           ${habits.map(habit => `
-            <div class="rounded-xl px-4 py-3" style="background: #0f1525; border: 1px solid #1a2035;">
+            <div class="rounded-xl px-4 py-3 bg-oura-card border border-oura-border/30">
               <p class="text-sm font-medium">${escapeHtml(habit.title)}</p>
-              ${habit.description ? `<p class="text-xs mt-1" style="color: #6b7280;">${escapeHtml(habit.description)}</p>` : ''}
+              ${habit.description ? `<p class="text-xs mt-1 text-oura-muted">${escapeHtml(habit.description)}</p>` : ''}
             </div>
           `).join('')}
         </div>
@@ -695,14 +726,14 @@ const Challenges = {
             const name = p.user?.display_name || p.user?.email || 'Unknown';
             const isAccepted = p.status === 'accepted';
             return `
-              <div class="flex items-center justify-between rounded-xl px-4 py-3" style="background: #0f1525; border: 1px solid #1a2035;">
+              <div class="flex items-center justify-between rounded-xl px-4 py-3 bg-oura-card border border-oura-border/30">
                 <div class="flex items-center gap-3">
-                  <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold" style="background: ${isAccepted ? 'rgba(74, 222, 128, 0.15)' : 'rgba(250, 204, 21, 0.15)'}; color: ${isAccepted ? '#4ade80' : '#facc15'};">
+                  <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${isAccepted ? 'bg-green-400/15 text-green-400' : 'bg-yellow-400/15 text-yellow-400'}">
                     ${escapeHtml(name.charAt(0).toUpperCase())}
                   </div>
                   <span class="text-sm">${escapeHtml(name)}</span>
                 </div>
-                <span class="text-xs font-medium px-2.5 py-1 rounded-full" style="background: ${isAccepted ? 'rgba(74, 222, 128, 0.12)' : 'rgba(250, 204, 21, 0.12)'}; color: ${isAccepted ? '#4ade80' : '#facc15'};">
+                <span class="text-xs font-medium px-2.5 py-1 rounded-full ${isAccepted ? 'bg-green-400/10 text-green-400' : 'bg-yellow-400/10 text-yellow-400'}">
                   ${isAccepted ? 'Joined' : 'Invited'}
                 </span>
               </div>
@@ -729,10 +760,12 @@ const Challenges = {
       const completedChallenges = allChallenges.filter(c => c.status === 'accepted' && !c.isActive && c.daysRemaining === 0 && !dismissed.includes(c.id));
 
       // Single active challenge, no invitations, no completed → go straight to detail
-      if (activeChallenges.length === 1 && invitations.length === 0 && completedChallenges.length === 0) {
+      // But not if the user just navigated back from challenge-detail (avoid redirect loop)
+      if (activeChallenges.length === 1 && invitations.length === 0 && completedChallenges.length === 0 && !this._skipSmartRedirect) {
         App.navigateTo('challenge-detail', activeChallenges[0].id);
         return;
       }
+      this._skipSmartRedirect = false;
 
       // Otherwise show the full list
       this.renderList();
@@ -805,7 +838,7 @@ const Challenges = {
 
       <!-- Invitations -->
       ${invitations.length > 0 ? `
-        <div class="rounded-2xl p-5 mb-6" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(249, 115, 22, 0.08) 100%); border: 1px solid rgba(239, 68, 68, 0.3);">
+        <div class="rounded-2xl p-5 mb-6 bg-red-500/10 border border-red-500/30">
           <div class="flex items-center gap-2 mb-4">
             <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
             <h3 class="text-base font-semibold text-red-400">${invitations.length === 1 ? 'You have an invitation!' : `You have ${invitations.length} invitations!`}</h3>
@@ -854,7 +887,7 @@ const Challenges = {
               class="bg-oura-card rounded-2xl p-5 cursor-pointer hover:bg-oura-subtle transition-colors">
               <div class="flex items-center gap-4">
                 <div class="protocol-icon w-16 h-16 rounded-xl flex items-center justify-center text-lg font-semibold text-white flex-shrink-0">
-                  ${initials}
+                  ${escapeHtml(initials)}
                 </div>
                 <div class="flex-1 min-w-0">
                   <h3 class="text-lg font-semibold">${escapeHtml(challenge.name)} ${Protocols.renderModeBadge(challenge.mode || 'pro')}</h3>
@@ -917,19 +950,24 @@ const Challenges = {
         challenge = cachedData.challenge;
         hasOuraToken = cachedData.hasOuraToken || false;
       } else {
-        // Need fresh data — fetch user + challenge first
-        currentUser = await SupabaseClient.getCurrentUser();
-        challenge = await this.getChallenge(challengeId);
+        // Need fresh data — fetch user + challenge in parallel
+        [currentUser, challenge] = await Promise.all([
+          SupabaseClient.getCurrentUser(),
+          this.getChallenge(challengeId)
+        ]);
+
+        // Start profile fetch early (runs in parallel with sync/data below)
+        const profilePromise = Auth.getProfile().catch(() => null);
 
         if (!skipSync && typeof SleepSync !== 'undefined' && !syncedToday) {
           // SYNC PATH: Show loading screen, sync + fetch in parallel
           container.innerHTML = `
             <div class="nav-bar flex items-center justify-between mb-4">
-              <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+              <button onclick="Challenges._skipSmartRedirect=true; App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
                 &larr; Back
               </button>
               <span class="text-base font-medium">${escapeHtml(challenge.name)}</span>
-              <span style="width: 50px;"></span>
+              <span class="w-[50px]"></span>
             </div>
             <div class="sync-screen">
               <div class="sync-ring-container">
@@ -973,11 +1011,9 @@ const Challenges = {
           sleepData = result.sleepData;
         }
 
-        // Fetch Oura status while we're doing network calls
-        try {
-          const profile = await Auth.getProfile();
-          hasOuraToken = !!profile?.oura_token;
-        } catch (_) {}
+        // Await profile (started in parallel above)
+        const profile = await profilePromise;
+        hasOuraToken = !!profile?.oura_token;
 
         // Cache everything needed for the fast path
         if (typeof Cache !== 'undefined') {
@@ -987,7 +1023,7 @@ const Challenges = {
 
       // Fresh Start notification banner for participants
       const freshStartBanner = challenge.fresh_start_at && challenge.creator.id !== currentUser.id && !localStorage.getItem('fresh_start_dismissed_' + challengeId) ? `
-        <div class="rounded-xl p-4 mb-5 flex items-start gap-3" style="background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), rgba(59, 130, 246, 0.08)); border: 1px solid rgba(74, 222, 128, 0.2);">
+        <div class="rounded-xl p-4 mb-5 flex items-start gap-3 bg-green-400/10 border border-green-400/20">
           <span class="flex-shrink-0"><svg class="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg></span>
           <div class="flex-1">
             <div class="text-sm font-semibold text-white mb-0.5">Fresh Start!</div>
@@ -1047,7 +1083,7 @@ const Challenges = {
       const imp = improvements[currentMetric];
       const improvementPct = imp.pct;
       const improvementDirection = imp.direction;
-      const heroEmoji = improvementDirection === 'up' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" /></svg>' : improvementDirection === 'down' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" /></svg>' : '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>';
+      const heroIcon = improvementDirection === 'up' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" /></svg>' : improvementDirection === 'down' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" /></svg>' : '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>';
 
       // Build leaderboard with improvement %
       const leaderboard = sleepData
@@ -1125,30 +1161,30 @@ const Challenges = {
         container.innerHTML = `
           <!-- Navigation -->
           <div class="flex items-center justify-between mb-4">
-            <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+            <button onclick="Challenges._skipSmartRedirect=true; App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
               &larr; Back
             </button>
             <span class="text-base font-semibold">${escapeHtml(challenge.name)}</span>
-            <span style="width: 50px;"></span>
+            <span class="w-[50px]"></span>
           </div>
 
           <!-- Challenge status badge -->
           <div class="flex justify-center mb-5">
             ${isCompleted ? `
-            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium" style="border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc;">
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border border-purple-500/30 text-purple-400">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Challenge Complete
             </div>
             ` : challenge.isUpcoming ? `
-            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium" style="border: 1px solid rgba(250, 204, 21, 0.3); color: #facc15;">
-              <span class="w-2 h-2 rounded-full inline-block" style="background: #facc15;"></span>
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border border-yellow-400/30 text-yellow-400">
+              <span class="w-2 h-2 rounded-full inline-block bg-yellow-400"></span>
               Upcoming
             </div>
             ` : `
-            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium" style="border: 1px solid rgba(74, 222, 128, 0.3); color: #4ade80;">
-              <span class="w-2 h-2 rounded-full inline-block" style="background: #4ade80;"></span>
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border border-green-400/30 text-green-400">
+              <span class="w-2 h-2 rounded-full inline-block bg-green-400"></span>
               Challenge Active
             </div>
             `}
@@ -1157,20 +1193,20 @@ const Challenges = {
           ${freshStartBanner}
 
           <!-- Celebration Hero Card -->
-          <div class="rounded-2xl p-6 text-center mb-6" style="background: linear-gradient(135deg, #0f1a2e 0%, #1a1035 100%); border: 1px solid ${isCompleted ? 'rgba(168, 85, 247, 0.15)' : 'rgba(74, 222, 128, 0.15)'};">
+          <div class="rounded-2xl p-6 text-center mb-6 bg-gradient-to-br from-[#0f1a2e] to-[#1a1035] border ${isCompleted ? 'border-purple-500/15' : 'border-green-400/15'}">
             <div class="mb-4 flex justify-center">${isCompleted ? '<svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5" /></svg>' : !hasOuraToken ? '<svg class="w-8 h-8 text-oura-muted" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>' : syncFailed ? '<svg class="w-8 h-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>' : justStarted ? '<svg class="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>' : '<svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>'}</div>
             <div class="text-2xl font-bold mb-3">${heroTitle}</div>
-            <p class="text-sm leading-relaxed mb-6" style="color: #6b7280;">
+            <p class="text-sm leading-relaxed mb-6 text-oura-muted">
               ${heroMessage}
             </p>
             <div class="flex justify-center gap-10">
               <div class="text-center">
-                <div class="text-3xl font-bold" style="color: ${isCompleted ? '#c084fc' : '#4ade80'};">${isCompleted ? 'Done' : challenge.daysRemaining}</div>
-                <div class="text-xs uppercase tracking-wider mt-1" style="color: #6b7280;">${isCompleted ? 'Completed' : 'Days Left'}</div>
+                <div class="text-3xl font-bold ${isCompleted ? 'text-purple-400' : 'text-green-400'}">${isCompleted ? 'Done' : challenge.daysRemaining}</div>
+                <div class="text-xs uppercase tracking-wider mt-1 text-oura-muted">${isCompleted ? 'Completed' : 'Days Left'}</div>
               </div>
               <div class="text-center">
-                <div class="text-3xl font-bold" style="color: #4ade80;">${participantCount}</div>
-                <div class="text-xs uppercase tracking-wider mt-1" style="color: #6b7280;">Challengers</div>
+                <div class="text-3xl font-bold text-green-400">${participantCount}</div>
+                <div class="text-xs uppercase tracking-wider mt-1 text-oura-muted">Challengers</div>
               </div>
             </div>
           </div>
@@ -1178,11 +1214,11 @@ const Challenges = {
           <!-- Baseline Section -->
           ${myBaseline.score ? `
             <div class="text-xs text-oura-muted uppercase tracking-widest text-center mb-3">This Is Your Baseline</div>
-            <div id="baseline-hero-card" class="rounded-2xl p-5 mb-4 text-center" style="background: #0f1525; border: 1px solid #1a2035;">
-              <div id="baseline-hero-value" class="text-4xl font-bold mb-1" style="color: #4ade80;">${Math.round(myBaseline.score)}</div>
+            <div id="baseline-hero-card" class="rounded-2xl p-5 mb-4 text-center bg-oura-card border border-oura-border/30">
+              <div id="baseline-hero-value" class="text-4xl font-bold mb-1 text-green-400">${Math.round(myBaseline.score)}</div>
               <div id="baseline-hero-label" class="text-sm text-oura-muted">30-day avg sleep score</div>
             </div>
-            <div class="text-xs text-center leading-relaxed mb-5" style="color: #6b7280;">This is where you're starting from. Let's see how much you can improve over the next 30 days.</div>
+            <div class="text-xs text-center leading-relaxed mb-5 text-oura-muted">This is where you're starting from. Let's see how much you can improve over the next 30 days.</div>
 
             <!-- Metric Toggle + Baseline Chart -->
             <div class="mb-6">
@@ -1240,7 +1276,7 @@ const Challenges = {
       container.innerHTML = `
         <!-- Navigation - minimal -->
         <div class="mb-4">
-          <button onclick="App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
+          <button onclick="Challenges._skipSmartRedirect=true; App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
             &larr; Back
           </button>
         </div>
@@ -1248,7 +1284,7 @@ const Challenges = {
         ${isCompleted ? `
         <!-- Challenge Complete banner -->
         <div class="flex justify-center mb-5">
-          <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium" style="border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc;">
+          <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border border-purple-500/30 text-purple-400">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -1263,12 +1299,12 @@ const Challenges = {
         <div id="hero-stat-container" class="text-center py-6 mb-4">
           <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">Your Sleep Score</div>
           ${improvementPct !== null ? `
-            <div class="text-6xl font-bold leading-none" style="color: ${improvementDirection === 'up' ? '#4ade80' : improvementDirection === 'down' ? '#f87171' : '#ffffff'}">
+            <div class="text-6xl font-bold leading-none ${improvementDirection === 'up' ? 'text-green-400' : improvementDirection === 'down' ? 'text-red-400' : 'text-white'}">
               ${improvementPct > 0 ? '+' : ''}${improvementPct}%
             </div>
             <div class="text-sm text-oura-muted mt-2">vs. your baseline</div>
-            <div class="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-bold" style="background: ${improvementDirection === 'up' ? 'rgba(74, 222, 128, 0.15)' : improvementDirection === 'down' ? 'rgba(248, 113, 113, 0.15)' : '#1a2035'}; color: ${improvementDirection === 'up' ? '#4ade80' : improvementDirection === 'down' ? '#f87171' : '#6b7280'}">
-              ${heroEmoji} ${improvementDirection === 'up' ? 'TRENDING UP' : improvementDirection === 'down' ? 'NEEDS ATTENTION' : 'STEADY'}
+            <div class="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-bold ${improvementDirection === 'up' ? 'bg-green-400/15 text-green-400' : improvementDirection === 'down' ? 'bg-red-400/15 text-red-400' : 'bg-oura-subtle text-oura-muted'}">
+              ${heroIcon} ${improvementDirection === 'up' ? 'TRENDING UP' : improvementDirection === 'down' ? 'NEEDS ATTENTION' : 'STEADY'}
             </div>
           ` : `
             <div class="text-4xl font-bold text-oura-muted leading-none">--</div>
@@ -1283,7 +1319,7 @@ const Challenges = {
             <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
           </div>
           <div class="text-center">
-            <div class="text-3xl font-bold" style="color: #4ade80">${myCurrent.score ? Math.round(myCurrent.score) : '--'}</div>
+            <div class="text-3xl font-bold text-green-400">${myCurrent.score ? Math.round(myCurrent.score) : '--'}</div>
             <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
           </div>
         </div>
@@ -1314,20 +1350,20 @@ const Challenges = {
               const name = p.user.display_name || p.user.email.split('@')[0];
               const initial = escapeHtml(name.charAt(0).toUpperCase());
               return `
-                <div class="flex items-center p-3.5 rounded-xl" style="background: ${p.isMe ? '#1a2035' : '#0f1525'}; ${p.isMe ? 'border: 1px solid rgba(108, 99, 255, 0.2);' : ''}">
+                <div class="flex items-center p-3.5 rounded-xl ${p.isMe ? 'bg-oura-subtle border border-indigo-500/20' : 'bg-oura-card'}">
                   <span class="text-lg mr-3 w-7">${p.rank}</span>
                   <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm mr-3 bg-oura-subtle">${p.isMe ? '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>' : initial}</div>
                   <div class="flex-1">
                     <div class="text-sm font-medium">${p.isMe ? 'You' : escapeHtml(name)}</div>
                     <div class="text-xs text-oura-muted">${Math.round(p.baselineScore)} → ${Math.round(p.currentScore)}</div>
                   </div>
-                  <span class="text-lg font-semibold" style="color: ${p.improvementPct >= 0 ? '#4ade80' : '#f87171'}">
+                  <span class="text-lg font-semibold ${p.improvementPct >= 0 ? 'text-green-400' : 'text-red-400'}">
                     ${p.improvementPct > 0 ? '+' : ''}${p.improvementPct}%
                   </span>
                 </div>
               `;
             }).join('') : `
-              <div class="rounded-xl p-4 text-center" style="background: #0f1525">
+              <div class="rounded-xl p-4 text-center bg-oura-card">
                 <p class="text-oura-muted text-sm">No challenge data yet</p>
               </div>
             `}
@@ -1597,15 +1633,13 @@ const Challenges = {
   switchMetric(challengeId, metric) {
     // Update toggle buttons
     document.querySelectorAll('.metric-btn').forEach(btn => {
-      btn.classList.remove('active');
-      btn.style.background = 'transparent';
-      btn.style.color = '#6b7280';
+      btn.classList.remove('active', 'bg-oura-subtle', 'text-white');
+      btn.classList.add('text-oura-muted');
     });
     const activeBtn = document.querySelector(`.metric-btn[data-metric="${metric}"]`);
     if (activeBtn) {
-      activeBtn.classList.add('active');
-      activeBtn.style.background = '#1a2035';
-      activeBtn.style.color = '#ffffff';
+      activeBtn.classList.add('active', 'bg-oura-subtle', 'text-white');
+      activeBtn.classList.remove('text-oura-muted');
     }
 
     if (!this._currentChallengeData) return;
@@ -1619,15 +1653,15 @@ const Challenges = {
 
       if (imp.pct !== null) {
         const direction = imp.direction;
-        const heroEmoji = direction === 'up' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" /></svg>' : direction === 'down' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" /></svg>' : '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>';
+        const heroIcon = direction === 'up' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" /></svg>' : direction === 'down' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" /></svg>' : '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>';
         heroContainer.innerHTML = `
           <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">${labels[metric]}</div>
-          <div class="text-6xl font-bold leading-none" style="color: ${direction === 'up' ? '#4ade80' : direction === 'down' ? '#f87171' : '#ffffff'}">
+          <div class="text-6xl font-bold leading-none ${direction === 'up' ? 'text-green-400' : direction === 'down' ? 'text-red-400' : 'text-white'}">
             ${imp.pct > 0 ? '+' : ''}${imp.pct}%
           </div>
           <div class="text-sm text-oura-muted mt-2">vs. your baseline</div>
-          <div class="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-bold" style="background: ${direction === 'up' ? 'rgba(74, 222, 128, 0.15)' : direction === 'down' ? 'rgba(248, 113, 113, 0.15)' : '#1a2035'}; color: ${direction === 'up' ? '#4ade80' : direction === 'down' ? '#f87171' : '#6b7280'}">
-            ${heroEmoji} ${direction === 'up' ? 'TRENDING UP' : direction === 'down' ? 'NEEDS ATTENTION' : 'STEADY'}
+          <div class="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-bold ${direction === 'up' ? 'bg-green-400/15 text-green-400' : direction === 'down' ? 'bg-red-400/15 text-red-400' : 'bg-oura-subtle text-oura-muted'}">
+            ${heroIcon} ${direction === 'up' ? 'TRENDING UP' : direction === 'down' ? 'NEEDS ATTENTION' : 'STEADY'}
           </div>
         `;
       } else {
@@ -1659,7 +1693,7 @@ const Challenges = {
           <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
         </div>
         <div class="text-center">
-          <div class="text-3xl font-bold" style="color: #4ade80">${challengeAvg ?? '--'}</div>
+          <div class="text-3xl font-bold text-green-400">${challengeAvg ?? '--'}</div>
           <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
         </div>
       `;
@@ -1719,20 +1753,20 @@ const Challenges = {
             const displayPct = lowerIsBetter ? Math.abs(p.improvementPct) : p.improvementPct;
             const pctPrefix = lowerIsBetter ? (p.improvementPct < 0 ? '-' : p.improvementPct > 0 ? '+' : '') : (p.improvementPct > 0 ? '+' : '');
             return `
-              <div class="flex items-center p-3.5 rounded-xl" style="background: ${p.isMe ? '#1a2035' : '#0f1525'}; ${p.isMe ? 'border: 1px solid rgba(108, 99, 255, 0.2);' : ''}">
+              <div class="flex items-center p-3.5 rounded-xl ${p.isMe ? 'bg-oura-subtle border border-indigo-500/20' : 'bg-oura-card'}">
                 <span class="text-lg mr-3 w-7">${p.rank}</span>
                 <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm mr-3 bg-oura-subtle">${p.isMe ? '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>' : initial}</div>
                 <div class="flex-1">
                   <div class="text-sm font-medium">${p.isMe ? 'You' : escapeHtml(name)}</div>
                   <div class="text-xs text-oura-muted">${p.baselineVal} → ${p.currentVal}</div>
                 </div>
-                <span class="text-lg font-semibold" style="color: ${p.direction === 'up' ? '#4ade80' : p.direction === 'down' ? '#f87171' : '#6b7280'}">
+                <span class="text-lg font-semibold ${p.direction === 'up' ? 'text-green-400' : p.direction === 'down' ? 'text-red-400' : 'text-oura-muted'}">
                   ${pctPrefix}${displayPct}%
                 </span>
               </div>
             `;
           }).join('') : `
-            <div class="rounded-xl p-4 text-center" style="background: #0f1525">
+            <div class="rounded-xl p-4 text-center bg-oura-card">
               <p class="text-oura-muted text-sm">No data for this metric</p>
             </div>
           `}
@@ -1774,11 +1808,11 @@ const Challenges = {
 
     // Config for each metric
     const configs = {
-      score: { label: 'Sleep Score', unit: 'pts', color: '#4ade80', field: 'sleep_score' },
-      hr: { label: 'Lowest Heart Rate', unit: 'bpm', color: '#2dd4bf', field: 'pre_sleep_hr' },
-      avghr: { label: 'Average Heart Rate', unit: 'bpm', color: '#60a5fa', field: 'avg_hr' },
-      deep: { label: 'Deep Sleep', unit: 'min', color: '#c084fc', field: 'deep_sleep_minutes' },
-      presleep: { label: 'HR Before Sleep', unit: 'bpm', color: '#f59e0b', field: 'hr_before_sleep' }
+      score: { label: 'Sleep Score', unit: 'pts', color: '#4ade80', colorClass: 'text-green-400', field: 'sleep_score' },
+      hr: { label: 'Lowest Heart Rate', unit: 'bpm', color: '#2dd4bf', colorClass: 'text-teal-400', field: 'pre_sleep_hr' },
+      avghr: { label: 'Average Heart Rate', unit: 'bpm', color: '#60a5fa', colorClass: 'text-blue-400', field: 'avg_hr' },
+      deep: { label: 'Deep Sleep', unit: 'min', color: '#c084fc', colorClass: 'text-purple-400', field: 'deep_sleep_minutes' },
+      presleep: { label: 'HR Before Sleep', unit: 'bpm', color: '#f59e0b', colorClass: 'text-amber-500', field: 'hr_before_sleep' }
     };
     const config = configs[metric];
     const lowerIsBetter = metric === 'hr' || metric === 'avghr' || metric === 'presleep';
@@ -1812,7 +1846,7 @@ const Challenges = {
           <button onclick="Challenges.closeMetricDetailModal()" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-accent hover:text-white">
             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
           </button>
-          <h3 class="text-lg font-bold" style="color: ${config.color}">${config.label}</h3>
+          <h3 class="text-lg font-bold ${config.colorClass}">${config.label}</h3>
         </div>
 
         <!-- Summary stats -->
@@ -1822,11 +1856,11 @@ const Challenges = {
             <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
           </div>
           <div class="text-center">
-            <div class="text-2xl font-bold" style="color: ${config.color}">${challengeAvg ?? '--'}</div>
+            <div class="text-2xl font-bold ${config.colorClass}">${challengeAvg ?? '--'}</div>
             <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
           </div>
           <div class="text-center">
-            <div class="text-2xl font-bold" style="color: ${isImproving ? '#4ade80' : improvementPct !== null ? '#f87171' : '#6b7280'}">
+            <div class="text-2xl font-bold ${isImproving ? 'text-green-400' : improvementPct !== null ? 'text-red-400' : 'text-oura-muted'}">
               ${improvementPct !== null ? (improvementPct > 0 ? '+' : '') + improvementPct + '%' : '--'}
             </div>
             <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Change</div>
@@ -1849,7 +1883,7 @@ const Challenges = {
               return `
                 <div class="flex items-center justify-between py-1.5 border-b border-oura-border/50 last:border-0">
                   <span class="text-sm text-oura-muted">${dateStr}</span>
-                  <span class="text-sm font-medium" style="color: ${isChallenge ? config.color : '#6b7280'}">${Math.round(d[config.field])} ${config.unit}</span>
+                  <span class="text-sm font-medium ${isChallenge ? config.colorClass : 'text-oura-muted'}">${Math.round(d[config.field])} ${config.unit}</span>
                 </div>
               `;
             }).join('')}
@@ -2041,7 +2075,7 @@ const Challenges = {
           </p>
         </div>
 
-        <div class="rounded-xl p-4 mb-5" style="background: rgba(15, 21, 37, 0.8); border: 1px solid rgba(26, 32, 53, 0.8);">
+        <div class="rounded-xl p-4 mb-5 bg-oura-card/80 border border-oura-border/30">
           <div class="text-xs text-oura-muted uppercase tracking-wider mb-3">What happens</div>
           <div class="space-y-2 text-sm">
             <div class="flex items-start gap-2">
@@ -2069,7 +2103,7 @@ const Challenges = {
         <button id="fresh-start-confirm-btn"
           onclick="Challenges.handleFreshStart('${challengeId}')"
           class="w-full py-3.5 min-h-[44px] rounded-xl text-sm font-bold transition-all"
-          style="background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%); color: #0a0a14;">
+          class="bg-gradient-to-br from-green-400 to-green-500 text-gray-900">
           <svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg> Let's Go!
         </button>
         <button onclick="Challenges.closeFreshStartModal()"
@@ -2098,7 +2132,7 @@ const Challenges = {
       }
     } catch (error) {
       console.error('Error toggling habit:', error);
-      alert('Failed to update habit: ' + error.message);
+      App.showToast('Failed to update habit: ' + error.message, 'error');
       // Re-render to reset checkbox state
       this.renderDetail(challengeId);
     }
@@ -2111,7 +2145,7 @@ const Challenges = {
       await this.renderList();
     } catch (error) {
       console.error('Error accepting invitation:', error);
-      alert('Failed to accept invitation: ' + error.message);
+      App.showToast('Failed to accept invitation: ' + error.message, 'error');
     }
   },
 
@@ -2122,7 +2156,7 @@ const Challenges = {
       await this.renderList();
     } catch (error) {
       console.error('Error declining invitation:', error);
-      alert('Failed to decline invitation: ' + error.message);
+      App.showToast('Failed to decline invitation: ' + error.message, 'error');
     }
   },
 
@@ -2273,8 +2307,10 @@ const Challenges = {
 
   // Show invite friends modal for an existing challenge
   async showInviteFriendsModal(challengeId) {
-    const challenge = await this.getChallenge(challengeId);
-    const friends = await Friends.getFriends();
+    const [challenge, friends] = await Promise.all([
+      this.getChallenge(challengeId),
+      Friends.getFriends()
+    ]);
 
     // Filter out friends already in the challenge
     const existingUserIds = new Set(challenge.participants.map(p => p.user.id));
@@ -2397,7 +2433,7 @@ const Challenges = {
         const friendIds = Array.from(checkboxes).map(cb => cb.value);
 
         if (friendIds.length === 0) {
-          alert('Please select at least one friend to invite.');
+          App.showToast('Please select at least one friend to invite.', 'error');
           return;
         }
 
@@ -2407,7 +2443,7 @@ const Challenges = {
           await this.renderDetail(challengeId);
         } catch (error) {
           console.error('Error inviting friends:', error);
-          alert('Failed to invite friends: ' + error.message);
+          App.showToast('Failed to invite friends: ' + error.message, 'error');
         }
       });
     }
@@ -2555,7 +2591,7 @@ const Challenges = {
         App.navigateTo('challenge-detail', challenge.id);
       } catch (error) {
         console.error('Error creating challenge:', error);
-        alert('Failed to create challenge: ' + error.message);
+        App.showToast('Failed to create challenge: ' + error.message, 'error');
       }
     });
 

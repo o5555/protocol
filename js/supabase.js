@@ -47,10 +47,26 @@ async function getSession() {
   return session;
 }
 
-// Get current user
+// Get current user (memoized — avoids redundant getSession() calls within the same render cycle)
+let _cachedUser = null;
+let _cachedUserTimestamp = 0;
+const USER_CACHE_TTL = 5000; // 5 seconds
+
 async function getCurrentUser() {
+  const now = Date.now();
+  if (_cachedUser && (now - _cachedUserTimestamp) < USER_CACHE_TTL) {
+    return _cachedUser;
+  }
   const session = await getSession();
-  return session?.user || null;
+  _cachedUser = session?.user || null;
+  _cachedUserTimestamp = now;
+  return _cachedUser;
+}
+
+// Clear user cache (called on auth state changes)
+function clearUserCache() {
+  _cachedUser = null;
+  _cachedUserTimestamp = 0;
 }
 
 // Check if user is authenticated
@@ -76,6 +92,7 @@ window.SupabaseClient = {
   getCurrentUser,
   isAuthenticated,
   onAuthStateChange,
+  clearUserCache,
   // Direct access to client for advanced operations
   get client() {
     return initSupabase();

@@ -3,10 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Sleep Challenge</title>
+    <title>Protocol Circle</title>
+    <meta name="description" content="Track sleep with your Oura Ring, compete in challenges with friends, and follow health protocols.">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Protocol Circle">
     <meta name="theme-color" content="#0a0a12">
+    <meta name="format-detection" content="telephone=no">
+    <meta property="og:title" content="Protocol Circle">
+    <meta property="og:description" content="Sleep tracking challenges with friends">
+    <meta property="og:image" content="icons/icon-512.png">
+    <meta property="og:type" content="website">
     <link rel="icon" type="image/png" href="icons/favicon.png">
     <link rel="apple-touch-icon" href="icons/icon-180.png">
     <link rel="manifest" href="manifest.json">
@@ -17,9 +25,13 @@
     <link rel="apple-touch-startup-image" href="icons/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
     <link rel="apple-touch-startup-image" href="icons/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
     <link rel="apple-touch-startup-image" href="icons/splash-1536x2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)">
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://fhsbkcvepvlqbygpmdpc.supabase.co" crossorigin>
+    <link rel="dns-prefetch" href="https://api.ouraring.com">
     <link rel="stylesheet" href="css/mobile.css">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         tailwind.config = {
@@ -107,7 +119,7 @@
                 <div id="auth-step-email">
                     <form id="otp-email-form">
                         <div class="mb-4">
-                            <label class="block text-sm text-oura-muted mb-2">Email Address</label>
+                            <label for="auth-email" class="block text-sm text-oura-muted mb-2">Email Address</label>
                             <input type="email" id="auth-email" required
                                 placeholder="you@example.com"
                                 class="w-full px-4 py-3 bg-oura-bg border border-oura-border rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-oura-accent">
@@ -129,7 +141,7 @@
                     <p class="text-sm text-oura-muted mb-1">Enter the 6-digit code sent to</p>
                     <p id="auth-code-email" class="text-white font-medium mb-4"></p>
                     <form id="otp-code-form">
-                        <div class="flex gap-2 mb-4 justify-center" id="otp-inputs">
+                        <div class="flex gap-2 mb-4 justify-center" id="otp-inputs" role="group" aria-label="6-digit verification code">
                             <input type="text" inputmode="numeric" maxlength="1" class="otp-digit w-12 h-14 text-center text-xl font-bold bg-oura-bg border border-oura-border rounded-xl text-white focus:outline-none focus:border-oura-accent" autocomplete="one-time-code">
                             <input type="text" inputmode="numeric" maxlength="1" class="otp-digit w-12 h-14 text-center text-xl font-bold bg-oura-bg border border-oura-border rounded-xl text-white focus:outline-none focus:border-oura-accent">
                             <input type="text" inputmode="numeric" maxlength="1" class="otp-digit w-12 h-14 text-center text-xl font-bold bg-oura-bg border border-oura-border rounded-xl text-white focus:outline-none focus:border-oura-accent">
@@ -183,21 +195,21 @@
                     <p class="text-oura-muted text-sm">Science-backed routines for better sleep</p>
                 </div>
                 <div id="protocols-container">
-                    <div class="text-center py-10 text-oura-muted">Loading protocols...</div>
+                    <div class="text-center py-10 text-oura-muted" role="status">Loading protocols...</div>
                 </div>
             </div>
 
             <!-- Protocol Detail Page -->
             <div id="page-protocol-detail" class="page hidden">
                 <div id="protocol-detail-container">
-                    <div class="text-center py-10 text-oura-muted">Loading...</div>
+                    <div class="text-center py-10 text-oura-muted" role="status">Loading...</div>
                 </div>
             </div>
 
             <!-- Challenges Page -->
             <div id="page-challenges" class="page hidden">
                 <div id="challenges-container">
-                    <div class="text-center py-10 text-oura-muted">Loading...</div>
+                    <div class="text-center py-10 text-oura-muted" role="status">Loading...</div>
                 </div>
             </div>
 
@@ -213,7 +225,7 @@
                     <p class="text-oura-muted text-sm">Invite friends to join challenges</p>
                 </div>
                 <div id="friends-container">
-                    <div class="text-center py-10 text-oura-muted">Loading friends...</div>
+                    <div class="text-center py-10 text-oura-muted" role="status">Loading friends...</div>
                 </div>
             </div>
 
@@ -224,7 +236,7 @@
                     <p class="text-oura-muted text-sm">Manage your profile and settings</p>
                 </div>
                 <div id="account-container">
-                    <div class="text-center py-10 text-oura-muted">Loading...</div>
+                    <div class="text-center py-10 text-oura-muted" role="status">Loading...</div>
                 </div>
             </div>
         </main>
@@ -235,14 +247,14 @@
                 <div class="flex justify-around items-center">
                     <button onclick="App.navigateTo('dashboard')" data-page="dashboard"
                         class="nav-btn flex flex-col items-center justify-center min-h-[52px] min-w-[68px] py-2 text-oura-muted transition-all">
-                        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
                         </svg>
                         <span class="text-[11px] mt-0.5 font-medium">Home</span>
                     </button>
                     <button onclick="App.navigateTo('protocols')" data-page="protocols"
                         class="nav-btn flex flex-col items-center justify-center min-h-[52px] min-w-[68px] py-2 text-oura-muted transition-all">
-                        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
                         </svg>
                         <span class="text-[11px] mt-0.5 font-medium">Protocols</span>
@@ -250,7 +262,7 @@
                     <button onclick="App.navigateTo('challenges')" data-page="challenges"
                         class="nav-btn relative flex flex-col items-center justify-center min-h-[52px] min-w-[68px] py-2 text-oura-muted transition-all">
                         <div class="relative">
-                            <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                                 <circle cx="12" cy="12" r="9" stroke-linecap="round" stroke-linejoin="round" />
                                 <circle cx="12" cy="10" r="2.5" stroke-linecap="round" stroke-linejoin="round" />
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 18.5a5 5 0 0 1 9 0" />
@@ -262,7 +274,7 @@
                     <button onclick="App.navigateTo('account')" data-page="account"
                         class="nav-btn flex flex-col items-center justify-center min-h-[52px] min-w-[68px] py-2 text-oura-muted transition-all">
                         <div class="relative">
-                            <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                             </svg>
                             <span id="friends-badge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
@@ -300,6 +312,9 @@
             navigateTo(page, detailId = null) {
                 const targetPage = document.getElementById(`page-${page}`);
                 if (!targetPage) return;
+
+                // Clean up any open modals
+                document.querySelectorAll('#edit-profile-modal, #oura-token-modal, #bug-report-modal').forEach(m => m.remove());
 
                 // Cancel any pending transition
                 if (this._transitionTimer) {
@@ -416,6 +431,43 @@
                 }
             },
 
+            _toastTimer: null,
+
+            showToast(message, type = 'success') {
+                document.getElementById('app-toast')?.remove();
+                clearTimeout(this._toastTimer);
+
+                const icon = type === 'error'
+                    ? '<svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>'
+                    : '<svg class="w-5 h-5 text-oura-accent flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>';
+
+                const toast = document.createElement('div');
+                toast.id = 'app-toast';
+                toast.className = 'fixed left-4 right-4 bottom-20 z-50 toast-enter';
+                toast.innerHTML = `
+                    <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 shadow-lg backdrop-blur-xl">
+                        <div class="flex items-start gap-3">
+                            ${icon}
+                            <p class="text-sm text-white flex-1">${message}</p>
+                            <button onclick="App.dismissToast()" class="text-oura-muted min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 -mt-2">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(toast);
+                this._toastTimer = setTimeout(() => this.dismissToast(), 4000);
+            },
+
+            dismissToast() {
+                clearTimeout(this._toastTimer);
+                const toast = document.getElementById('app-toast');
+                if (!toast) return;
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-exit');
+                setTimeout(() => toast.remove(), 250);
+            },
+
             async init() {
                 // Restore saved navigation state, or default to dashboard
                 let startPage = 'dashboard';
@@ -516,6 +568,14 @@
                     // Initialize push notifications
                     SupabaseClient.getCurrentUser().then(u => { if (u) PushNotifications.init(u.id); }).catch(() => {});
                 }
+
+                // Offline/online indicator
+                window.addEventListener('offline', () => {
+                    App.showToast('You are offline. Some features may be unavailable.', 'error');
+                });
+                window.addEventListener('online', () => {
+                    App.showToast('Back online!');
+                });
             },
 
             // Check for pending invites and update notification badges

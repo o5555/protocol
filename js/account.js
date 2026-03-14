@@ -35,7 +35,7 @@ const Account = {
         return;
       }
 
-      // Get user profile
+      // Get user profile (user already resolved, fetch profile directly)
       const profile = await this.getProfile(currentUser.id);
       const displayName = profile?.display_name || (currentUser.email ? currentUser.email.split('@')[0] : 'User');
       const hasOuraToken = !!profile?.oura_token;
@@ -168,10 +168,14 @@ const Account = {
 
   // Show edit profile modal
   async showEditProfileModal() {
-    const currentUser = await SupabaseClient.getCurrentUser();
+    const [currentUser, cachedProfile] = await Promise.all([
+      SupabaseClient.getCurrentUser(),
+      // Optimistic: use account cache if available
+      Promise.resolve(Cache.get('account'))
+    ]);
     if (!currentUser) return;
 
-    const profile = await this.getProfile(currentUser.id);
+    const profile = cachedProfile ? { display_name: cachedProfile.displayName } : await this.getProfile(currentUser.id);
     const displayName = profile?.display_name || '';
 
     const modal = document.createElement('div');
@@ -214,7 +218,7 @@ const Account = {
         this.render();
       } catch (error) {
         console.error('Error updating profile:', error);
-        alert('Failed to update profile: ' + error.message);
+        App.showToast('Failed to update profile: ' + error.message, 'error');
       }
     });
 
@@ -248,11 +252,13 @@ const Account = {
 
   // Show Oura token modal
   async showOuraTokenModal() {
-    const currentUser = await SupabaseClient.getCurrentUser();
+    const [currentUser, cachedAccount] = await Promise.all([
+      SupabaseClient.getCurrentUser(),
+      Promise.resolve(Cache.get('account'))
+    ]);
     if (!currentUser) return;
 
-    const profile = await this.getProfile(currentUser.id);
-    const hasToken = !!profile?.oura_token;
+    const hasToken = cachedAccount ? cachedAccount.ouraStatus === 'connected' : !!(await this.getProfile(currentUser.id))?.oura_token;
 
     const modal = document.createElement('div');
     modal.id = 'oura-token-modal';
@@ -314,13 +320,20 @@ const Account = {
 
         await this.updateProfile({ oura_token: token });
         Cache.clear('account');
+        Cache.clear('dashboard');
 
         statusEl.className = 'text-xs text-green-400';
-        statusEl.textContent = 'Token saved successfully!';
+        statusEl.textContent = 'Token saved! Syncing sleep data...';
+
+        // Kick off background sync
+        if (typeof SleepSync !== 'undefined') {
+          SleepSync.syncNow({ silent: true }).catch(() => {});
+        }
 
         setTimeout(() => {
           this.closeOuraTokenModal();
-          this.render();
+          // Re-render the current page (could be Account or Dashboard)
+          App.loadPageContent(App.currentPage, App.currentDetailId);
         }, 1000);
       } catch (error) {
         console.error('Error saving token:', error);
@@ -465,7 +478,7 @@ const Account = {
       window.location.reload();
     } catch (error) {
       console.error('Error signing out:', error);
-      alert('Failed to sign out: ' + error.message);
+      App.showToast('Failed to sign out: ' + error.message, 'error');
     }
   }
 };

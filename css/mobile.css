@@ -7,6 +7,11 @@
   --sal: env(safe-area-inset-left);
 }
 
+/* Hardcoded dark background — prevents white flash before Tailwind CDN loads */
+html, body {
+  background-color: #0a0a12;
+}
+
 /* Prevent iOS rubber-banding on the app shell */
 html {
   overscroll-behavior-y: contain;
@@ -267,6 +272,16 @@ button, a, input, select, textarea, label {
 
 .toast-exit {
   animation: toast-slide-down 0.25s ease-in forwards;
+}
+
+/* ── Focus Indicators ── */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[role="checkbox"]:focus-visible {
+  outline: 2px solid #00c8a0;
+  outline-offset: 2px;
 }
 
 /* ── Page Transitions ── */

@@ -278,7 +278,7 @@ const Protocols = {
               </div>
               <div class="flex-1 min-w-0">
                 <h3 class="text-lg font-semibold">${escapeHtml(protocol.name)}</h3>
-                <p class="text-oura-muted text-sm mt-1 line-clamp-3">${escapeHtml(protocol.description || '')}</p>
+                <p class="text-oura-muted text-sm mt-1 line-clamp-3">${escapeHtml(protocol.description || (protocol.habits?.length ? `${protocol.habits.length} daily habits` : 'Custom protocol'))}</p>
               </div>
               <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -355,7 +355,7 @@ const Protocols = {
               <h2 class="text-2xl font-bold">${escapeHtml(protocol.name)}</h2>
               ${isCustom ? `<span class="px-2 py-0.5 text-[0.65rem] font-medium bg-purple-500/15 text-purple-400 rounded-full">Custom</span>` : ''}
             </div>
-            <p class="text-oura-muted mt-2">${escapeHtml(protocol.description || '')}</p>
+            <p class="text-oura-muted mt-2">${escapeHtml(protocol.description || (protocol.habits?.length ? `Custom protocol with ${protocol.habits.length} daily habits` : 'Custom protocol'))}</p>
           </div>
         </div>
       </div>
@@ -413,7 +413,7 @@ const Protocols = {
       App.navigateTo('protocols');
     } catch (error) {
       console.error('Error deleting protocol:', error);
-      alert('Failed to delete protocol: ' + error.message);
+      App.showToast('Failed to delete protocol: ' + error.message, 'error');
     }
   },
 
@@ -665,7 +665,7 @@ const Protocols = {
       App.navigateTo('protocol-detail', protocol.id);
     } catch (error) {
       console.error('Error creating protocol:', error);
-      alert('Failed to create protocol: ' + error.message);
+      App.showToast('Failed to create protocol: ' + error.message, 'error');
       nextBtn.disabled = false;
       nextBtn.textContent = 'Create Protocol';
     }

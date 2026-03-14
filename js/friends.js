@@ -431,10 +431,12 @@ const Friends = {
       </div>
     `;
 
-    // Set up invite form handler
+    // Set up invite form handler (clone to remove any duplicate listeners from re-render)
     const inviteForm = document.getElementById('invite-friend-form');
     if (inviteForm) {
-      inviteForm.addEventListener('submit', this.handleInvite.bind(this));
+      const fresh = inviteForm.cloneNode(true);
+      inviteForm.parentNode.replaceChild(fresh, inviteForm);
+      fresh.addEventListener('submit', this.handleInvite.bind(this));
     }
   },
 
@@ -487,7 +489,7 @@ const Friends = {
       await this.render();
     } catch (error) {
       console.error('Error accepting request:', error);
-      alert('Failed to accept request: ' + error.message);
+      App.showToast('Failed to accept request: ' + error.message, 'error');
     }
   },
 
@@ -499,7 +501,7 @@ const Friends = {
       await this.render();
     } catch (error) {
       console.error('Error declining request:', error);
-      alert('Failed to decline request: ' + error.message);
+      App.showToast('Failed to decline request: ' + error.message, 'error');
     }
   },
 
@@ -549,7 +551,7 @@ const Friends = {
       await this.render();
     } catch (error) {
       console.error('Error cancelling invite:', error);
-      alert('Failed to cancel invite: ' + error.message);
+      App.showToast('Failed to cancel invite: ' + error.message, 'error');
     }
   },
 
@@ -563,7 +565,7 @@ const Friends = {
       await this.render();
     } catch (error) {
       console.error('Error removing friend:', error);
-      alert('Failed to remove friend: ' + error.message);
+      App.showToast('Failed to remove friend: ' + error.message, 'error');
     }
   }
 };

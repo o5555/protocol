@@ -45,21 +45,20 @@ const Dashboard = {
       // Only update DOM if this is still the most recent render call
       if (generation !== this._renderGeneration) return;
 
-      // Fetch league data for first active challenge
+      // Fetch league data + habit data in parallel (both depend on activeChallenges but not each other)
       let leagueData = null;
-      if (activeChallenges.length > 0) {
-        try {
-          const result = await Comparison.getChallengeSleepData(activeChallenges[0].id);
-          if (generation !== this._renderGeneration) return;
-          const currentUser = await SupabaseClient.getCurrentUser();
-          leagueData = this._buildLeagueData(result, currentUser?.id);
-        } catch (e) {
-          console.warn('[Dashboard] League data fetch failed:', e);
-        }
-      }
+      const leaguePromise = activeChallenges.length > 0
+        ? Comparison.getChallengeSleepData(activeChallenges[0].id)
+            .then(async result => {
+              const currentUser = await SupabaseClient.getCurrentUser();
+              return this._buildLeagueData(result, currentUser?.id);
+            })
+            .catch(e => { console.warn('[Dashboard] League data fetch failed:', e); return null; })
+        : Promise.resolve(null);
 
-      // Fetch habit data for active challenge
-      await this._fetchHabitData(activeChallenges, generation);
+      const habitPromise = this._fetchHabitData(activeChallenges, generation);
+
+      [leagueData] = await Promise.all([leaguePromise, habitPromise]);
       if (generation !== this._renderGeneration) return;
 
       // Cache the data
@@ -921,16 +920,51 @@ const Dashboard = {
         }
       }
 
-      // No-token prompt
-      if (!profile?.oura_token) {
+      // Welcome state for new users — no token AND no active challenge
+      const isNewUser = !profile?.oura_token && activeChallenges.length === 0;
+      if (isNewUser) {
+        html += `
+          <div class="text-center mb-6 pt-4">
+            <h2 class="text-2xl font-bold mb-2">Welcome to Protocol Circle</h2>
+            <p class="text-oura-muted text-sm">Get started by connecting your Oura Ring and joining a challenge.</p>
+          </div>
+          <div class="space-y-3 mb-6">
+            <button onclick="Account.showOuraTokenModal()" class="w-full bg-oura-card rounded-2xl p-5 border border-oura-border/30 text-left">
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full bg-oura-accent/15 flex items-center justify-center flex-shrink-0">
+                  <svg class="w-6 h-6 text-oura-accent" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>
+                </div>
+                <div class="flex-1">
+                  <p class="font-semibold mb-0.5">Connect Your Oura Ring</p>
+                  <p class="text-sm text-oura-muted">Paste your access token to sync sleep data</p>
+                </div>
+                <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+              </div>
+            </button>
+            <button onclick="App.navigateTo('protocols')" class="w-full bg-oura-card rounded-2xl p-5 border border-oura-border/30 text-left">
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full bg-purple-500/15 flex items-center justify-center flex-shrink-0">
+                  <svg class="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M18.75 4.236c.982.143 1.954.317 2.916.52A6.003 6.003 0 0 1 16.27 9.728M18.75 4.236V4.5c0 2.108-.966 3.99-2.48 5.228m0 0a6.023 6.023 0 0 1-2.021 1.247m0 0A6.015 6.015 0 0 1 12 11.25a6.015 6.015 0 0 1-2.27-.475m4.54 0a6.023 6.023 0 0 0 2.021 1.247m-6.561 0a6.023 6.023 0 0 1-2.021 1.247" /></svg>
+                </div>
+                <div class="flex-1">
+                  <p class="font-semibold mb-0.5">Start a Challenge</p>
+                  <p class="text-sm text-oura-muted">Pick a protocol and compete with friends</p>
+                </div>
+                <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+              </div>
+            </button>
+          </div>
+        `;
+      } else if (!profile?.oura_token) {
+        // Existing user with a challenge but no token — show compact prompt
         html += `
           <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-5 mb-4">
             <div class="flex items-start gap-3">
-              <svg class="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>
+              <svg class="w-8 h-8 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>
               <div>
                 <p class="font-semibold text-amber-400 mb-1">Connect Your Oura Ring</p>
                 <p class="text-sm text-oura-muted">Link your Oura ring to see heart rate data and sleep insights.</p>
-                <button onclick="App.navigateTo('account')" class="mt-3 px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg text-sm font-medium hover:bg-amber-500/30 transition-colors">
+                <button onclick="Account.showOuraTokenModal()" class="mt-3 px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg text-sm font-medium hover:bg-amber-500/30 transition-colors">
                   Connect Oura
                 </button>
               </div>
@@ -938,7 +972,6 @@ const Dashboard = {
           </div>
         `;
       }
-
 
       if (leagueData && leagueData.participants.length > 0) {
         // Store for swipe handler
@@ -1009,6 +1042,24 @@ const Dashboard = {
         </div>
         `;
 
+        // Start a challenge CTA (when no active challenges)
+        if (activeChallenges.length === 0 && profile?.oura_token) {
+          html += `
+          <button onclick="App.navigateTo('protocols')" class="w-full bg-oura-card rounded-2xl p-5 mb-4 border border-oura-border/30 border-dashed text-left">
+            <div class="flex items-center gap-4">
+              <div class="w-10 h-10 rounded-full bg-oura-accent/15 flex items-center justify-center flex-shrink-0">
+                <svg class="w-5 h-5 text-oura-accent" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+              </div>
+              <div class="flex-1">
+                <p class="font-semibold text-sm">Start a Challenge</p>
+                <p class="text-xs text-oura-muted mt-0.5">Pick a protocol and compete with friends for 30 days</p>
+              </div>
+              <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+            </div>
+          </button>
+          `;
+        }
+
         // Active challenge cards (only when no league table)
         if (activeChallenges.length > 0) {
           html += `<div class="text-xs font-semibold text-oura-muted uppercase tracking-wider mb-3 mt-2">Active Challenges</div>`;
@@ -1019,7 +1070,7 @@ const Dashboard = {
               <div onclick="App.navigateTo('challenge-detail', '${ch.id}')"
                 class="bg-oura-card rounded-2xl p-6 mb-3 cursor-pointer hover:bg-oura-subtle transition-colors">
                 <div class="flex items-center gap-4 mb-4">
-                  <div class="protocol-icon w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">${Protocols.getInitials(ch.protocol?.name || 'CH')}</div>
+                  <div class="protocol-icon w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">${escapeHtml(Protocols.getInitials(ch.protocol?.name || 'CH'))}</div>
                   <div>
                     <h3 class="font-semibold text-lg">${escapeHtml(ch.name)}</h3>
                     <p class="text-oura-muted text-sm">${escapeHtml(ch.protocol?.name || 'Protocol')}</p>
@@ -1495,7 +1546,7 @@ const Dashboard = {
     }
 
     if (!avgHR && challenge) {
-      return `You're on day ${Challenges.getDayNumber(challenge.start_date)} of "${challenge.name}". Sync your Oura data to see heart rate trends.`;
+      return `You're on day ${Challenges.getDayNumber(challenge.start_date)} of "${escapeHtml(challenge.name)}". Sync your Oura data to see heart rate trends.`;
     }
 
     if (avgHR && !challenge) {
@@ -1507,12 +1558,12 @@ const Dashboard = {
     // Both HR and challenge exist
     const dayNum = Challenges.getDayNumber(challenge.start_date);
     if (avgHR < 60) {
-      return `Outstanding! ${avgHR} bpm on day ${dayNum} of "${challenge.name}". Your pre-sleep relaxation is working.`;
+      return `Outstanding! ${avgHR} bpm on day ${dayNum} of "${escapeHtml(challenge.name)}". Your pre-sleep relaxation is working.`;
     }
     if (avgHR < 70) {
-      return `${avgHR} bpm on day ${dayNum} — you're making progress with "${challenge.name}". Keep up the evening habits!`;
+      return `${avgHR} bpm on day ${dayNum} — you're making progress with "${escapeHtml(challenge.name)}". Keep up the evening habits!`;
     }
-    return `Day ${dayNum} of "${challenge.name}" — your HR is ${avgHR} bpm. Focus on winding down earlier tonight. Consistency is key.`;
+    return `Day ${dayNum} of "${escapeHtml(challenge.name)}" — your HR is ${avgHR} bpm. Focus on winding down earlier tonight. Consistency is key.`;
   },
 
   // ── AI Chat ──

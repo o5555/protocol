@@ -583,7 +583,7 @@ const SleepSync = {
     // Get Oura token
     const profile = await Auth.getProfile();
     if (!profile?.oura_token) {
-      if (!silent) alert('Please connect your Oura ring first in the Dashboard settings.');
+      if (!silent) App.showToast('Please connect your Oura ring first in Account settings.', 'error');
       return { success: false, count: 0, error: 'No Oura token' };
     }
 
@@ -618,10 +618,15 @@ const SleepSync = {
       const baseUrl = '/api';
 
       const ouraHeaders = { 'Authorization': `Bearer ${profile.oura_token}` };
+      // Oura HR endpoint only supports ~30 day ranges
+      const hrStart = new Date();
+      hrStart.setDate(hrStart.getDate() - 30);
+      const hrStartStr = DateUtils.toLocalDateStr(hrStart);
+
       const [sleepResponse, dailySleepResponse, hrResponse] = await Promise.all([
         fetch(`${baseUrl}/sleep?start_date=${startStr}&end_date=${endStr}`, { headers: ouraHeaders }),
         fetch(`${baseUrl}/daily_sleep?start_date=${startStr}&end_date=${endStr}`, { headers: ouraHeaders }).catch(() => null),
-        fetch(`${baseUrl}/heartrate?start_datetime=${startStr}T00:00:00&end_datetime=${endStr}T23:59:59`, { headers: ouraHeaders }).catch(() => null)
+        fetch(`${baseUrl}/heartrate?start_datetime=${hrStartStr}T00:00:00&end_datetime=${endStr}T23:59:59`, { headers: ouraHeaders }).catch(() => null)
       ]);
 
       if (!sleepResponse.ok) {
@@ -720,7 +725,7 @@ const SleepSync = {
       if (error) throw error;
 
       if (!silent) {
-        alert(`Synced ${sleepRecords.length} nights of sleep data!`);
+        App.showToast(`Synced ${sleepRecords.length} nights of sleep data!`);
       }
 
       // Refresh current view if on challenge detail (skip if called from renderDetail itself)
@@ -743,7 +748,7 @@ const SleepSync = {
     } catch (error) {
       console.error('Error syncing sleep data:', error);
       if (!silent) {
-        alert('Failed to sync sleep data: ' + error.message);
+        App.showToast('Failed to sync sleep data: ' + error.message, 'error');
       }
       return { success: false, count: 0, error: error.message };
     }

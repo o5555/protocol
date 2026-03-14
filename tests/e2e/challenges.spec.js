@@ -296,8 +296,8 @@ test.describe('Challenges Page — Behavioral Tests', () => {
       // Wait for the click handler to run
       await page.waitForTimeout(500);
 
-      const avgHrStyle = await avgHrBtn.evaluate(el => el.style.color);
-      expect(avgHrStyle).toBe('rgb(255, 255, 255)');
+      const avgHrClasses = await avgHrBtn.getAttribute('class');
+      expect(avgHrClasses).toContain('active');
     }
 
     const unexpected = unexpectedErrors(errors);

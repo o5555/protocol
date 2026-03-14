@@ -22,6 +22,9 @@ const PullToRefresh = {
   },
 
   init() {
+    if (this._initialized) return;
+    this._initialized = true;
+
     this._indicator = document.getElementById('ptr-indicator');
     this._label = document.getElementById('ptr-label');
     this._spinner = document.getElementById('ptr-spinner');
@@ -29,9 +32,12 @@ const PullToRefresh = {
 
     if (!this._indicator || !this._contentArea) return;
 
-    document.addEventListener('touchstart', this._onTouchStart.bind(this), { passive: true });
-    document.addEventListener('touchmove', this._onTouchMove.bind(this), { passive: false });
-    document.addEventListener('touchend', this._onTouchEnd.bind(this), { passive: true });
+    this._boundTouchStart = this._onTouchStart.bind(this);
+    this._boundTouchMove = this._onTouchMove.bind(this);
+    this._boundTouchEnd = this._onTouchEnd.bind(this);
+    document.addEventListener('touchstart', this._boundTouchStart, { passive: true });
+    document.addEventListener('touchmove', this._boundTouchMove, { passive: false });
+    document.addEventListener('touchend', this._boundTouchEnd, { passive: true });
   },
 
   _isScrolledToTop() {
