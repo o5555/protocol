@@ -60,6 +60,12 @@ button, a, input, select, textarea, label {
   padding-bottom: calc(8px + var(--sab));
 }
 
+/* Habit check-in overlay safe areas */
+.safe-area-overlay {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 /* ── Skeleton Shimmer (loading placeholders) ── */
 
 @keyframes skeleton-shimmer {

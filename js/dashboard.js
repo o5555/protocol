@@ -736,7 +736,8 @@ const Dashboard = {
       return this._renderHabitCollapsed(count, total);
     }
 
-    // State B — pre-check-in: seed pending set from DB completions on first render
+    // State B — not yet checked in
+    // Default to collapsed state — user can expand to check in from dashboard
     if (!this._habitCheckinPending) {
       this._habitCheckinPending = new Set(completions);
     }
@@ -744,32 +745,40 @@ const Dashboard = {
     const pendingSet = this._habitCheckinPending;
     const completedCount = pendingSet.size;
 
+    // Default to collapsed state — user can expand to check in
     return `
       <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 mb-3" id="habit-section">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-bold text-oura-muted uppercase tracking-wider">Last Night's Habits</h3>
-          <span id="habit-counter" class="text-xs text-oura-muted">${completedCount} of ${habits.length}</span>
-        </div>
-        <div class="space-y-0 divide-y divide-oura-border/20">
-          ${habits.map(h => {
-            const checked = pendingSet.has(h.id);
-            return `
-            <button class="habit-check-row flex items-center gap-3 w-full text-left py-3 min-h-[48px]"
-                    data-habit-id="${h.id}" data-checked="${checked}"
-                    role="checkbox" aria-checked="${checked}" aria-label="${escapeHtml(h.title)}">
-              <div class="w-6 h-6 rounded-lg border ${checked
-                ? 'bg-oura-accent border-oura-accent'
-                : 'border-oura-border'} flex items-center justify-center flex-shrink-0">
-                ${checked ? '<svg class="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>' : ''}
-              </div>
-              <span class="text-sm ${checked ? 'text-oura-muted line-through' : 'text-white'}">${escapeHtml(h.title)}</span>
-            </button>`;
-          }).join('')}
-        </div>
-        <button id="habit-checkin-confirm"
-          class="w-full mt-4 py-3 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all">
-          Check in
+        <button class="flex items-center justify-between w-full" id="habit-expand-toggle">
+          <div class="flex items-center gap-3">
+            <div class="w-6 h-6 rounded-lg border border-oura-border flex items-center justify-center flex-shrink-0">
+              <svg class="w-4 h-4 text-oura-muted" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            </div>
+            <span class="text-sm text-oura-muted">Check in your habits</span>
+          </div>
+          <svg class="w-4 h-4 text-oura-muted transition-transform" id="habit-expand-chevron" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
         </button>
+        <div class="hidden mt-3" id="habit-expand-content">
+          <div class="space-y-0 divide-y divide-oura-border/20">
+            ${habits.map(h => {
+              const checked = pendingSet.has(h.id);
+              return `
+              <button class="habit-check-row flex items-center gap-3 w-full text-left py-3 min-h-[48px]"
+                      data-habit-id="${h.id}" data-checked="${checked}"
+                      role="checkbox" aria-checked="${checked}" aria-label="${escapeHtml(h.title)}">
+                <div class="w-6 h-6 rounded-lg border ${checked
+                  ? 'bg-oura-accent border-oura-accent'
+                  : 'border-oura-border'} flex items-center justify-center flex-shrink-0">
+                  ${checked ? '<svg class="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>' : ''}
+                </div>
+                <span class="text-sm ${checked ? 'text-oura-muted line-through' : 'text-white'}">${escapeHtml(h.title)}</span>
+              </button>`;
+            }).join('')}
+          </div>
+          <button id="habit-checkin-confirm"
+            class="w-full mt-4 py-3 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-oura-accent/30 transition-all">
+            Check in
+          </button>
+        </div>
       </div>`;
   },
 
@@ -853,8 +862,11 @@ const Dashboard = {
         }
       }, 800);
 
-      // One-shot AI refresh
-      this._refreshAiAfterCheckin();
+      // One-shot AI refresh — but NOT if the overlay was skipped earlier.
+      // Per spec: "If user later checks in from dashboard — AI insight does NOT re-generate"
+      if (!this._overlaySkippedToday) {
+        this._refreshAiAfterCheckin();
+      }
     } catch (err) {
       console.warn('[Dashboard] Habit check-in failed:', err);
       // Re-enable button on error
@@ -892,6 +904,18 @@ const Dashboard = {
     if (container._habitListenerAttached) return;
     container._habitListenerAttached = true;
     container.addEventListener('click', (e) => {
+      // Expand/collapse toggle for habit section
+      if (e.target.closest('#habit-expand-toggle')) {
+        e.stopPropagation();
+        const content = document.getElementById('habit-expand-content');
+        const chevron = document.getElementById('habit-expand-chevron');
+        if (content) {
+          content.classList.toggle('hidden');
+          if (chevron) chevron.classList.toggle('rotate-180');
+        }
+        return;
+      }
+
       // Confirm button
       if (e.target.closest('#habit-checkin-confirm')) {
         e.stopPropagation();
