@@ -2209,7 +2209,7 @@ const Challenges = {
           <label class="block text-sm font-medium text-white mb-2">New start date</label>
           <input type="date" id="fresh-start-date"
             value="${defaultDate}" min="${minDate}" max="${maxDateStr}"
-            class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-white">
+            class="w-full px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-white text-base">
         </div>
 
         <button id="fresh-start-confirm-btn"
@@ -2613,7 +2613,7 @@ const Challenges = {
               </button>
             </div>
             <input type="date" id="challenge-start-date"
-              class="hidden w-full mt-2 px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-white"
+              class="hidden w-full mt-2 px-4 py-3 bg-oura-subtle border border-oura-border rounded-xl text-white text-base"
               min="${DateUtils.toLocalDateStr(new Date())}">
           </div>
 
