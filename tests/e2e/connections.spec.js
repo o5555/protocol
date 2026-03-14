@@ -569,10 +569,10 @@ test.describe('Oura Ring Connection', () => {
     // Verify success message appears
     await page.waitForFunction(() => {
       const el = document.getElementById('oura-token-status');
-      return el && el.textContent.includes('saved successfully');
+      return el && el.textContent.includes('Token saved');
     }, { timeout: 5000 });
 
-    await expect(page.locator('#oura-token-status')).toContainText('saved successfully');
+    await expect(page.locator('#oura-token-status')).toContainText('Token saved');
 
     expect(unexpectedErrors(errors)).toEqual([]);
   });

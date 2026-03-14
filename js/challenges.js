@@ -95,16 +95,18 @@ const Challenges = {
     }
     this._myChallengesTimestamp = now;
     this._myChallengesPromise = this._fetchMyChallenges();
-    // Clear the promise reference after it resolves/rejects so future calls re-fetch
-    this._myChallengesPromise.finally(() => {
-      // Only clear if this is still the same promise (not replaced by a newer call)
+    this._myChallengesPromise.then(() => {
+      // Keep success cached for TTL, then clear for fresh data
+      setTimeout(() => {
+        if (this._myChallengesTimestamp === now) {
+          this._myChallengesPromise = null;
+        }
+      }, this._MY_CHALLENGES_TTL);
+    }).catch(() => {
+      // Never cache failures — clear immediately so retries go through
       if (this._myChallengesTimestamp === now) {
-        // Keep the result cached for the TTL window, then clear
-        setTimeout(() => {
-          if (this._myChallengesTimestamp === now) {
-            this._myChallengesPromise = null;
-          }
-        }, this._MY_CHALLENGES_TTL);
+        this._myChallengesPromise = null;
+        this._myChallengesTimestamp = 0;
       }
     });
     return this._myChallengesPromise;
