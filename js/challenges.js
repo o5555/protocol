@@ -752,7 +752,20 @@ const Challenges = {
     const container = document.getElementById('challenges-container');
     if (!container) return;
 
-    container.innerHTML = '<div class="text-center py-10 text-oura-muted text-sm">Loading...</div>';
+    container.innerHTML = `
+      <div class="space-y-3">
+        ${[1,2].map(() => `
+        <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="skeleton-bar w-10 h-10 rounded-xl flex-shrink-0"></div>
+            <div class="flex-1">
+              <div class="skeleton-bar h-4 w-32 mb-1.5"></div>
+              <div class="skeleton-bar h-3 w-20"></div>
+            </div>
+          </div>
+          <div class="skeleton-bar h-2 w-full rounded-full"></div>
+        </div>`).join('')}
+      </div>`;
 
     try {
       const allChallenges = await this.getMyChallenges();
@@ -794,8 +807,19 @@ const Challenges = {
       this._renderListContent(container, cachedData);
     } else {
       container.innerHTML = `
-        <div class="text-center py-10 text-oura-muted text-sm">Loading challenges...</div>
-      `;
+        <div class="space-y-3">
+          ${[1,2].map(() => `
+          <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="skeleton-bar w-10 h-10 rounded-xl flex-shrink-0"></div>
+              <div class="flex-1">
+                <div class="skeleton-bar h-4 w-32 mb-1.5"></div>
+                <div class="skeleton-bar h-3 w-20"></div>
+              </div>
+            </div>
+            <div class="skeleton-bar h-2 w-full rounded-full"></div>
+          </div>`).join('')}
+        </div>`;
     }
 
     // Fetch fresh data (in background if we have cache)
@@ -944,82 +968,60 @@ const Challenges = {
 
       var hasOuraToken = false;
 
-      if (cachedData && !needsSync) {
-        // FAST PATH: Use cached data — zero network calls, no loading screen
+      if (cachedData) {
+        // FAST PATH: Show cached data instantly — always, even if sync is needed
         sleepData = cachedData.sleepData;
         syncResult = cachedData.syncResult;
         currentUser = cachedData.currentUser;
         challenge = cachedData.challenge;
         hasOuraToken = cachedData.hasOuraToken || false;
       } else {
-        // Need fresh data — fetch user + challenge in parallel
+        // No cache — need to fetch everything
+        // Show skeleton while loading
+        container.innerHTML = `
+          <div class="space-y-4">
+            <div class="flex items-center justify-between mb-4">
+              <div class="skeleton-bar w-16 h-5"></div>
+              <div class="skeleton-bar w-32 h-5"></div>
+              <div class="w-[50px]"></div>
+            </div>
+            <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+              <div class="skeleton-bar w-24 h-4 mb-4"></div>
+              <div class="space-y-3">
+                ${[1,2,3].map(() => `
+                <div class="flex items-center gap-3">
+                  <div class="skeleton-bar w-6 h-6 rounded-full flex-shrink-0"></div>
+                  <div class="flex-1">
+                    <div class="skeleton-bar h-3 w-28 mb-1.5"></div>
+                    <div class="skeleton-bar h-3 w-16"></div>
+                  </div>
+                  <div class="skeleton-bar h-5 w-10"></div>
+                </div>`).join('')}
+              </div>
+            </div>
+            <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+              <div class="skeleton-bar w-28 h-4 mb-3"></div>
+              <div class="skeleton-bar h-48 w-full rounded-xl"></div>
+            </div>
+          </div>`;
+
         [currentUser, challenge] = await Promise.all([
           SupabaseClient.getCurrentUser(),
           this.getChallenge(challengeId)
         ]);
 
-        // Start profile fetch early (runs in parallel with sync/data below)
         const profilePromise = Auth.getProfile().catch(() => null);
 
-        if (!skipSync && typeof SleepSync !== 'undefined' && !syncedToday) {
-          // SYNC PATH: Show loading screen, sync + fetch in parallel
-          container.innerHTML = `
-            <div class="nav-bar flex items-center justify-between mb-4">
-              <button onclick="Challenges._skipSmartRedirect=true; App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
-                &larr; Back
-              </button>
-              <span class="text-base font-medium">${escapeHtml(challenge.name)}</span>
-              <span class="w-[50px]"></span>
-            </div>
-            <div class="sync-screen">
-              <div class="sync-ring-container">
-                <svg class="sync-ring-svg" width="96" height="96" viewBox="0 0 100 100">
-                  <defs>
-                    <linearGradient id="sync-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stop-color="#00c8a0"/>
-                      <stop offset="100%" stop-color="#6c63ff"/>
-                    </linearGradient>
-                  </defs>
-                  <circle class="sync-ring-bg" cx="50" cy="50" r="40"/>
-                  <circle class="sync-ring-progress" cx="50" cy="50" r="40"/>
-                </svg>
-              </div>
-              <p class="sync-label">Syncing...</p>
-            </div>
-          `;
-          const syncWithTimeout = Promise.race([
-            SleepSync.syncNow({ silent: true, skipRefresh: true }),
-            new Promise(resolve => setTimeout(() => resolve({ success: false, count: 0, error: 'Sync timed out' }), 8000))
-          ]);
-          const dataFetch = Comparison.getChallengeSleepData(challengeId);
+        // Fetch data (no sync blocking the UI)
+        const result = await Comparison.getChallengeSleepData(challengeId);
+        sleepData = result.sleepData;
 
-          const [syncRes, initialData] = await Promise.all([syncWithTimeout, dataFetch]);
-          syncResult = syncRes;
-
-          if (syncResult?.count > 0) {
-            if (typeof Cache !== 'undefined') Cache.clear('comparison_' + challengeId);
-            const refreshed = await Comparison.getChallengeSleepData(challengeId);
-            sleepData = refreshed.sleepData;
-          } else {
-            sleepData = initialData.sleepData;
-          }
-
-          if (typeof Cache !== 'undefined' && typeof Cache.markSyncedToday === 'function') {
-            Cache.markSyncedToday();
-          }
-        } else {
-          // NO SYNC PATH: Just fetch data directly
-          const result = await Comparison.getChallengeSleepData(challengeId);
-          sleepData = result.sleepData;
-        }
-
-        // Await profile (started in parallel above)
         const profile = await profilePromise;
         hasOuraToken = !!profile?.oura_token;
 
-        // Cache everything needed for the fast path
+        // Cache for next visit
         if (typeof Cache !== 'undefined') {
-          Cache.set(cacheKey, { sleepData, syncResult, currentUser, challenge, hasOuraToken });
+          Cache.set(cacheKey, { sleepData, syncResult: null, currentUser, challenge, hasOuraToken });
         }
       }
 
@@ -1415,6 +1417,13 @@ const Challenges = {
         this.renderMainChart(myData, challenge.start_date, 'score');
       }
 
+      // Background sync: run after rendering (never blocks the UI)
+      if (needsSync && hasOuraToken) {
+        this._backgroundSyncDetail(challengeId, cacheKey).catch(e =>
+          console.warn('[Challenges] Background sync failed:', e)
+        );
+      }
+
     } catch (error) {
       console.error('Error rendering challenge detail:', error);
       container.innerHTML = `
@@ -1422,6 +1431,35 @@ const Challenges = {
           <p class="text-red-400">Failed to load challenge. Please try again.</p>
         </div>
       `;
+    }
+  },
+
+  // Background sync for challenge detail — syncs Oura data then re-renders if new data arrived
+  async _backgroundSyncDetail(challengeId, cacheKey) {
+    const syncResult = await Promise.race([
+      SleepSync.syncNow({ silent: true, skipRefresh: true }),
+      new Promise(resolve => setTimeout(() => resolve({ success: false, count: 0 }), 8000))
+    ]);
+
+    if (syncResult?.count > 0) {
+      // New data arrived — refresh
+      if (typeof Cache !== 'undefined') Cache.clear('comparison_' + challengeId);
+      const refreshed = await Comparison.getChallengeSleepData(challengeId);
+      const container = document.getElementById('challenge-detail-container');
+      if (container && container.dataset.challengeId === challengeId) {
+        const cachedData = typeof Cache !== 'undefined' ? Cache.get(cacheKey) : null;
+        if (cachedData) {
+          cachedData.sleepData = refreshed.sleepData;
+          cachedData.syncResult = syncResult;
+          if (typeof Cache !== 'undefined') Cache.set(cacheKey, cachedData);
+          // Re-render with fresh data
+          this.renderDetail(challengeId, { skipSync: true });
+        }
+      }
+    }
+
+    if (typeof Cache !== 'undefined' && typeof Cache.markSyncedToday === 'function') {
+      Cache.markSyncedToday();
     }
   },
 
