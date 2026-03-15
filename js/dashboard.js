@@ -25,6 +25,7 @@ const Dashboard = {
     this._habitCheckinPending = null;
     this._habitCheckinLocked = false;
     this._overlayPending = false;  // Reset per render; set true again if overlay triggers
+    this._overlayPendingSet = null;  // Reset so fresh completions are used if overlay re-shows
     // Note: _overlaySkippedToday is NOT reset here — it persists across tab switches
     // Reset AI flags so failures from a previous visit don't block retries
     this._aiFetchFailed = false;
@@ -94,7 +95,7 @@ const Dashboard = {
       Cache.set('dashboard', { profile, activeChallenges, recentSleep, leagueData });
 
       // Check if habit overlay should be shown (before rendering content)
-      if (this._shouldShowOverlay()) {
+      if (this._shouldShowOverlay(recentSleep)) {
         this._overlayPending = true;  // Suppress AI in _renderContent
       }
 
@@ -468,12 +469,14 @@ const Dashboard = {
   // ── Habit overlay methods ──
 
   // Check if the habit overlay should be shown
-  _shouldShowOverlay() {
+  _shouldShowOverlay(recentSleep) {
     if (this._overlaySkippedToday) return false;
     if (!this._habitData) return false;
     const { challenge, habits, firstDay, today } = this._habitData;
     if (!challenge || !habits || habits.length === 0) return false;
     if (firstDay) return false;
+    // Don't ask about yesterday's habits during bedtime — user is winding down, not reflecting
+    if (this._isInBedtimeWindow(recentSleep)) return false;
     // Already checked in (localStorage or DB)
     if (this._isCheckedIn(challenge.id, today)) return false;
     if (this._habitData.completions?.length > 0) return false;
