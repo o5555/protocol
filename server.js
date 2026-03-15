@@ -40,11 +40,21 @@ const MIME_TYPES = {
     '.svg': 'image/svg+xml'
 };
 
-// Parse JSON body from request
+// Parse JSON body from request (1MB limit to prevent memory abuse)
+const MAX_BODY_SIZE = 1024 * 1024;
 function parseBody(req) {
     return new Promise((resolve, reject) => {
         let body = '';
-        req.on('data', chunk => body += chunk);
+        let size = 0;
+        req.on('data', chunk => {
+            size += chunk.length;
+            if (size > MAX_BODY_SIZE) {
+                req.destroy();
+                reject(new Error('Request body too large'));
+                return;
+            }
+            body += chunk;
+        });
         req.on('end', () => {
             try {
                 resolve(body ? JSON.parse(body) : {});
@@ -56,11 +66,22 @@ function parseBody(req) {
     });
 }
 
+// HTML-escape for safe embedding in Telegram messages
+function escapeHtmlServer(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 const server = http.createServer(async (req, res) => {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    // Security headers
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
 
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
@@ -430,13 +451,13 @@ const server = http.createServer(async (req, res) => {
                 const text = [
                     '\u{1F41B} <b>Bug Report</b>',
                     '',
-                    `<b>From:</b> ${userEmail || 'Unknown'}`,
-                    `<b>Screen:</b> ${screen || 'Unknown'}`,
+                    `<b>From:</b> ${escapeHtmlServer(userEmail || 'Unknown')}`,
+                    `<b>Screen:</b> ${escapeHtmlServer(screen || 'Unknown')}`,
                     '',
-                    message,
+                    escapeHtmlServer(message),
                     '',
-                    deviceInfo ? `<i>${deviceInfo.browser || ''} \u{2022} ${deviceInfo.screenSize || ''}</i>` : '',
-                    errorLog ? `\n<pre>${errorLog.slice(0, 500)}</pre>` : ''
+                    deviceInfo ? `<i>${escapeHtmlServer(deviceInfo.browser || '')} \u{2022} ${escapeHtmlServer(deviceInfo.screenSize || '')}</i>` : '',
+                    errorLog ? `\n<pre>${escapeHtmlServer(errorLog.slice(0, 500))}</pre>` : ''
                 ].filter(Boolean).join('\n');
 
                 const payload = JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' });

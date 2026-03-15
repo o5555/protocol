@@ -7,6 +7,9 @@ const Challenges = {
   // Generation counter for stale-while-revalidate in renderList
   _listGeneration: 0,
 
+  // Generation counter for challenge detail to prevent stale renders
+  _detailGeneration: 0,
+
   // Skip auto-redirect to detail when user clicks Back from challenge-detail
   _skipSmartRedirect: false,
 
@@ -382,6 +385,8 @@ const Challenges = {
       if (typeof Cache !== 'undefined') {
         Cache.clear('dashboard');
         Cache.clear('challenges_list');
+        this._myChallengesPromise = null;
+        this._myChallengesTimestamp = 0;
         Cache.clear('challenge_detail_' + challengeId);
         Cache.clear('comparison_' + challengeId);
       }
@@ -420,6 +425,8 @@ const Challenges = {
       if (typeof Cache !== 'undefined') {
         Cache.clear('dashboard');
         Cache.clear('challenges_list');
+        this._myChallengesPromise = null;
+        this._myChallengesTimestamp = 0;
         Cache.clear('challenge_detail_' + challengeId);
         Cache.clear('comparison_' + challengeId);
       }
@@ -496,6 +503,8 @@ const Challenges = {
       if (typeof Cache !== 'undefined') {
         Cache.clear('dashboard');
         Cache.clear('challenges_list');
+        this._myChallengesPromise = null;
+        this._myChallengesTimestamp = 0;
         Cache.clear('challenge_detail_' + challengeId);
         Cache.clear('comparison_' + challengeId);
       }
@@ -699,8 +708,8 @@ const Challenges = {
     if (!habits || habits.length === 0) return '';
 
     return `
-      <div class="mt-6 mb-4">
-        <div class="text-xs text-oura-muted uppercase tracking-widest mb-3">Protocol Habits</div>
+      <div class="mt-4 mb-4">
+        <div class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-3">Protocol Habits</div>
         <div class="space-y-2">
           ${habits.map(habit => `
             <div class="rounded-xl px-4 py-3 bg-oura-card border border-oura-border/30">
@@ -721,8 +730,8 @@ const Challenges = {
     if (others.length === 0) return '';
 
     return `
-      <div class="mt-6 mb-4">
-        <div class="text-xs text-oura-muted uppercase tracking-widest mb-3">Participants</div>
+      <div class="mt-4 mb-4">
+        <div class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-3">Participants</div>
         <div class="space-y-2">
           ${others.map(p => {
             const name = p.user?.display_name || p.user?.email || 'Unknown';
@@ -933,10 +942,10 @@ const Challenges = {
 
       <!-- Invitations -->
       ${invitations.length > 0 ? `
-        <div class="rounded-2xl p-5 mb-6 bg-red-500/10 border border-red-500/30">
+        <div class="rounded-2xl p-5 mb-6 bg-amber-500/10 border border-amber-500/20">
           <div class="flex items-center gap-2 mb-4">
-            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
-            <h3 class="text-base font-semibold text-red-400">${invitations.length === 1 ? 'You have an invitation!' : `You have ${invitations.length} invitations!`}</h3>
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+            <h3 class="text-base font-semibold text-amber-400">${invitations.length === 1 ? 'You have an invitation!' : `You have ${invitations.length} invitations!`}</h3>
           </div>
           <div class="space-y-3">
             ${invitations.map(inv => `
@@ -1019,6 +1028,8 @@ const Challenges = {
     const container = document.getElementById('challenge-detail-container');
     if (!container) return;
 
+    const generation = ++this._detailGeneration;
+
     try {
       const now = new Date();
       const today = this.toLocalDateStr(now);
@@ -1031,11 +1042,11 @@ const Challenges = {
       const needsSync = !skipSync && typeof SleepSync !== 'undefined' && !syncedToday;
 
       let syncResult = null;
-      var sleepData;
-      var currentUser;
-      var challenge;
+      let sleepData;
+      let currentUser;
+      let challenge;
 
-      var hasOuraToken = false;
+      let hasOuraToken = false;
 
       if (cachedData) {
         // FAST PATH: Show cached data instantly — always, even if sync is needed
@@ -1082,10 +1093,13 @@ const Challenges = {
           this.getChallenge(challengeId)
         ]);
 
+        if (generation !== this._detailGeneration) return;
+
         const profilePromise = Auth.getProfile().catch(() => null);
 
         // Fetch data (no sync blocking the UI)
         const result = await Comparison.getChallengeSleepData(challengeId);
+        if (generation !== this._detailGeneration) return;
         sleepData = result.sleepData;
 
         const profile = await profilePromise;
@@ -1235,17 +1249,22 @@ const Challenges = {
         }
 
         container.innerHTML = `
-          <!-- Navigation -->
+          <!-- Header: Back + Name + Settings -->
           <div class="flex items-center justify-between mb-4">
-            <button onclick="Challenges._skipSmartRedirect=true; App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
-              &larr; Back
+            <button onclick="Challenges._skipSmartRedirect=true; App.navigateTo('challenges')" class="min-h-[44px] min-w-[44px] inline-flex items-center text-oura-accent hover:text-white">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
             </button>
-            <span class="text-base font-semibold">${escapeHtml(challenge.name)}</span>
-            <span class="w-[50px]"></span>
+            <span class="text-base font-semibold truncate mx-2">${escapeHtml(challenge.name)}</span>
+            <button onclick="Challenges.showSettingsMenu('${challengeId}', ${challenge.creator.id === currentUser.id}, ${challenge.dayNumber}, ${!!challenge.fresh_start_used})"
+              class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white transition-colors">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM18.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+              </svg>
+            </button>
           </div>
 
           <!-- Challenge status badge -->
-          <div class="flex justify-center mb-5">
+          <div class="flex justify-center mb-4">
             ${isCompleted ? `
             <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border border-purple-500/30 text-purple-400">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1289,7 +1308,7 @@ const Challenges = {
 
           <!-- Baseline Section -->
           ${myBaseline.score ? `
-            <div class="text-xs text-oura-muted uppercase tracking-widest text-center mb-3">This Is Your Baseline</div>
+            <div class="text-sm font-semibold text-oura-muted uppercase tracking-wider text-center mb-3">This Is Your Baseline</div>
             <div id="baseline-hero-card" class="rounded-2xl p-5 mb-4 text-center bg-oura-card border border-oura-border/30">
               <div id="baseline-hero-value" class="text-4xl font-bold mb-1 text-green-400">${Math.round(myBaseline.score)}</div>
               <div id="baseline-hero-label" class="text-sm text-oura-muted">30-day avg sleep score</div>
@@ -1297,18 +1316,16 @@ const Challenges = {
             <div class="text-xs text-center leading-relaxed mb-5 text-oura-muted">This is where you're starting from. Let's see how much you can improve over the next 30 days.</div>
 
             <!-- Metric Toggle + Baseline Chart -->
-            <div class="mb-6">
-              <div class="flex items-center justify-center mb-3">
-                <div class="flex gap-1.5 sm:gap-2 w-full" id="metric-toggle">
-                  <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[44px] bg-oura-subtle text-white" data-metric="score">SLEEP</button>
-                  <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="avghr">AVG HR</button>
-                  <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="hr">LOW HR</button>
-                  <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="deep">DEEP</button>
-                  <button onclick="Challenges.switchMetric('${challengeId}', 'presleep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="presleep">PRE HR</button>
-                </div>
+            <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-4">
+              <div class="flex gap-1.5 w-full mb-3" id="metric-toggle">
+                <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 py-2 text-xs rounded-lg text-center min-h-[36px] bg-oura-subtle text-white" data-metric="score">Sleep</button>
+                <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 py-2 text-xs rounded-lg text-center text-oura-muted hover:bg-oura-subtle min-h-[36px]" data-metric="avghr">Avg HR</button>
+                <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 py-2 text-xs rounded-lg text-center text-oura-muted hover:bg-oura-subtle min-h-[36px]" data-metric="hr">Low HR</button>
+                <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 py-2 text-xs rounded-lg text-center text-oura-muted hover:bg-oura-subtle min-h-[36px]" data-metric="deep">Deep</button>
+                <button onclick="Challenges.switchMetric('${challengeId}', 'presleep')" class="metric-btn flex-1 px-2 py-2 text-xs rounded-lg text-center text-oura-muted hover:bg-oura-subtle min-h-[36px]" data-metric="presleep">Pre HR</button>
               </div>
-              <div class="rounded-2xl p-4 cursor-pointer bg-oura-bg" onclick="Challenges.showMetricDetailModal('${challengeId}')">
-                <div id="trend-chart-container" class="h-48">
+              <div class="rounded-xl bg-oura-bg p-3 cursor-pointer" onclick="Challenges.showMetricDetailModal('${challengeId}')">
+                <div id="trend-chart-container" class="h-44">
                   <canvas id="main-trend-chart"></canvas>
                 </div>
               </div>
@@ -1330,36 +1347,30 @@ const Challenges = {
           ` : ''}
 
           ${!isCompleted ? `
-          <!-- Invite Friends -->
           <button onclick="Challenges.showInviteFriendsModal('${challengeId}')"
-            class="w-full py-3 min-h-[44px] ${!hasOuraToken ? 'mt-3 ' : ''}bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
+            class="w-full py-3 min-h-[44px] ${!hasOuraToken ? 'mt-3 ' : ''}bg-oura-subtle text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-border transition-colors">
             + Invite Friends
           </button>
           ` : ''}
-
-          <!-- Settings cogwheel -->
-          <div class="flex justify-center mt-6">
-            <button onclick="Challenges.showSettingsMenu('${challengeId}', ${challenge.creator.id === currentUser.id}, ${challenge.dayNumber}, ${!!challenge.fresh_start_used})"
-              class="p-3 text-oura-muted hover:text-white transition-colors">
-              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-          </div>
         `;
       } else {
       container.innerHTML = `
-        <!-- Navigation - minimal -->
-        <div class="mb-4">
-          <button onclick="Challenges._skipSmartRedirect=true; App.navigateTo('challenges')" class="min-h-[44px] inline-flex items-center text-oura-accent hover:text-white">
-            &larr; Back
+        <!-- Header: Back + Name + Settings -->
+        <div class="flex items-center justify-between mb-4">
+          <button onclick="Challenges._skipSmartRedirect=true; App.navigateTo('challenges')" class="min-h-[44px] min-w-[44px] inline-flex items-center text-oura-accent hover:text-white">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+          </button>
+          <span class="text-base font-semibold truncate mx-2">${escapeHtml(challenge.name)}</span>
+          <button onclick="Challenges.showSettingsMenu('${challengeId}', ${challenge.creator.id === currentUser.id}, ${challenge.dayNumber}, ${!!challenge.fresh_start_used})"
+            class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-white transition-colors">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM18.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+            </svg>
           </button>
         </div>
 
         ${isCompleted ? `
-        <!-- Challenge Complete banner -->
-        <div class="flex justify-center mb-5">
+        <div class="flex justify-center mb-4">
           <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border border-purple-500/30 text-purple-400">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1371,87 +1382,80 @@ const Challenges = {
 
         ${freshStartBanner}
 
-        <!-- Hero Stat -->
-        <div id="hero-stat-container" class="text-center py-6 mb-4">
-          <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">Your Sleep Score</div>
-          ${improvementPct !== null ? `
-            <div class="text-6xl font-bold leading-none ${improvementDirection === 'up' ? 'text-green-400' : improvementDirection === 'down' ? 'text-red-400' : 'text-white'}">
-              ${improvementPct > 0 ? '+' : ''}${improvementPct}%
-            </div>
-            <div class="text-sm text-oura-muted mt-2">vs. your baseline</div>
-            <div class="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-bold ${improvementDirection === 'up' ? 'bg-green-400/15 text-green-400' : improvementDirection === 'down' ? 'bg-red-400/15 text-red-400' : 'bg-oura-subtle text-oura-muted'}">
-              ${heroIcon} ${improvementDirection === 'up' ? 'TRENDING UP' : improvementDirection === 'down' ? 'NEEDS ATTENTION' : 'STEADY'}
-            </div>
-          ` : `
-            <div class="text-4xl font-bold text-oura-muted leading-none">--</div>
-            <div class="text-sm text-oura-muted mt-2">Waiting for sleep data</div>
-          `}
+        <!-- Progress -->
+        <div class="mb-5">
+          <p class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.name)}</p>
+          ${isCompleted
+            ? `<p class="text-sm font-medium text-purple-400 mt-1">30 days completed</p>`
+            : `<div class="flex items-center gap-3 mt-1.5">
+                <span class="text-sm font-medium text-white">Day ${challenge.dayNumber}/30</span>
+                <div class="flex-1 bg-oura-border rounded-full h-1.5 max-w-[140px]">
+                  <div class="bg-oura-accent h-1.5 rounded-full" style="width: ${Math.min(100, Math.round((challenge.dayNumber / 30) * 100))}%"></div>
+                </div>
+                <span class="text-xs text-oura-muted">${challenge.daysRemaining}d left</span>
+              </div>`
+          }
         </div>
 
-        <!-- Stats Row -->
-        <div id="stats-row-container" class="flex justify-around mb-5">
-          <div class="text-center">
-            <div class="text-3xl font-bold text-oura-muted">${myBaseline.score ? Math.round(myBaseline.score) : '--'}</div>
-            <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
-          </div>
-          <div class="text-center">
-            <div class="text-3xl font-bold text-green-400">${myCurrent.score ? Math.round(myCurrent.score) : '--'}</div>
-            <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
-          </div>
-        </div>
-
-        <!-- Metric Toggle + Chart -->
-        <div class="mb-6">
-          <div class="flex items-center justify-center mb-3">
-            <div class="flex gap-1.5 sm:gap-2 w-full" id="metric-toggle">
-              <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center min-h-[44px] bg-oura-subtle text-white" data-metric="score">SLEEP</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="avghr">AVG HR</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="hr">LOW HR</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="deep">DEEP</button>
-              <button onclick="Challenges.switchMetric('${challengeId}', 'presleep')" class="metric-btn flex-1 px-2 sm:px-4 py-2 text-[11px] sm:text-xs rounded-md text-center text-oura-muted hover:bg-oura-card min-h-[44px]" data-metric="presleep">PRE HR</button>
+        <!-- Your Progress -->
+        <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-4">
+          <div id="hero-stat-container" class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-3">Your Sleep Score</div>
+          <div id="stats-row-container" class="flex justify-around mb-4">
+            <div class="text-center">
+              <div class="text-2xl font-bold text-oura-muted">${myBaseline.score ? Math.round(myBaseline.score) : '--'}</div>
+              <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl font-bold text-green-400">${myCurrent.score ? Math.round(myCurrent.score) : '--'}</div>
+              <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl font-bold ${improvementDirection === 'up' ? 'text-green-400' : improvementDirection === 'down' ? 'text-red-400' : 'text-oura-muted'}">
+                ${improvementPct !== null ? (improvementPct > 0 ? '+' : '') + improvementPct + '%' : '--'}
+              </div>
+              <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Change</div>
             </div>
           </div>
-          <div class="rounded-2xl p-4 cursor-pointer bg-oura-bg" onclick="Challenges.showMetricDetailModal('${challengeId}')">
-            <div id="trend-chart-container" class="h-48">
+          <div class="flex gap-1.5 w-full mb-3" id="metric-toggle">
+            <button onclick="Challenges.switchMetric('${challengeId}', 'score')" class="metric-btn active flex-1 px-2 py-2 text-xs rounded-lg text-center min-h-[36px] bg-oura-subtle text-white" data-metric="score">Sleep</button>
+            <button onclick="Challenges.switchMetric('${challengeId}', 'avghr')" class="metric-btn flex-1 px-2 py-2 text-xs rounded-lg text-center text-oura-muted hover:bg-oura-subtle min-h-[36px]" data-metric="avghr">Avg HR</button>
+            <button onclick="Challenges.switchMetric('${challengeId}', 'hr')" class="metric-btn flex-1 px-2 py-2 text-xs rounded-lg text-center text-oura-muted hover:bg-oura-subtle min-h-[36px]" data-metric="hr">Low HR</button>
+            <button onclick="Challenges.switchMetric('${challengeId}', 'deep')" class="metric-btn flex-1 px-2 py-2 text-xs rounded-lg text-center text-oura-muted hover:bg-oura-subtle min-h-[36px]" data-metric="deep">Deep</button>
+            <button onclick="Challenges.switchMetric('${challengeId}', 'presleep')" class="metric-btn flex-1 px-2 py-2 text-xs rounded-lg text-center text-oura-muted hover:bg-oura-subtle min-h-[36px]" data-metric="presleep">Pre HR</button>
+          </div>
+          <div class="rounded-xl bg-oura-bg p-3 cursor-pointer" onclick="Challenges.showMetricDetailModal('${challengeId}')">
+            <div id="trend-chart-container" class="h-44">
               <canvas id="main-trend-chart"></canvas>
             </div>
           </div>
         </div>
 
-        <!-- Leaderboard -->
-        <div class="mb-6" id="leaderboard-container">
-          <div class="text-xs text-oura-muted uppercase tracking-wider mb-3">${isCompleted ? 'FINAL STANDINGS' : 'CHALLENGE STANDINGS'}</div>
+        <!-- Challenge Standings -->
+        <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30 mb-4" id="leaderboard-container">
+          <div class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-4">${isCompleted ? 'Final Standings' : 'Challenge Standings'}</div>
           <div class="space-y-2">
             ${leaderboard.length > 0 ? leaderboard.map(p => {
               const name = p.user.display_name || p.user.email.split('@')[0];
               const initial = escapeHtml(name.charAt(0).toUpperCase());
               return `
-                <div class="flex items-center p-3.5 rounded-xl ${p.isMe ? 'bg-oura-subtle border border-indigo-500/20' : 'bg-oura-card'}">
-                  <span class="text-lg mr-3 w-7">${p.rank}</span>
-                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm mr-3 bg-oura-subtle">${p.isMe ? '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>' : initial}</div>
+                <div class="flex items-center p-3 rounded-xl ${p.isMe ? 'bg-oura-accent/5 border border-oura-accent/20' : 'bg-oura-subtle'}">
+                  <span class="text-sm font-bold text-oura-muted w-6 mr-2">${p.rank}</span>
+                  <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold mr-3 ${p.isMe ? 'bg-oura-accent/15 text-oura-accent' : 'bg-oura-card text-white'}">${p.isMe ? '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>' : initial}</div>
                   <div class="flex-1">
-                    <div class="text-sm font-medium">${p.isMe ? 'You' : escapeHtml(name)}</div>
+                    <div class="text-sm font-medium ${p.isMe ? 'text-oura-accent' : 'text-white'}">${p.isMe ? 'You' : escapeHtml(name)}</div>
                     <div class="text-xs text-oura-muted">${Math.round(p.baselineScore)} → ${Math.round(p.currentScore)}</div>
                   </div>
-                  <span class="text-lg font-semibold ${p.improvementPct >= 0 ? 'text-green-400' : 'text-red-400'}">
+                  <span class="text-base font-bold ${p.improvementPct >= 0 ? 'text-green-400' : 'text-red-400'}">
                     ${p.improvementPct > 0 ? '+' : ''}${p.improvementPct}%
                   </span>
                 </div>
               `;
             }).join('') : `
-              <div class="rounded-xl p-4 text-center bg-oura-card">
+              <div class="rounded-xl p-4 text-center bg-oura-subtle">
                 <p class="text-oura-muted text-sm">No challenge data yet</p>
               </div>
             `}
           </div>
-        </div>
-
-        <!-- Day Badge - Protocol info -->
-        <div class="text-center py-3 px-4 bg-oura-card rounded-lg mb-4">
-          ${isCompleted
-            ? `<span class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.name)} · <strong class="text-white">Completed</strong></span>`
-            : `<span class="text-sm text-oura-muted">${escapeHtml(challenge.protocol.name)} · Day <strong class="text-white">${challenge.dayNumber}</strong> of 30</span>`
-          }
         </div>
 
         <!-- Protocol Habits -->
@@ -1461,23 +1465,11 @@ const Challenges = {
         ${this.renderParticipantsSection(challenge.participants, currentUser.id)}
 
         ${!isCompleted ? `
-        <!-- Invite Friends -->
         <button onclick="Challenges.showInviteFriendsModal('${challengeId}')"
-          class="w-full py-3 min-h-[44px] bg-oura-card text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-subtle transition-colors">
+          class="w-full py-3 min-h-[44px] bg-oura-subtle text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-border transition-colors">
           + Invite Friends
         </button>
         ` : ''}
-
-        <!-- Settings cogwheel -->
-        <div class="flex justify-center mt-6">
-          <button onclick="Challenges.showSettingsMenu('${challengeId}', ${challenge.creator.id === currentUser.id}, ${challenge.dayNumber}, ${!!challenge.fresh_start_used})"
-            class="p-3 text-oura-muted hover:text-white transition-colors">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
-        </div>
       `;
       }
 
@@ -1544,7 +1536,8 @@ const Challenges = {
       score: 'sleep_score',
       hr: 'pre_sleep_hr',
       avghr: 'avg_hr',
-      deep: 'deep_sleep_minutes'
+      deep: 'deep_sleep_minutes',
+      presleep: 'hr_before_sleep'
     };
     const field = fieldMap[metric] || 'sleep_score';
 
@@ -1757,35 +1750,14 @@ const Challenges = {
     if (!this._currentChallengeData) return;
     const { myData, challenge, improvements } = this._currentChallengeData;
 
-    // Update hero stat
+    // Update hero stat (now just the section header text)
     const heroContainer = document.getElementById('hero-stat-container');
     if (heroContainer && improvements) {
-      const imp = improvements[metric];
       const labels = { score: 'Your Sleep Score', hr: 'Your Lowest HR', avghr: 'Your Avg HR (Sleep)', deep: 'Your Deep Sleep', presleep: 'Your HR Before Sleep' };
-
-      if (imp.pct !== null) {
-        const direction = imp.direction;
-        const heroIcon = direction === 'up' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" /></svg>' : direction === 'down' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" /></svg>' : '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>';
-        heroContainer.innerHTML = `
-          <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">${labels[metric]}</div>
-          <div class="text-6xl font-bold leading-none ${direction === 'up' ? 'text-green-400' : direction === 'down' ? 'text-red-400' : 'text-white'}">
-            ${imp.pct > 0 ? '+' : ''}${imp.pct}%
-          </div>
-          <div class="text-sm text-oura-muted mt-2">vs. your baseline</div>
-          <div class="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-bold ${direction === 'up' ? 'bg-green-400/15 text-green-400' : direction === 'down' ? 'bg-red-400/15 text-red-400' : 'bg-oura-subtle text-oura-muted'}">
-            ${heroIcon} ${direction === 'up' ? 'TRENDING UP' : direction === 'down' ? 'NEEDS ATTENTION' : 'STEADY'}
-          </div>
-        `;
-      } else {
-        heroContainer.innerHTML = `
-          <div class="text-xs text-oura-muted uppercase tracking-wider mb-2">${labels[metric]}</div>
-          <div class="text-4xl font-bold text-oura-muted leading-none">--</div>
-          <div class="text-sm text-oura-muted mt-2">Sync your Oura ring to see progress</div>
-        `;
-      }
+      heroContainer.textContent = labels[metric];
     }
 
-    // Update stats row
+    // Update stats row (baseline / challenge / change)
     const statsRow = document.getElementById('stats-row-container');
     if (statsRow && improvements) {
       const imp = improvements[metric];
@@ -1797,16 +1769,20 @@ const Challenges = {
       const baselineAvg = baselineVals.length > 0 ? Math.round(baselineVals.reduce((a, b) => a + b, 0) / baselineVals.length) : null;
       const challengeAvg = challengeVals.length > 0 ? Math.round(challengeVals.reduce((a, b) => a + b, 0) / challengeVals.length) : null;
 
-      const changeColor = imp.pct !== null ? (imp.direction === 'up' ? '#4ade80' : imp.direction === 'down' ? '#f87171' : '#6b7280') : '#6b7280';
+      const dirClass = imp.pct !== null ? (imp.direction === 'up' ? 'text-green-400' : imp.direction === 'down' ? 'text-red-400' : 'text-oura-muted') : 'text-oura-muted';
 
       statsRow.innerHTML = `
         <div class="text-center">
-          <div class="text-3xl font-bold text-oura-muted">${baselineAvg ?? '--'}</div>
+          <div class="text-2xl font-bold text-oura-muted">${baselineAvg ?? '--'}</div>
           <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Baseline</div>
         </div>
         <div class="text-center">
-          <div class="text-3xl font-bold text-green-400">${challengeAvg ?? '--'}</div>
+          <div class="text-2xl font-bold text-green-400">${challengeAvg ?? '--'}</div>
           <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Challenge</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold ${dirClass}">${imp.pct !== null ? (imp.pct > 0 ? '+' : '') + imp.pct + '%' : '--'}</div>
+          <div class="text-xs text-oura-muted uppercase tracking-wider mt-1">Change</div>
         </div>
       `;
     }
@@ -1857,7 +1833,7 @@ const Challenges = {
 
       const isCompleted = !challenge.isActive && challenge.daysRemaining === 0;
       leaderboardContainer.innerHTML = `
-        <div class="text-xs text-oura-muted uppercase tracking-wider mb-3">${isCompleted ? 'FINAL STANDINGS' : 'CHALLENGE STANDINGS'}</div>
+        <div class="text-sm font-semibold text-oura-muted uppercase tracking-wider mb-4">${isCompleted ? 'Final Standings' : 'Challenge Standings'}</div>
         <div class="space-y-2">
           ${leaderboard.length > 0 ? leaderboard.map(p => {
             const name = p.user.display_name || p.user.email.split('@')[0];
@@ -1865,20 +1841,20 @@ const Challenges = {
             const displayPct = lowerIsBetter ? Math.abs(p.improvementPct) : p.improvementPct;
             const pctPrefix = lowerIsBetter ? (p.improvementPct < 0 ? '-' : p.improvementPct > 0 ? '+' : '') : (p.improvementPct > 0 ? '+' : '');
             return `
-              <div class="flex items-center p-3.5 rounded-xl ${p.isMe ? 'bg-oura-subtle border border-indigo-500/20' : 'bg-oura-card'}">
-                <span class="text-lg mr-3 w-7">${p.rank}</span>
-                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm mr-3 bg-oura-subtle">${p.isMe ? '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>' : initial}</div>
+              <div class="flex items-center p-3 rounded-xl ${p.isMe ? 'bg-oura-accent/5 border border-oura-accent/20' : 'bg-oura-subtle'}">
+                <span class="text-sm font-bold text-oura-muted w-6 mr-2">${p.rank}</span>
+                <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold mr-3 ${p.isMe ? 'bg-oura-accent/15 text-oura-accent' : 'bg-oura-card text-white'}">${p.isMe ? '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>' : initial}</div>
                 <div class="flex-1">
-                  <div class="text-sm font-medium">${p.isMe ? 'You' : escapeHtml(name)}</div>
+                  <div class="text-sm font-medium ${p.isMe ? 'text-oura-accent' : 'text-white'}">${p.isMe ? 'You' : escapeHtml(name)}</div>
                   <div class="text-xs text-oura-muted">${p.baselineVal} → ${p.currentVal}</div>
                 </div>
-                <span class="text-lg font-semibold ${p.direction === 'up' ? 'text-green-400' : p.direction === 'down' ? 'text-red-400' : 'text-oura-muted'}">
+                <span class="text-base font-bold ${p.direction === 'up' ? 'text-green-400' : p.direction === 'down' ? 'text-red-400' : 'text-oura-muted'}">
                   ${pctPrefix}${displayPct}%
                 </span>
               </div>
             `;
           }).join('') : `
-            <div class="rounded-xl p-4 text-center bg-oura-card">
+            <div class="rounded-xl p-4 text-center bg-oura-subtle">
               <p class="text-oura-muted text-sm">No data for this metric</p>
             </div>
           `}
@@ -1890,12 +1866,12 @@ const Challenges = {
     const baselineHeroValue = document.getElementById('baseline-hero-value');
     const baselineHeroLabel = document.getElementById('baseline-hero-label');
     if (baselineHeroValue && baselineHeroLabel) {
-      const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes' };
+      const fieldMap = { score: 'sleep_score', hr: 'pre_sleep_hr', avghr: 'avg_hr', deep: 'deep_sleep_minutes', presleep: 'hr_before_sleep' };
       const field = fieldMap[metric];
       const baselineVals = myData.baselineData.filter(d => d[field]).map(d => d[field]);
       const baselineAvg = baselineVals.length > 0 ? Math.round(baselineVals.reduce((a, b) => a + b, 0) / baselineVals.length) : null;
-      const labels = { score: '30-day avg sleep score', hr: '30-day avg lowest HR', avghr: '30-day avg HR (sleep)', deep: '30-day avg deep sleep' };
-      const units = { score: '', hr: ' bpm', avghr: ' bpm', deep: ' min' };
+      const labels = { score: '30-day avg sleep score', hr: '30-day avg lowest HR', avghr: '30-day avg HR (sleep)', deep: '30-day avg deep sleep', presleep: '30-day avg pre-sleep HR' };
+      const units = { score: '', hr: ' bpm', avghr: ' bpm', deep: ' min', presleep: ' bpm' };
       baselineHeroValue.textContent = baselineAvg !== null ? baselineAvg + (units[metric] || '') : '--';
       baselineHeroLabel.textContent = labels[metric] || '';
     }

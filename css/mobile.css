@@ -38,13 +38,6 @@ button, a, input, select, textarea, label {
   padding-top: var(--sat);
 }
 
-/* Standalone PWA: extra top padding when browser chrome is hidden */
-@media all and (display-mode: standalone) {
-  .app-header {
-    padding-top: var(--sat);
-  }
-}
-
 /* Onboarding section: safe-area padding */
 #onboarding-section {
   padding-top: var(--sat);
@@ -177,8 +170,8 @@ button, a, input, select, textarea, label {
   opacity: 0;
   pointer-events: none;
   will-change: transform, opacity;
-  /* Offset upward so it's hidden above the viewport */
-  margin-top: -48px;
+  /* Offset upward so it's hidden above the viewport (accounts for safe area) */
+  margin-top: calc(-48px - var(--sat));
   padding-top: var(--sat);
 }
 

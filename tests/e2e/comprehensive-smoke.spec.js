@@ -608,11 +608,11 @@ test.describe('Challenges page (mocked)', () => {
   });
 
   test('"Start New Challenge" button exists', async ({ page }) => {
-    // Wait for the challenges container to finish rendering
+    // Wait for the challenges container to finish rendering (has meaningful content)
     await page.waitForFunction(
       () => {
         const c = document.getElementById('challenges-container');
-        return c && !c.textContent.includes('Loading...');
+        return c && c.textContent.trim().length > 0 && !c.textContent.includes('Loading...');
       },
       { timeout: 10000 }
     ).catch(() => {});

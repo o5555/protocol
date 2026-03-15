@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pc-v55';
+const CACHE_NAME = 'pc-v58';
 
 const APP_SHELL = [
   '/',
@@ -52,16 +52,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first for external CDN requests (don't cache)
+  // Network-first for external CDN requests, cache successful responses for offline
   if (url.origin !== self.location.origin) {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(event.request).then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => caches.match(event.request))
     );
     return;
   }
 
-  // Network-first for JS and HTML (always get latest code)
-  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.html') || url.pathname === '/') {
+  // Network-first for JS, HTML, and CSS (always get latest code)
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.html') || url.pathname.endsWith('.css') || url.pathname === '/') {
     event.respondWith(
       fetch(event.request).then((response) => {
         if (response.ok) {
@@ -77,7 +83,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for static assets (icons, CSS, manifest)
+  // Cache-first for static assets (icons, manifest)
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) {

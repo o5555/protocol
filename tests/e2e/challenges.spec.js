@@ -229,14 +229,14 @@ test.describe('Challenges Page — Behavioral Tests', () => {
       { timeout: 10000 }
     );
 
-    // Verify Back button is present and clickable
-    const backBtn = container.locator('button:has-text("Back")');
+    // Verify Back button (chevron icon) is present and clickable
+    const backBtn = container.locator('button').first();
     await expect(backBtn).toBeVisible();
 
     // Verify some challenge content rendered (hero stat, protocol info, or leaderboard)
     const html = await container.innerHTML();
     const hasContent = html.includes('Test Challenge') || html.includes('Sleep Protocol') ||
-                       html.includes('hero-stat') || html.includes('CHALLENGE STANDINGS') ||
+                       html.includes('hero-stat') || html.includes('Challenge Standings') ||
                        html.includes("You're In");
     expect(hasContent).toBe(true);
 

@@ -455,7 +455,8 @@ test.describe('Challenge Detail Interactions', () => {
       return el && el.innerHTML.length > 100 && !el.innerHTML.includes('Loading...');
     }, { timeout: 10000 });
 
-    const backBtn = page.locator('#challenge-detail-container button:has-text("Back")');
+    // Back button is now an SVG chevron icon (first button in header row)
+    const backBtn = page.locator('#challenge-detail-container button').first();
     await expect(backBtn).toBeVisible();
     await expect(backBtn).toBeEnabled();
 
@@ -474,9 +475,8 @@ test.describe('Challenge Detail Interactions', () => {
       return el && el.innerHTML.length > 100 && !el.innerHTML.includes('Loading...');
     }, { timeout: 10000 });
 
-    // Verify Back button navigates to challenges (which may auto-redirect back to detail
-    // if there's only one active challenge via renderSmartView)
-    const backBtn = page.locator('#challenge-detail-container button:has-text("Back")').first();
+    // Back button is now an SVG chevron icon (first button in header row)
+    const backBtn = page.locator('#challenge-detail-container button').first();
     await expect(backBtn).toBeVisible({ timeout: 5000 });
     // Verify the back button's onclick routes to 'challenges', not 'protocols'
     const onclick = await backBtn.getAttribute('onclick');

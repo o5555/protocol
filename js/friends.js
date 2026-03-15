@@ -415,7 +415,7 @@ const Friends = {
                   <p class="text-xs text-oura-muted">Auto-connects when they sign up</p>
                 </div>
                 <button onclick="Friends.handleCancelInvite('${inv.id}')"
-                  class="text-sm text-oura-muted hover:text-red-400">
+                  class="text-sm text-oura-muted hover:text-red-400 min-h-[44px] min-w-[44px] flex items-center justify-center">
                   Cancel
                 </button>
               </div>
@@ -436,7 +436,7 @@ const Friends = {
                   <p class="text-sm text-oura-muted">${escapeHtml(friend.email)}</p>
                 </div>
                 <button onclick="Friends.handleRemove('${friend.friendshipId}')"
-                  class="text-sm text-oura-muted hover:text-red-400">
+                  class="text-sm text-oura-muted hover:text-red-400 min-h-[44px] min-w-[44px] flex items-center justify-center">
                   Remove
                 </button>
               </div>

@@ -36,17 +36,17 @@ const PushNotifications = {
                     <p class="text-sm text-white font-medium leading-tight">Enable notifications</p>
                     <p class="text-xs text-oura-muted mt-0.5 leading-tight">Know when your leaderboard is ready</p>
                 </div>
-                <button id="push-dismiss-btn" class="text-oura-muted p-1 flex-shrink-0">
+                <button id="push-dismiss-btn" class="text-oura-muted p-2 min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                 </button>
             </div>
             <div class="px-4 pb-3 flex gap-2">
-                <button id="push-enable-btn" class="px-4 py-1.5 bg-oura-accent text-black text-xs font-semibold rounded-full">
+                <button id="push-enable-btn" class="px-4 py-2.5 min-h-[44px] bg-oura-accent text-black text-xs font-semibold rounded-full">
                     Allow
                 </button>
-                <button id="push-dismiss-btn-2" class="px-4 py-1.5 bg-white/10 text-white/70 text-xs font-medium rounded-full">
+                <button id="push-dismiss-btn-2" class="px-4 py-2.5 min-h-[44px] bg-white/10 text-white/70 text-xs font-medium rounded-full">
                     Not now
                 </button>
             </div>
@@ -138,3 +138,5 @@ const PushNotifications = {
         return outputArray;
     }
 };
+
+window.PushNotifications = PushNotifications;

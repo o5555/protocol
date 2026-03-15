@@ -5,3 +5,5 @@ const DateUtils = {
       String(d.getDate()).padStart(2, '0');
   }
 };
+
+window.DateUtils = DateUtils;

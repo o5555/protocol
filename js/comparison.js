@@ -201,7 +201,7 @@ const Comparison = {
             <div class="bg-oura-subtle rounded-xl p-4">
               <div class="flex items-center gap-3 mb-3">
                 <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style="background: ${color}30; color: ${color}">${initial}</div>
-                <span class="font-semibold text-sm">${name}</span>
+                <span class="font-semibold text-sm">${escapeHtml(name)}</span>
               </div>
               <p class="text-oura-muted text-xs">No data yet</p>
             </div>
@@ -223,7 +223,7 @@ const Comparison = {
             <div class="flex items-center gap-3 mb-3">
               <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style="background: ${color}30; color: ${color}">${initial}</div>
               <div class="flex-1 min-w-0">
-                <span class="font-semibold text-sm block truncate">${name}</span>
+                <span class="font-semibold text-sm block truncate">${escapeHtml(name)}</span>
                 ${hasBaseline && hasCurrent ? '<span class="text-[9px] text-oura-muted">vs 30-day baseline</span>' :
                   hasBaseline ? '<span class="text-[9px] text-oura-muted">baseline only</span>' : ''}
               </div>
@@ -299,7 +299,7 @@ const Comparison = {
                   <span class="text-oura-muted">→</span>
                   <span class="text-white text-lg font-bold">${groupCurrent.hours || '--'}</span>
                 </div>
-                <div class="mt-1">${this.formatChange(parseFloat(groupBaseline.hours), parseFloat(groupCurrent.hours), false)}</div>
+                <div class="mt-1">${groupBaseline.hours != null && groupCurrent.hours != null ? this.formatChange(parseFloat(groupBaseline.hours), parseFloat(groupCurrent.hours), false) : ''}</div>
               ` : `
                 <p class="text-white text-lg font-bold">${hasGroupCurrent ? groupCurrent.hours : groupBaseline.hours || '--'}</p>
                 <p class="text-[10px] text-oura-muted">${hasGroupCurrent ? 'current' : 'baseline'}</p>

@@ -55,16 +55,16 @@ const Cache = {
       .forEach(k => localStorage.removeItem(k));
   },
 
-  // Check if Oura sync has happened today
+  // Check if Oura sync has happened today (uses local date to match DateUtils)
   isSyncedToday() {
     const last = localStorage.getItem(this.PREFIX + 'last_sync_date');
-    const today = new Date().toISOString().slice(0, 10);
+    const today = DateUtils.toLocalDateStr(new Date());
     return last === today;
   },
 
   // Mark that sync happened today
   markSyncedToday() {
-    localStorage.setItem(this.PREFIX + 'last_sync_date', new Date().toISOString().slice(0, 10));
+    localStorage.setItem(this.PREFIX + 'last_sync_date', DateUtils.toLocalDateStr(new Date()));
   }
 };
 

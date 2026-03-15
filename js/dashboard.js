@@ -683,6 +683,39 @@ const Dashboard = {
     }
   },
 
+  // Check and show habit overlay on app startup, regardless of which page loaded.
+  // Called from App.init() when the restored page is NOT dashboard (dashboard handles its own overlay).
+  // Also called on visibilitychange resume for non-dashboard pages.
+  async checkOverlayOnStartup() {
+    if (App.currentPage === 'dashboard') return;
+    if (this._overlaySkippedToday) return;
+    if (document.getElementById('habit-overlay-wrapper')) return;
+
+    try {
+      const activeChallenges = await Challenges.getActiveChallenges().catch(() => []);
+      if (activeChallenges.length === 0) return;
+
+      // Use generation guard so if user navigates to dashboard mid-check, we bail out
+      const generation = ++this._renderGeneration;
+
+      // Fetch habit data and recent sleep (for bedtime window check) in parallel
+      const [, recentSleep] = await Promise.all([
+        this._fetchHabitData(activeChallenges, generation),
+        this.getRecentSleepData().catch(() => [])
+      ]);
+
+      // Bail if a dashboard render started while we were fetching
+      if (generation !== this._renderGeneration) return;
+
+      if (this._shouldShowOverlay(recentSleep)) {
+        this._overlayPending = true;
+        this._showOverlay();
+      }
+    } catch (e) {
+      console.warn('[Dashboard] Startup overlay check failed:', e);
+    }
+  },
+
   // Run AI insight rendering after overlay resolves (confirm or skip)
   _triggerAiAfterOverlay(recentSleep, leagueData, activeChallenges) {
     const aiChallengeId = activeChallenges?.[0]?.id || 'personal';

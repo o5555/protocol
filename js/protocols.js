@@ -559,8 +559,8 @@ const Protocols = {
               : this._customProtocolHabits.map((habit, index) => `
                 <div class="flex items-center gap-3 bg-oura-subtle rounded-lg px-3 py-2">
                   <span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-oura-border rounded-full text-xs font-medium">${index + 1}</span>
-                  <span class="flex-1 text-sm">${habit.title}</span>
-                  <button onclick="Protocols.removeHabit(${index})" class="min-h-[32px] min-w-[32px] flex items-center justify-center text-oura-muted hover:text-red-400">
+                  <span class="flex-1 text-sm">${escapeHtml(habit.title)}</span>
+                  <button onclick="Protocols.removeHabit(${index})" class="min-h-[44px] min-w-[44px] flex items-center justify-center text-oura-muted hover:text-red-400">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
@@ -576,7 +576,7 @@ const Protocols = {
           <label class="block text-sm font-medium text-oura-muted mb-2">Add Custom Habit</label>
           <div class="flex gap-2">
             <input type="text" id="custom-habit-title" placeholder="Enter a habit..."
-              class="flex-1 bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-white placeholder-neutral-600 focus:border-oura-accent focus:outline-none"
+              class="flex-1 bg-oura-card border border-oura-border rounded-lg px-4 py-3 min-h-[48px] text-base text-white placeholder-neutral-600 focus:border-oura-accent focus:outline-none"
               onkeypress="if(event.key === 'Enter') Protocols.addCustomHabit()">
             <button onclick="Protocols.addCustomHabit()"
               class="min-h-[48px] min-w-[48px] bg-oura-accent text-gray-900 rounded-lg flex items-center justify-center hover:bg-oura-accent/90">
@@ -593,15 +593,15 @@ const Protocols = {
           <div class="space-y-4">
             ${Object.entries(habitsByProtocol).map(([protocolName, habits]) => `
               <div class="bg-oura-card rounded-lg p-4">
-                <h4 class="text-sm font-semibold text-white mb-3">${protocolName}</h4>
+                <h4 class="text-sm font-semibold text-white mb-3">${escapeHtml(protocolName)}</h4>
                 <div class="space-y-2">
                   ${habits.map(habit => {
                     const isSelected = this._customProtocolHabits.some(h => h.title === habit.title);
                     return `
-                      <button onclick="Protocols.addExistingHabit('${habit.id}', '${habit.title.replace(/'/g, "\\'")}', '${(habit.description || '').replace(/'/g, "\\'")}')"
+                      <button onclick="Protocols.addExistingHabit('${habit.id}', '${escapeHtml(habit.title).replace(/'/g, "\\'")}', '${escapeHtml(habit.description || '').replace(/'/g, "\\'")}')"
                         class="w-full text-left px-3 py-2 min-h-[44px] rounded-lg transition-colors ${isSelected ? 'bg-oura-accent/20 border border-oura-accent' : 'bg-oura-subtle hover:bg-oura-border'}">
-                        <p class="text-sm font-medium">${habit.title}</p>
-                        ${habit.description ? `<p class="text-xs text-oura-muted mt-0.5">${habit.description}</p>` : ''}
+                        <p class="text-sm font-medium">${escapeHtml(habit.title)}</p>
+                        ${habit.description ? `<p class="text-xs text-oura-muted mt-0.5">${escapeHtml(habit.description)}</p>` : ''}
                       </button>
                     `;
                   }).join('')}

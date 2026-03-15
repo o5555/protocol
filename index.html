@@ -190,16 +190,12 @@
 
             <!-- Protocol Detail Page -->
             <div id="page-protocol-detail" class="page hidden">
-                <div id="protocol-detail-container">
-                    <div class="text-center py-10 text-oura-muted" role="status">Loading...</div>
-                </div>
+                <div id="protocol-detail-container"></div>
             </div>
 
             <!-- Challenges Page -->
             <div id="page-challenges" class="page hidden">
-                <div id="challenges-container">
-                    <div class="text-center py-10 text-oura-muted" role="status">Loading...</div>
-                </div>
+                <div id="challenges-container"></div>
             </div>
 
             <!-- Challenge Detail Page -->
@@ -213,9 +209,7 @@
                     <h2 class="text-2xl font-semibold mb-1">Friends</h2>
                     <p class="text-oura-muted text-sm">Invite friends to join challenges</p>
                 </div>
-                <div id="friends-container">
-                    <div class="text-center py-10 text-oura-muted" role="status">Loading friends...</div>
-                </div>
+                <div id="friends-container"></div>
             </div>
 
             <!-- Account Page -->
@@ -224,9 +218,7 @@
                     <h2 class="text-2xl font-semibold mb-1">Account</h2>
                     <p class="text-oura-muted text-sm">Manage your profile and settings</p>
                 </div>
-                <div id="account-container">
-                    <div class="text-center py-10 text-oura-muted" role="status">Loading...</div>
-                </div>
+                <div id="account-container"></div>
             </div>
         </main>
 
@@ -429,7 +421,7 @@
                     <div class="bg-oura-card rounded-2xl p-4 border border-oura-border/30 shadow-lg backdrop-blur-xl">
                         <div class="flex items-start gap-3">
                             ${icon}
-                            <p class="text-sm text-white flex-1">${message}</p>
+                            <p class="text-sm text-white flex-1">${escapeHtml(message)}</p>
                             <button onclick="App.dismissToast()" class="text-oura-muted min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 -mt-2">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
@@ -527,6 +519,8 @@
                         if (!Cache.isFresh('dashboard')) {
                             this.loadPageContent(this.currentPage, this.currentDetailId);
                         }
+                        // Check habit overlay on resume (covers next-day opens on non-dashboard pages)
+                        Dashboard.checkOverlayOnStartup();
                     }
                 });
 
@@ -542,6 +536,10 @@
 
                 // Check for notifications (invites)
                 this.checkNotifications();
+
+                // Show habit check-in overlay on cold start, even if not on dashboard
+                // (dashboard handles its own overlay; this covers challenges/account/etc.)
+                Dashboard.checkOverlayOnStartup();
 
                 // Register service worker for PWA + push notifications
                 if ('serviceWorker' in navigator) {
