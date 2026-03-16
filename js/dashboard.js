@@ -27,8 +27,8 @@ const Dashboard = {
     this._overlayPending = false;  // Reset per render; set true again if overlay triggers
     this._overlayPendingSet = null;  // Reset so fresh completions are used if overlay re-shows
     // Note: _overlaySkippedToday is NOT reset here — it persists across tab switches
-    // Reset AI flags so failures from a previous visit don't block retries
-    this._aiFetchFailed = false;
+    // Note: _aiFetchFailed is NOT reset here — persists for the session to avoid
+    // re-showing the loading skeleton on every tab switch after a failed/empty fetch
     // Note: _aiCardRenderedInsight is NOT reset here — prevents visual flash on tab switch
 
     const generation = ++this._renderGeneration;
