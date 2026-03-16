@@ -24,6 +24,12 @@ try {
     console.warn('web-push not available, push notifications disabled');
 }
 
+// Load AI prompts from markdown files (once at startup)
+const PROMPT_AI_INSIGHT = fs.readFileSync(path.join(__dirname, 'prompts', 'ai-insight.md'), 'utf8').trim();
+const PROMPT_NOTE_TIDIER = fs.readFileSync(path.join(__dirname, 'prompts', 'note-tidier.md'), 'utf8').trim();
+const PROMPT_CHAT = fs.readFileSync(path.join(__dirname, 'prompts', 'chat.md'), 'utf8').trim();
+const PROMPT_WRAPUP = fs.readFileSync(path.join(__dirname, 'prompts', 'wrapup.md'), 'utf8').trim();
+
 function toLocalDateStr(d) {
     return d.getFullYear() + '-' +
         String(d.getMonth() + 1).padStart(2, '0') + '-' +
@@ -992,37 +998,7 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
 
-            const systemPrompt =
-                'You are a data-driven sleep coach. You get up to 30 nights of sleep data.\n' +
-                'The data has two sections: LAST NIGHT (full field names) and TREND DATA (abbreviated keys for prior nights).\n\n' +
-
-                'DATE ACCURACY — THIS IS CRITICAL:\n' +
-                '- "Last night" means ONLY the night in the LAST NIGHT section. Never use "last night" for any other night.\n' +
-                '- For older nights, use the actual date (e.g. "Mar 10" or "Mon night") or say "two nights ago", "earlier this week", etc.\n' +
-                '- When quoting last night\'s numbers, copy them EXACTLY from the LAST NIGHT section. Do not average or round.\n\n' +
-
-                'WHAT TO LOOK FOR:\n' +
-                '1. Bedtime vs outcomes: correlate bedtime times with sleep scores and deep sleep.\n' +
-                '2. Silent regressions: deep sleep declining while headline score stays stable? Light sleep replacing deep?\n' +
-                '3. Deep sleep streaks or droughts: consecutive nights above or below their personal average.\n' +
-                '4. HR trends: resting HR creeping up or down over 2-3 weeks.\n' +
-                '5. HRV trends: improving or declining? Higher HRV = better recovery.\n' +
-                '6. Sleep efficiency: flag nights with efficiency_score below 85 (too much time awake in bed). Use efficiency_score (Oura 0-100), not raw %.\n' +
-                '7. Sleep architecture: deep/REM/light ratios shifting? Declining deep or REM share is a red flag.\n\n' +
-
-                'FORMAT:\n' +
-                '- Give 2-4 bullet points. Start each with "- ".\n' +
-                '- Each bullet starts with a **bold headline** (5-8 words, double asterisks), then a colon, then 1-2 short sentences with specific numbers.\n' +
-                '- The headline must be specific about WHICH nights it refers to. Never write a headline that implies "last night" when the insight is about older nights.\n' +
-                '- Every bullet must include specific numbers, dates, or time ranges from the data.\n' +
-                '- Max 2 sentences per bullet. Keep it short — this is read on a phone.\n' +
-                '- No generic advice. Only insights backed by their actual data.\n\n' +
-
-                'EXTRAS:\n' +
-                '- If user chat context is provided, personalize insights using past conversation topics (travel, stress, alcohol, schedule changes).\n' +
-                '- If habit data is provided, correlate completed/missed habits with sleep performance.\n' +
-                '- If friend data is provided and notable, include a brief social nudge as a bullet.\n' +
-                '- No emoji. No greetings. No intro text before the bullets.';
+            const systemPrompt = PROMPT_AI_INSIGHT;
 
             const userMessage = [sleepContext, habitContext, friendContext, chatContext]
                 .filter(Boolean)
@@ -1104,6 +1080,96 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Generate challenge wrap-up report
+    if (req.url === '/api/ai/wrapup' && req.method === 'POST') {
+        const AI_GATEWAY_TOKEN = (process.env.AI_GATEWAY_TOKEN || process.env.VERCEL_OIDC_TOKEN || '').trim();
+        if (!AI_GATEWAY_TOKEN) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'AI gateway not configured' }));
+            return;
+        }
+
+        try {
+            const body = await parseBody(req);
+            const { sleepContext } = body;
+
+            if (!sleepContext) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Missing sleepContext' }));
+                return;
+            }
+
+            const payload = JSON.stringify({
+                model: 'anthropic/claude-sonnet-4-6',
+                instructions: PROMPT_WRAPUP,
+                input: [
+                    { role: 'user', content: sleepContext }
+                ],
+                max_output_tokens: 800
+            });
+
+            const options = {
+                hostname: 'ai-gateway.vercel.sh',
+                path: '/v1/responses',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${AI_GATEWAY_TOKEN}`,
+                    'Content-Length': Buffer.byteLength(payload)
+                }
+            };
+
+            const aiReq = https.request(options, (aiRes) => {
+                let data = '';
+                aiRes.on('data', chunk => data += chunk);
+                aiRes.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(data);
+                        if (parsed.error) {
+                            console.error('[ai] Wrapup gateway error:', JSON.stringify(parsed.error));
+                            res.writeHead(502, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: parsed.error.message || 'AI gateway error' }));
+                            return;
+                        }
+                        const text = parsed.output_text
+                            || parsed.output?.[0]?.content?.[0]?.text
+                            || parsed.choices?.[0]?.message?.content
+                            || '';
+                        if (!text) {
+                            console.error('[ai] Empty wrapup from gateway. Response keys:', Object.keys(parsed).join(', '));
+                        }
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ wrapup: text }));
+                    } catch {
+                        console.error('[ai] Failed to parse wrapup response:', data.substring(0, 500));
+                        res.writeHead(502, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Failed to parse AI response' }));
+                    }
+                });
+            });
+
+            aiReq.on('error', (err) => {
+                console.error('[ai] Wrapup gateway error:', err.message);
+                res.writeHead(502, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'AI service unavailable' }));
+            });
+
+            aiReq.setTimeout(25000, () => {
+                aiReq.destroy();
+                res.writeHead(504, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'AI request timed out' }));
+            });
+
+            aiReq.write(payload);
+            aiReq.end();
+        } catch (err) {
+            console.error('[ai] Wrapup error:', err.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
     // Clean up raw user context into a tidy note
     if (req.url === '/api/ai/clean-context' && req.method === 'POST') {
         const AI_GATEWAY_TOKEN = (process.env.AI_GATEWAY_TOKEN || process.env.VERCEL_OIDC_TOKEN || '').trim();
@@ -1124,11 +1190,7 @@ const server = http.createServer(async (req, res) => {
 
             const payload = JSON.stringify({
                 model: 'anthropic/claude-haiku-4-5-20251001',
-                instructions: 'You are a note tidier. The user typed quick context about their day into a sleep tracking app chat. ' +
-                    'Clean it into a short, clear note (1-2 sentences max). Fix typos and grammar. ' +
-                    'Keep all factual details (drinks, travel, stress, exercise, meals, etc). ' +
-                    'Do not add information that was not in the original. Do not add greetings or commentary. ' +
-                    'Return ONLY the cleaned note, nothing else.',
+                instructions: PROMPT_NOTE_TIDIER,
                 input: [{ role: 'user', content: rawContext }],
                 max_output_tokens: 150
             });
@@ -1210,10 +1272,7 @@ const server = http.createServer(async (req, res) => {
             // Cap conversation length
             const trimmed = messages.slice(-20);
 
-            const systemPrompt = 'You are a supportive sleep coach. Be brief, conversational, and data-driven. ' +
-                'Answer the user\'s questions about their sleep, habits, and health. ' +
-                'Use 2-4 short sentences. Use bullet points (starting with "- ") when listing things. ' +
-                'Do not use emoji. Do not use greeting words like "Hey" or "Hi".' +
+            const systemPrompt = PROMPT_CHAT +
                 (sleepContext ? '\n\nUser sleep data: ' + sleepContext : '') +
                 (habitContext ? '\n\nUser habits: ' + habitContext : '');
 

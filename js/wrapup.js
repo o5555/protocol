@@ -1,0 +1,654 @@
+// Challenge Wrap-Up Experience
+// Full-screen swipeable card overlay shown when a challenge ends.
+
+const Wrapup = {
+  _currentIndex: 0,
+  _totalCards: 5,
+  _data: null,
+  _aiContent: null,
+  _aiFetchInFlight: false,
+
+  // ── Public API ──
+
+  show(challengeData) {
+    if (document.getElementById('wrapup-overlay')) return;
+    this._data = challengeData;
+    this._currentIndex = 0;
+    this._aiContent = null;
+
+    // Check localStorage cache for AI content
+    const cacheKey = 'wrapup_ai_' + (challengeData.challenge?.id || 'unknown');
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) this._aiContent = JSON.parse(cached);
+    } catch { /* ignore */ }
+
+    // Build overlay
+    const wrapper = document.createElement('div');
+    wrapper.id = 'wrapup-overlay';
+    wrapper.className = 'fixed inset-0 bg-oura-bg z-50 safe-area-overlay';
+    wrapper.innerHTML = this._renderOverlay();
+    document.body.appendChild(wrapper);
+
+    // Attach swipe + click handlers
+    this._attachSwipe(wrapper);
+    this._attachClicks(wrapper);
+
+    // Start AI fetch if not cached
+    if (!this._aiContent) {
+      this._fetchAi();
+    }
+  },
+
+  dismiss() {
+    const overlay = document.getElementById('wrapup-overlay');
+    if (!overlay) return;
+    overlay.style.transition = 'opacity 200ms ease-out';
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 200);
+  },
+
+  // ── Overlay Structure ──
+
+  _renderOverlay() {
+    return `
+      <button onclick="Wrapup.dismiss()" class="absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-oura-subtle text-oura-muted" aria-label="Close">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+      </button>
+      <div id="wrapup-clip" class="overflow-hidden h-full">
+        <div id="wrapup-track" class="flex h-full wrapup-track" style="touch-action: pan-y">
+          ${this._renderCard1()}
+          ${this._renderCard2()}
+          ${this._renderCard3()}
+          ${this._renderCard4()}
+          ${this._renderCard5()}
+        </div>
+      </div>
+      <div id="wrapup-dots" class="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-10">
+        ${this._renderDots(0)}
+      </div>
+    `;
+  },
+
+  _renderDots(activeIndex) {
+    return Array.from({ length: this._totalCards }, (_, i) =>
+      `<button data-wrapup-dot="${i}" class="w-2.5 h-2.5 rounded-full transition-all ${i === activeIndex ? 'bg-oura-accent scale-110' : 'bg-oura-muted/30'}" aria-label="Card ${i + 1}"></button>`
+    ).join('');
+  },
+
+  // ── Card Rendering ──
+
+  _cardShell(content) {
+    return `<div class="min-w-full h-full flex flex-col px-6 pt-12 pb-16 overflow-y-auto sm:max-w-md sm:mx-auto">${content}</div>`;
+  },
+
+  _renderCard1() {
+    const c = this._data?.challenge;
+    if (!c) return this._cardShell('<p class="text-oura-muted">No challenge data</p>');
+
+    const name = escapeHtml(c.name || 'Challenge');
+    const protocolName = escapeHtml(c.protocol?.name || '');
+    const start = this._formatDate(c.start_date);
+    const end = this._formatDate(c.end_date);
+    const myData = this._data.myData;
+    const nightsTracked = myData?.challengeData?.length || 0;
+    const participants = c.participants?.filter(p => p.status === 'accepted').length || 1;
+
+    return this._cardShell(`
+      <div class="flex-1 flex flex-col justify-center items-center text-center">
+        <p class="text-oura-accent text-sm font-semibold uppercase tracking-wider mb-4">Challenge Complete</p>
+        <h1 class="text-3xl font-bold text-white mb-2">${name}</h1>
+        ${protocolName ? `<p class="text-oura-muted text-base mb-8">${protocolName}</p>` : '<div class="mb-8"></div>'}
+        <div class="grid grid-cols-3 gap-6 w-full max-w-xs">
+          <div>
+            <p class="text-2xl font-bold text-white">30</p>
+            <p class="text-xs text-oura-muted mt-1">days</p>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-white">${nightsTracked}</p>
+            <p class="text-xs text-oura-muted mt-1">nights tracked</p>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-white">${participants}</p>
+            <p class="text-xs text-oura-muted mt-1">${participants === 1 ? 'participant' : 'participants'}</p>
+          </div>
+        </div>
+        <p class="text-oura-muted text-sm mt-8">${start} - ${end}</p>
+      </div>
+      <p class="text-center text-oura-muted/50 text-xs">Swipe to continue</p>
+    `);
+  },
+
+  _renderCard2() {
+    const myData = this._data?.myData;
+    const improvements = this._data?.improvements;
+    if (!myData || !improvements) return this._cardShell('<p class="text-oura-muted">No data available</p>');
+
+    const baseline = myData.baselineData || [];
+    const challenge = myData.challengeData || [];
+
+    // Compute averages
+    const avg = (arr, key) => {
+      const vals = arr.filter(d => d[key] != null).map(d => d[key]);
+      return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+    };
+
+    const baseScore = avg(baseline, 'sleep_score');
+    const currScore = avg(challenge, 'sleep_score');
+    const baseDeep = avg(baseline, 'deep_sleep_minutes');
+    const currDeep = avg(challenge, 'deep_sleep_minutes');
+    const baseHR = avg(baseline, 'avg_hr');
+    const currHR = avg(challenge, 'avg_hr');
+    const baseBedtime = this._avgBedtime(baseline);
+    const currBedtime = this._avgBedtime(challenge);
+
+    const metrics = [
+      { label: 'Sleep Score', before: baseScore, after: currScore, unit: '', lowerBetter: false },
+      { label: 'Deep Sleep', before: baseDeep, after: currDeep, unit: ' min', lowerBetter: false },
+      { label: 'Resting HR', before: baseHR, after: currHR, unit: ' bpm', lowerBetter: true },
+      { label: 'Avg Bedtime', before: baseBedtime, after: currBedtime, unit: '', lowerBetter: false, isBedtime: true }
+    ];
+
+    return this._cardShell(`
+      <div class="flex-1 flex flex-col justify-center">
+        <h2 class="text-2xl font-bold text-white text-center mb-2">Your Numbers</h2>
+        <p class="text-oura-muted text-sm text-center mb-8">Baseline vs. challenge averages</p>
+        <div class="space-y-4">
+          ${metrics.map(m => this._renderMetricRow(m)).join('')}
+        </div>
+      </div>
+    `);
+  },
+
+  _renderMetricRow({ label, before, after, unit, lowerBetter, isBedtime }) {
+    const bStr = isBedtime ? (before || '--') : (before != null ? before + unit : '--');
+    const aStr = isBedtime ? (after || '--') : (after != null ? after + unit : '--');
+
+    let arrowColor = 'text-oura-muted';
+    let arrowSvg = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>';
+
+    if (before != null && after != null && !isBedtime) {
+      const diff = after - before;
+      const improved = lowerBetter ? diff < 0 : diff > 0;
+      const declined = lowerBetter ? diff > 0 : diff < 0;
+      if (improved) {
+        arrowColor = 'text-emerald-400';
+        arrowSvg = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5"/></svg>';
+      } else if (declined) {
+        arrowColor = 'text-red-400';
+        arrowSvg = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>';
+      }
+    }
+
+    return `
+      <div class="bg-oura-card rounded-xl p-4 border border-oura-border/30">
+        <p class="text-xs text-oura-muted uppercase tracking-wide mb-2">${label}</p>
+        <div class="flex items-center justify-between">
+          <span class="text-lg text-oura-muted">${bStr}</span>
+          <span class="${arrowColor}">${arrowSvg}</span>
+          <span class="text-lg font-bold text-white">${aStr}</span>
+        </div>
+      </div>
+    `;
+  },
+
+  _renderCard3() {
+    if (this._aiContent?.highlights) {
+      return this._cardShell(`
+        <div class="flex-1 flex flex-col justify-center">
+          <h2 class="text-2xl font-bold text-white text-center mb-2">Your Highlights</h2>
+          <p class="text-oura-muted text-sm text-center mb-8">Top moments from your challenge</p>
+          <div class="space-y-4">
+            ${this._aiContent.highlights.map((h, i) => `
+              <div class="bg-oura-card rounded-xl p-4 border border-oura-border/30">
+                <div class="flex items-start gap-3">
+                  <span class="text-oura-accent font-bold text-lg mt-0.5">${i + 1}</span>
+                  <div>
+                    <p class="font-semibold text-white text-sm">${escapeHtml(h.title)}</p>
+                    <p class="text-oura-muted text-sm mt-1">${escapeHtml(h.body)}</p>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `);
+    }
+
+    // Loading skeleton
+    return this._cardShell(`
+      <div class="flex-1 flex flex-col justify-center">
+        <h2 class="text-2xl font-bold text-white text-center mb-2">Your Highlights</h2>
+        <p class="text-oura-muted text-sm text-center mb-8">Top moments from your challenge</p>
+        <div id="wrapup-card3-content" class="space-y-4">
+          ${this._renderSkeletonCards(3)}
+        </div>
+      </div>
+    `);
+  },
+
+  _renderCard4() {
+    if (this._aiContent?.routine) {
+      return this._cardShell(`
+        <div class="flex-1 flex flex-col justify-center">
+          <h2 class="text-2xl font-bold text-white text-center mb-2">Your Routine</h2>
+          <p class="text-oura-muted text-sm text-center mb-8">Personalized for your sleep patterns</p>
+          <div class="bg-oura-card rounded-xl p-5 border border-oura-border/30 space-y-4">
+            ${this._aiContent.routine.map((step, i) => `
+              <div class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-oura-accent/15 text-oura-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">${i + 1}</span>
+                <p class="text-sm text-white">${escapeHtml(step)}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `);
+    }
+
+    return this._cardShell(`
+      <div class="flex-1 flex flex-col justify-center">
+        <h2 class="text-2xl font-bold text-white text-center mb-2">Your Routine</h2>
+        <p class="text-oura-muted text-sm text-center mb-8">Personalized for your sleep patterns</p>
+        <div id="wrapup-card4-content" class="space-y-3">
+          ${this._renderSkeletonLines(4)}
+        </div>
+      </div>
+    `);
+  },
+
+  _renderCard5() {
+    const hasTakeaways = this._aiContent?.takeaways?.length > 0;
+
+    return this._cardShell(`
+      <div class="flex-1 flex flex-col justify-center">
+        <h2 class="text-2xl font-bold text-white text-center mb-2">What's Next</h2>
+        <p class="text-oura-muted text-sm text-center mb-8">Keep the momentum going</p>
+        ${hasTakeaways ? `
+          <div class="bg-oura-card rounded-xl p-5 border border-oura-border/30 mb-8">
+            <div class="space-y-3">
+              ${this._aiContent.takeaways.map(t => `
+                <div class="flex items-start gap-2">
+                  <svg class="w-4 h-4 text-oura-accent flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                  <p class="text-sm text-white">${escapeHtml(t)}</p>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : `
+          <div id="wrapup-card5-content" class="mb-8">
+            ${this._renderSkeletonLines(3)}
+          </div>
+        `}
+        <button onclick="Wrapup.dismiss(); App.navigateTo('challenges')"
+          class="w-full py-3.5 bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl text-base">
+          Start a New Challenge
+        </button>
+        <button onclick="Wrapup.dismiss()" class="w-full py-3 text-oura-muted text-sm mt-1">
+          Close
+        </button>
+      </div>
+    `);
+  },
+
+  // ── Skeleton Loading ──
+
+  _renderSkeletonCards(n) {
+    return Array.from({ length: n }, () => `
+      <div class="bg-oura-card rounded-xl p-4 border border-oura-border/30">
+        <div class="skeleton-bar h-3 w-32 mb-2"></div>
+        <div class="skeleton-bar h-3 w-full"></div>
+      </div>
+    `).join('');
+  },
+
+  _renderSkeletonLines(n) {
+    return Array.from({ length: n }, (_, i) => `
+      <div class="skeleton-bar h-3 ${i === n - 1 ? 'w-2/3' : 'w-full'} mb-3"></div>
+    `).join('');
+  },
+
+  // ── Swipe Handling (adapted from league carousel) ──
+
+  _attachSwipe(wrapper) {
+    const track = wrapper.querySelector('#wrapup-track');
+    const clip = wrapper.querySelector('#wrapup-clip');
+    if (!track || !clip) return;
+
+    let startX = 0, startY = 0, isDragging = false;
+    let directionLocked = false, isHorizontal = false;
+
+    const getSlideWidth = () => clip.clientWidth;
+
+    clip.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      isDragging = true;
+      directionLocked = false;
+      isHorizontal = false;
+      track.style.transition = 'none';
+    }, { passive: true });
+
+    clip.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+
+      if (!directionLocked && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        directionLocked = true;
+        isHorizontal = Math.abs(dx) >= Math.abs(dy);
+      }
+      if (!directionLocked || !isHorizontal) return;
+
+      const slideW = getSlideWidth();
+      const baseOffset = -this._currentIndex * slideW;
+      let offset = baseOffset + dx;
+
+      // Rubber-band at edges
+      if (this._currentIndex === 0 && dx > 0) {
+        offset = baseOffset + dx * 0.3;
+      } else if (this._currentIndex === this._totalCards - 1 && dx < 0) {
+        offset = baseOffset + dx * 0.3;
+      }
+
+      track.style.transform = `translateX(${offset}px)`;
+    }, { passive: true });
+
+    clip.addEventListener('touchend', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+
+      if (!isHorizontal) {
+        this._goToCard(this._currentIndex);
+        return;
+      }
+
+      const dx = e.changedTouches[0].clientX - startX;
+      const slideW = getSlideWidth();
+      const threshold = slideW * 0.2;
+      let target = this._currentIndex;
+
+      if (Math.abs(dx) > threshold) {
+        if (dx < 0 && target < this._totalCards - 1) target++;
+        else if (dx > 0 && target > 0) target--;
+      }
+
+      this._goToCard(target);
+    }, { passive: true });
+  },
+
+  _goToCard(index) {
+    this._currentIndex = index;
+    const track = document.getElementById('wrapup-track');
+    const clip = document.getElementById('wrapup-clip');
+    if (!track || !clip) return;
+
+    const slideW = clip.clientWidth;
+    track.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+    track.style.transform = `translateX(${-index * slideW}px)`;
+
+    // Update dots
+    const dotsEl = document.getElementById('wrapup-dots');
+    if (dotsEl) dotsEl.innerHTML = this._renderDots(index);
+  },
+
+  _attachClicks(wrapper) {
+    // Dot navigation
+    wrapper.addEventListener('click', (e) => {
+      const dot = e.target.closest('[data-wrapup-dot]');
+      if (dot) {
+        const idx = parseInt(dot.dataset.wrapupDot, 10);
+        if (!isNaN(idx)) this._goToCard(idx);
+      }
+    });
+  },
+
+  // ── AI Integration ──
+
+  async _fetchAi() {
+    if (this._aiFetchInFlight) return;
+    this._aiFetchInFlight = true;
+
+    try {
+      const context = this._buildWrapupContext();
+      const resp = await fetch('/api/ai/wrapup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sleepContext: context })
+      });
+
+      if (!resp.ok) throw new Error('AI request failed');
+      const { wrapup } = await resp.json();
+      if (!wrapup) throw new Error('Empty response');
+
+      this._aiContent = this._parseAiResponse(wrapup);
+
+      // Cache permanently per challenge
+      const cacheKey = 'wrapup_ai_' + (this._data.challenge?.id || 'unknown');
+      try { localStorage.setItem(cacheKey, JSON.stringify(this._aiContent)); } catch { /* full */ }
+
+      // Re-render AI cards
+      this._updateAiCards();
+    } catch (err) {
+      console.warn('[Wrapup] AI fetch failed:', err.message);
+      this._renderAiError();
+    } finally {
+      this._aiFetchInFlight = false;
+    }
+  },
+
+  _buildWrapupContext() {
+    const d = this._data;
+    const c = d.challenge;
+    const myData = d.myData;
+    const baseline = myData?.baselineData || [];
+    const challenge = myData?.challengeData || [];
+
+    const avg = (arr, key) => {
+      const vals = arr.filter(r => r[key] != null).map(r => r[key]);
+      return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+    };
+
+    // Build compact context
+    let ctx = `CHALLENGE: "${c.name}" (${c.start_date} to ${c.end_date}, 30 days)\n\n`;
+
+    ctx += `BASELINE (${baseline.length} nights before challenge):\n`;
+    ctx += `Avg sleep score: ${avg(baseline, 'sleep_score') ?? 'N/A'}, `;
+    ctx += `Avg deep: ${avg(baseline, 'deep_sleep_minutes') ?? 'N/A'} min, `;
+    ctx += `Avg HR: ${avg(baseline, 'avg_hr') ?? 'N/A'}, `;
+    ctx += `Avg bedtime: ${this._avgBedtime(baseline) || 'N/A'}\n\n`;
+
+    ctx += `CHALLENGE PERIOD (${challenge.length} nights with data out of 30):\n`;
+    ctx += `Avg sleep score: ${avg(challenge, 'sleep_score') ?? 'N/A'}, `;
+    ctx += `Avg deep: ${avg(challenge, 'deep_sleep_minutes') ?? 'N/A'} min, `;
+    ctx += `Avg HR: ${avg(challenge, 'avg_hr') ?? 'N/A'}, `;
+    ctx += `Avg bedtime: ${this._avgBedtime(challenge) || 'N/A'}\n\n`;
+
+    // Best and worst nights
+    const scored = challenge.filter(n => n.sleep_score != null).sort((a, b) => b.sleep_score - a.sleep_score);
+    if (scored.length >= 2) {
+      const best = scored.slice(0, 3);
+      const worst = scored.slice(-3).reverse();
+      ctx += 'BEST NIGHTS:\n';
+      best.forEach(n => {
+        ctx += `- ${n.date}: score ${n.sleep_score}, deep ${n.deep_sleep_minutes ?? '?'} min, bedtime ${this._formatBedtime(n.bedtime_start) || '?'}\n`;
+      });
+      ctx += '\nWORST NIGHTS:\n';
+      worst.forEach(n => {
+        ctx += `- ${n.date}: score ${n.sleep_score}, deep ${n.deep_sleep_minutes ?? '?'} min, bedtime ${this._formatBedtime(n.bedtime_start) || '?'}\n`;
+      });
+    }
+
+    // Bedtime pattern analysis
+    const withBedtime = challenge.filter(n => n.bedtime_start);
+    if (withBedtime.length >= 5) {
+      const early = withBedtime.filter(n => {
+        const h = this._bedtimeHour(n.bedtime_start);
+        return h !== null && h < 23;
+      });
+      const late = withBedtime.filter(n => {
+        const h = this._bedtimeHour(n.bedtime_start);
+        return h !== null && h >= 23;
+      });
+      if (early.length > 0 && late.length > 0) {
+        const earlyAvg = avg(early, 'sleep_score');
+        const lateAvg = avg(late, 'sleep_score');
+        const earlyDeep = avg(early, 'deep_sleep_minutes');
+        const lateDeep = avg(late, 'deep_sleep_minutes');
+        ctx += `\nBEDTIME PATTERN:\n`;
+        ctx += `Before 23:00: ${early.length} nights (avg score ${earlyAvg}, avg deep ${earlyDeep} min)\n`;
+        ctx += `After 23:00: ${late.length} nights (avg score ${lateAvg}, avg deep ${lateDeep} min)\n`;
+      }
+    }
+
+    // Habit completions if available
+    if (d.habitProgress?.length > 0) {
+      ctx += '\nHABIT COMPLETIONS:\n';
+      d.habitProgress.forEach(h => {
+        ctx += `- "${h.title}": completed ${h.completedDays ?? '?'}/${h.totalDays ?? 30} days\n`;
+      });
+    }
+
+    return ctx;
+  },
+
+  _parseAiResponse(text) {
+    const sections = { highlights: [], routine: [], takeaways: [] };
+
+    // Split by ## headings
+    const highlightsMatch = text.match(/## Highlights\s*\n([\s\S]*?)(?=## Routine|$)/i);
+    const routineMatch = text.match(/## Routine\s*\n([\s\S]*?)(?=## Takeaways|$)/i);
+    const takeawaysMatch = text.match(/## Takeaways\s*\n([\s\S]*?)$/i);
+
+    if (highlightsMatch) {
+      // Parse highlights: **Title** followed by body text
+      const raw = highlightsMatch[1].trim();
+      const blocks = raw.split(/\n\*\*/).filter(Boolean);
+      blocks.forEach(block => {
+        // First block may start with ** already stripped or not
+        const cleaned = block.startsWith('**') ? block.slice(2) : block;
+        const titleEnd = cleaned.indexOf('**');
+        if (titleEnd > 0) {
+          const title = cleaned.slice(0, titleEnd).trim();
+          const body = cleaned.slice(titleEnd + 2).replace(/^\n/, '').trim();
+          sections.highlights.push({ title, body });
+        } else {
+          // Fallback: first line is title, rest is body
+          const lines = cleaned.split('\n').filter(l => l.trim());
+          if (lines.length >= 1) {
+            sections.highlights.push({
+              title: lines[0].replace(/\*\*/g, '').trim(),
+              body: lines.slice(1).join(' ').trim()
+            });
+          }
+        }
+      });
+    }
+
+    if (routineMatch) {
+      // Parse numbered steps
+      const lines = routineMatch[1].trim().split('\n').filter(l => l.trim());
+      lines.forEach(line => {
+        const cleaned = line.replace(/^\d+[\.\)]\s*/, '').trim();
+        if (cleaned) sections.routine.push(cleaned);
+      });
+    }
+
+    if (takeawaysMatch) {
+      // Parse bullet points
+      const lines = takeawaysMatch[1].trim().split('\n').filter(l => l.trim());
+      lines.forEach(line => {
+        const cleaned = line.replace(/^[-*]\s*/, '').trim();
+        if (cleaned) sections.takeaways.push(cleaned);
+      });
+    }
+
+    return sections;
+  },
+
+  _updateAiCards() {
+    const overlay = document.getElementById('wrapup-overlay');
+    if (!overlay || !this._aiContent) return;
+
+    // Re-render the track with AI content now available
+    const track = document.getElementById('wrapup-track');
+    if (!track) return;
+
+    // Preserve current position
+    const clip = document.getElementById('wrapup-clip');
+    const slideW = clip ? clip.clientWidth : 0;
+
+    track.innerHTML = `
+      ${this._renderCard1()}
+      ${this._renderCard2()}
+      ${this._renderCard3()}
+      ${this._renderCard4()}
+      ${this._renderCard5()}
+    `;
+
+    // Restore position without animation
+    track.style.transition = 'none';
+    track.style.transform = `translateX(${-this._currentIndex * slideW}px)`;
+  },
+
+  _renderAiError() {
+    const targets = [
+      { id: 'wrapup-card3-content', html: '<p class="text-oura-muted text-sm text-center">Could not load your highlights.</p><button onclick="Wrapup._retryAi()" class="text-oura-accent text-sm mt-2 mx-auto block">Try again</button>' },
+      { id: 'wrapup-card4-content', html: '<p class="text-oura-muted text-sm text-center">Review your challenge data to find what worked for you.</p>' },
+      { id: 'wrapup-card5-content', html: '' }
+    ];
+    targets.forEach(({ id, html }) => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    });
+  },
+
+  _retryAi() {
+    // Reset skeleton loading on card 3
+    const el = document.getElementById('wrapup-card3-content');
+    if (el) el.innerHTML = this._renderSkeletonCards(3);
+    const el4 = document.getElementById('wrapup-card4-content');
+    if (el4) el4.innerHTML = this._renderSkeletonLines(4);
+    const el5 = document.getElementById('wrapup-card5-content');
+    if (el5) el5.innerHTML = this._renderSkeletonLines(3);
+    this._fetchAi();
+  },
+
+  // ── Helpers ──
+
+  _formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  },
+
+  _formatBedtime(isoStr) {
+    if (!isoStr) return null;
+    try {
+      const match = isoStr.match(/T(\d{2}:\d{2})/);
+      return match ? match[1] : null;
+    } catch { return null; }
+  },
+
+  _bedtimeHour(isoStr) {
+    const bt = this._formatBedtime(isoStr);
+    if (!bt) return null;
+    return parseInt(bt.split(':')[0], 10);
+  },
+
+  _avgBedtime(data) {
+    const bedtimes = data.filter(d => d.bedtime_start).map(d => {
+      const bt = this._formatBedtime(d.bedtime_start);
+      if (!bt) return null;
+      const [h, m] = bt.split(':').map(Number);
+      // Normalize: hours < 12 means after midnight, shift to 24+ for averaging
+      return h < 12 ? (h + 24) * 60 + m : h * 60 + m;
+    }).filter(v => v !== null);
+
+    if (bedtimes.length === 0) return null;
+
+    const avgMin = Math.round(bedtimes.reduce((a, b) => a + b, 0) / bedtimes.length);
+    const normH = Math.floor(avgMin / 60) % 24;
+    const normM = avgMin % 60;
+    return `${String(normH).padStart(2, '0')}:${String(normM).padStart(2, '0')}`;
+  }
+};

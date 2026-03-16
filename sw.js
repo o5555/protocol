@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pc-v59';
+const CACHE_NAME = 'pc-v60';
 
 const APP_SHELL = [
   '/',
@@ -17,6 +17,7 @@ const APP_SHELL = [
   '/js/notifications.js',
   '/js/friends.js',
   '/js/challenges.js',
+  '/js/wrapup.js',
   '/manifest.json',
   '/icons/icon-192.svg',
   '/icons/icon-512.svg',

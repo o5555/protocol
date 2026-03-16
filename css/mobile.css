@@ -59,6 +59,13 @@ button, a, input, select, textarea, label {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Wrap-up card swipe transition */
+@media (prefers-reduced-motion: no-preference) {
+  .wrapup-track {
+    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+}
+
 /* ── Skeleton Shimmer (loading placeholders) ── */
 
 @keyframes skeleton-shimmer {

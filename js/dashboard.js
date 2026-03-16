@@ -481,6 +481,7 @@ const Dashboard = {
 
   // Check if the habit overlay should be shown
   _shouldShowOverlay(recentSleep) {
+    if (document.getElementById('wrapup-overlay')) return false;
     if (this._overlaySkippedToday) return false;
     if (!this._habitData) return false;
     const { challenge, habits, firstDay, today } = this._habitData;

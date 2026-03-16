@@ -1469,12 +1469,24 @@ const Challenges = {
           class="w-full py-3 min-h-[44px] bg-oura-subtle text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-border transition-colors">
           + Invite Friends
         </button>
-        ` : ''}
+        ` : `
+        <button onclick="Wrapup.show(Challenges._currentChallengeData)"
+          class="w-full py-3 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl">
+          View Wrap-Up
+        </button>
+        `}
       `;
       }
 
       // Store data for metric switching
       this._currentChallengeData = { myData, challenge, improvements, sleepData, currentUserId: currentUser.id };
+
+      // Auto-show wrap-up on first visit to a completed challenge with data
+      if (isCompleted && !hasNoChallengeData && !localStorage.getItem('wrapup_seen_' + challengeId)) {
+        localStorage.setItem('wrapup_seen_' + challengeId, '1');
+        // Delay slightly so the detail page renders behind the overlay
+        setTimeout(() => Wrapup.show(this._currentChallengeData), 100);
+      }
 
       // Render the main Chart.js trend chart (also for hero view with baseline-only data)
       if (!hasNoChallengeData || (showHeroInstead && myBaseline.score)) {
