@@ -612,6 +612,7 @@
                 console.error('Auth init failed:', e);
             }
             await App.init();
+            Wrapup._checkPreview();
             clearTimeout(splashTimeout);
             // If not on dashboard (auth screen, or other page), dismiss splash now
             // Dashboard dismisses its own splash after content renders

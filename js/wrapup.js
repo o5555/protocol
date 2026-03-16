@@ -650,5 +650,23 @@ const Wrapup = {
     const normH = Math.floor(avgMin / 60) % 24;
     const normM = avgMin % 60;
     return `${String(normH).padStart(2, '0')}:${String(normM).padStart(2, '0')}`;
+  },
+
+  // Dev preview: trigger wrap-up with mock data via ?_wrapup_preview=1
+  _checkPreview() {
+    if (!new URLSearchParams(window.location.search).has('_wrapup_preview')) return;
+    // Clear the param
+    history.replaceState(null, '', '/');
+    const mk = (n, fn) => Array.from({ length: n }, fn);
+    this.show({
+      challenge: { id: 'preview', name: '30-Day Sleep Protocol', start_date: '2026-02-14', end_date: '2026-03-15', protocol: { name: 'Huberman Sleep Stack' }, participants: [{ status: 'accepted' }, { status: 'accepted' }, { status: 'accepted' }] },
+      myData: {
+        baselineData: mk(25, (_, i) => ({ sleep_score: 68 + (i % 10), deep_sleep_minutes: 55 + (i % 20), avg_hr: 59 + (i % 4), bedtime_start: '2026-01-' + String(15 + i).padStart(2, '0') + 'T23:' + String(30 + (i % 25)).padStart(2, '0') + ':00-06:00' })),
+        challengeData: mk(28, (_, i) => ({ sleep_score: 75 + (i % 12), deep_sleep_minutes: 70 + (i % 30), avg_hr: 55 + (i % 4), bedtime_start: '2026-02-' + String(14 + i).padStart(2, '0') + 'T22:' + String(20 + (i % 30)).padStart(2, '0') + ':00-06:00' }))
+      },
+      improvements: { score: { pct: 8, direction: 'up' }, hr: { pct: -5, direction: 'up' }, avghr: { pct: -4, direction: 'up' }, deep: { pct: 18, direction: 'up' }, presleep: { pct: -3, direction: 'up' } },
+      sleepData: [],
+      habitProgress: [{ title: 'No screens 1hr before bed', completedDays: 22, totalDays: 28 }, { title: 'Magnesium before bed', completedDays: 25, totalDays: 28 }, { title: '10 min morning sunlight', completedDays: 15, totalDays: 28 }]
+    });
   }
 };
