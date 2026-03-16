@@ -130,7 +130,18 @@ const Dashboard = {
       const result = await SleepSync.syncNow({ silent: true, skipRefresh: true });
       if (generation !== this._renderGeneration) return;
       if (result?.success && result.count > 0) {
-        // New data arrived — re-fetch and re-render
+        // New data arrived — clear stale AI insight cache so it regenerates with fresh data
+        const today = DateUtils.toLocalDateStr(new Date());
+        try {
+          const activeCh = await Challenges.getActiveChallenges().catch(() => []);
+          const aiChallengeId = activeCh[0]?.id || 'personal';
+          const aiCacheKey = `ai_insight_${aiChallengeId}_${today}`;
+          Cache.clear(aiCacheKey);
+          localStorage.removeItem(aiCacheKey);
+          this._aiCardRenderedInsight = null;
+        } catch (e) { /* ignore */ }
+
+        // Re-fetch and re-render
         const [profile, activeChallenges, recentSleep] = await Promise.all([
           Auth.getProfile(),
           Challenges.getActiveChallenges().catch(() => []),
@@ -950,6 +961,12 @@ const Dashboard = {
       const recentSleep = cached?.recentSleep || [];
       const leagueData = cached?.leagueData || null;
 
+      // Guard: only generate AI insight if today's sleep data is available
+      const today = DateUtils.toLocalDateStr(new Date());
+      if (!recentSleep[0] || recentSleep[0].date !== today) {
+        return; // Don't generate with stale data
+      }
+
       const insight = await this._fetchAiInsight(recentSleep, leagueData, false);
       const ac = document.getElementById('ai-insight-container');
       if (ac && insight) {
@@ -1010,10 +1027,11 @@ const Dashboard = {
 
   // Calculate the user's bedtime window from historical sleep data.
   // Returns { start: hours (0-23.99), end: hours (0-23.99) } in local-time-of-sleep.
-  // "start" = avg bedtime minus 1 hour, "end" = avg wake time plus 2 hours.
-  // If fewer than 7 nights of data, falls back to 22:00 - 09:00.
+  // "start" = avg bedtime minus 1 hour (wind-down), "end" = avg wake time (not extended past it).
+  // The overlay should show as soon as the user wakes up, so end = wake time, not wake + N hours.
+  // If fewer than 7 nights of data, falls back to 22:00 - 05:00 (conservative).
   _calcBedtimeWindow(recentSleep) {
-    const FALLBACK = { start: 22, end: 9 };
+    const FALLBACK = { start: 22, end: 5 };
     if (!recentSleep || recentSleep.length < 7) return FALLBACK;
 
     // Cap at 30 days per spec
@@ -1044,9 +1062,9 @@ const Dashboard = {
     const avgBedtime = this._circularMeanHours(bedtimeHours);
     const avgWake = this._circularMeanHours(wakeHours);
 
-    // Window: bedtime - 1hr to wake + 2hr
+    // Window: bedtime - 1hr to wake time (overlay shows as soon as user wakes up)
     const start = (avgBedtime - 1 + 24) % 24;
-    const end = (avgWake + 2) % 24;
+    const end = avgWake % 24;
     return { start, end };
   },
 
@@ -1118,7 +1136,10 @@ const Dashboard = {
         return entry;
       });
 
-      sleepContext = `LAST NIGHT:\n${JSON.stringify(lastNightObj)}\n\nTREND DATA (${trend.length} prior nights, newest first):\n${JSON.stringify(trend)}`;
+      // Label based on whether the most recent entry is actually today
+      const today = DateUtils.toLocalDateStr(new Date());
+      const dataLabel = lastNight.date === today ? 'LAST NIGHT' : `MOST RECENT NIGHT (${lastNight.date})`;
+      sleepContext = `${dataLabel}:\n${JSON.stringify(lastNightObj)}\n\nTREND DATA (${trend.length} prior nights, newest first):\n${JSON.stringify(trend)}`;
     }
 
     let habitContext = '';
@@ -1629,12 +1650,15 @@ const Dashboard = {
   MIN_SLEEP_MINUTES: 180,
 
   // Filter sleep data to only include nights with basic validity
-  // Only excludes: very short naps (< 3 hours) and nights missing a sleep score
+  // Excludes very short naps (< 3 hours) and past nights missing a sleep score.
+  // Today's entry is kept even without a score (Oura's daily_sleep score often lags
+  // behind session data by minutes/hours — we still need it for hasTodayData checks).
   filterValidNights(data) {
     if (!data || !Array.isArray(data)) return [];
+    const today = DateUtils.toLocalDateStr(new Date());
     return data.filter(d =>
       d.total_sleep_minutes >= this.MIN_SLEEP_MINUTES &&
-      d.sleep_score != null
+      (d.sleep_score != null || d.date === today)
     );
   },
 

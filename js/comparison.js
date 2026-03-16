@@ -688,6 +688,15 @@ const SleepSync = {
           sleep_score: scoresByDay[day] || null,
           avg_hr: primary.average_heart_rate || null,
           pre_sleep_hr: primary.lowest_heart_rate || null,
+          bedtime_start: primary.bedtime_start || null,
+          hrv: (() => {
+            const hrvData = primary.heart_rate_variability;
+            if (!hrvData?.items) return null;
+            const valid = hrvData.items.filter(v => v != null);
+            if (valid.length === 0) return null;
+            return Math.round((valid.reduce((a, b) => a + b, 0) / valid.length) * 10) / 10;
+          })(),
+          sleep_efficiency: primary.efficiency ?? null,
           hr_before_sleep: (() => {
             if (!primary.bedtime_start) return null;
             const latency = primary.latency || 900;

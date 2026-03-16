@@ -118,7 +118,7 @@ test.describe('Bedtime Window Calculator', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  test('falls back to 22-9 with fewer than 7 nights', async ({ page }) => {
+  test('falls back to 22-5 with fewer than 7 nights', async ({ page }) => {
     const result = await page.evaluate(() => {
       const sleep = Array.from({ length: 5 }, (_, i) => ({
         date: `2026-03-${10 + i}`,
@@ -127,20 +127,20 @@ test.describe('Bedtime Window Calculator', () => {
       }));
       return Dashboard._calcBedtimeWindow(sleep);
     });
-    expect(result).toEqual({ start: 22, end: 9 });
+    expect(result).toEqual({ start: 22, end: 5 });
   });
 
-  test('calculates window from 7+ nights', async ({ page }) => {
+  test('calculates window from 7+ nights (end = wake time)', async ({ page }) => {
     const result = await page.evaluate(() => {
       const sleep = Array.from({ length: 10 }, (_, i) => ({
         date: `2026-03-${10 + i}`,
         bedtime_start: `2026-03-${10 + i}T23:00:00-06:00`,
-        total_sleep_minutes: 480
+        total_sleep_minutes: 480  // 8 hours → wake at ~7:00
       }));
       return Dashboard._calcBedtimeWindow(sleep);
     });
     expect(result.start).toBeCloseTo(22, 0);
-    expect(result.end).toBeCloseTo(9, 0);
+    expect(result.end).toBeCloseTo(7, 0);  // wake time, not wake+2
   });
 
   test('circular mean handles midnight crossover', async ({ page }) => {
