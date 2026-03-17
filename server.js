@@ -1418,7 +1418,14 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
-        res.writeHead(200, { 'Content-Type': contentType });
+        // Prevent HTTP caching of sw.js so browser always checks for updates
+        const headers = { 'Content-Type': contentType };
+        if (filePath.endsWith('sw.js')) {
+            headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+        } else if (ext === '.js' || ext === '.html' || ext === '.css') {
+            headers['Cache-Control'] = 'no-cache';
+        }
+        res.writeHead(200, headers);
         res.end(content);
     });
 });
