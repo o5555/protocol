@@ -130,43 +130,47 @@ const Dashboard = {
   async _backgroundSync(generation) {
     try {
       const result = await SleepSync.syncNow({ silent: true, skipRefresh: true });
-      if (generation !== this._renderGeneration) return;
-      if (result?.success && result.count > 0) {
-        // New data arrived — clear stale AI insight cache so it regenerates with fresh data
-        const today = DateUtils.toLocalDateStr(new Date());
-        try {
-          const activeCh = await Challenges.getActiveChallenges().catch(() => []);
-          const aiChallengeId = activeCh[0]?.id || 'personal';
-          const aiCacheKey = `ai_insight_${aiChallengeId}_${today}`;
-          Cache.clear(aiCacheKey);
-          localStorage.removeItem(aiCacheKey);
-          this._aiCardRenderedInsight = null;
-        } catch (e) { /* ignore */ }
+      if (!result?.success || result.count === 0) return;
 
-        // Re-fetch and re-render
-        const [profile, activeChallenges, recentSleep] = await Promise.all([
-          Auth.getProfile(),
-          Challenges.getActiveChallenges().catch(() => []),
-          this.getRecentSleepData().catch(() => [])
-        ]);
-        if (generation !== this._renderGeneration) return;
-        let leagueData = null;
-        if (activeChallenges.length > 0) {
-          try {
-            const compCacheKey = 'comparison_' + activeChallenges[0].id;
-            if (typeof Cache !== 'undefined') Cache.clear(compCacheKey);
-            const r2 = await Comparison.getChallengeSleepData(activeChallenges[0].id);
-            if (generation !== this._renderGeneration) return;
-            const currentUser = await SupabaseClient.getCurrentUser();
-            leagueData = this._buildLeagueData(r2, currentUser?.id);
-          } catch (e) { /* ignore */ }
-        }
-        await this._fetchHabitData(activeChallenges, generation);
-        if (generation !== this._renderGeneration) return;
-        Cache.set('dashboard', { profile, activeChallenges, recentSleep, leagueData });
-        const container = document.getElementById('dashboard-container');
-        if (container) this._renderContent(container, { profile, activeChallenges, recentSleep, leagueData });
+      // Sync wrote data — always re-render if we're still on the dashboard,
+      // regardless of generation (checkOverlayOnStartup can bump it mid-sync)
+      if (App.currentPage !== 'dashboard') return;
+
+      // New data arrived — clear stale AI insight cache so it regenerates with fresh data
+      const today = DateUtils.toLocalDateStr(new Date());
+      try {
+        const activeCh = await Challenges.getActiveChallenges().catch(() => []);
+        const aiChallengeId = activeCh[0]?.id || 'personal';
+        const aiCacheKey = `ai_insight_${aiChallengeId}_${today}`;
+        Cache.clear(aiCacheKey);
+        localStorage.removeItem(aiCacheKey);
+        this._aiCardRenderedInsight = null;
+      } catch (e) { /* ignore */ }
+
+      // Re-fetch and re-render with fresh data from DB
+      const [profile, activeChallenges, recentSleep] = await Promise.all([
+        Auth.getProfile(),
+        Challenges.getActiveChallenges().catch(() => []),
+        this.getRecentSleepData().catch(() => [])
+      ]);
+      if (App.currentPage !== 'dashboard') return;
+      let leagueData = null;
+      if (activeChallenges.length > 0) {
+        try {
+          const compCacheKey = 'comparison_' + activeChallenges[0].id;
+          if (typeof Cache !== 'undefined') Cache.clear(compCacheKey);
+          const r2 = await Comparison.getChallengeSleepData(activeChallenges[0].id);
+          if (App.currentPage !== 'dashboard') return;
+          const currentUser = await SupabaseClient.getCurrentUser();
+          leagueData = this._buildLeagueData(r2, currentUser?.id);
+        } catch (e) { /* ignore */ }
       }
+      // Use current generation for habit fetch (needs it for internal guards)
+      await this._fetchHabitData(activeChallenges, this._renderGeneration);
+      if (App.currentPage !== 'dashboard') return;
+      Cache.set('dashboard', { profile, activeChallenges, recentSleep, leagueData });
+      const container = document.getElementById('dashboard-container');
+      if (container) this._renderContent(container, { profile, activeChallenges, recentSleep, leagueData });
     } catch (e) {
       console.warn('[Dashboard] Background sync failed:', e);
     }
