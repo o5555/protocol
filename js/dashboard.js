@@ -34,8 +34,11 @@ const Dashboard = {
     const generation = ++this._renderGeneration;
 
     // Try to render instantly from cache (but always refresh in background)
+    // Skip cache if it's from a previous day — stale yesterday data is worse than a skeleton
     const cachedData = Cache.get('dashboard');
-    if (cachedData) {
+    const today = DateUtils.toLocalDateStr(new Date());
+    const cacheIsToday = cachedData?.recentSleep?.[0]?.date === today;
+    if (cachedData && cacheIsToday) {
       this._renderContent(container, cachedData);
     } else {
       // Show minimal loading state to prevent flash of empty/wrong content
@@ -97,15 +100,14 @@ const Dashboard = {
       // Check if habit overlay should be shown (before rendering content)
       if (this._shouldShowOverlay(recentSleep)) {
         this._overlayPending = true;  // Suppress AI in _renderContent
+        // Show overlay BEFORE dashboard content to prevent a flash of the homepage
+        if (!document.getElementById('habit-overlay-wrapper')) {
+          this._showOverlay();
+        }
       }
 
-      // Re-render with fresh data
+      // Re-render with fresh data (behind the overlay if it's showing)
       this._renderContent(container, { profile, activeChallenges, recentSleep, leagueData });
-
-      // Show overlay AFTER content renders (so dashboard loads behind it)
-      if (this._overlayPending && !document.getElementById('habit-overlay-wrapper')) {
-        this._showOverlay();
-      }
 
       // Background sync: pull latest Oura data, then re-render if new data arrived
       if (profile?.oura_token && typeof SleepSync !== 'undefined') {
