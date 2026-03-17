@@ -436,6 +436,14 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Version endpoint — client checks this on every load to detect stale SW
+    // Returns the current CACHE_NAME so the client can compare
+    if (req.url === '/api/version' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ version: 'pc-v63' }));
+        return;
+    }
+
     // Bug report endpoint - saves to Supabase and forwards to Telegram
     // (must be before the /api/* proxy catch-all)
     if (req.url === '/api/bug-report' && req.method === 'POST') {

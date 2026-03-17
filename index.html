@@ -605,6 +605,27 @@
         };
 
         document.addEventListener('DOMContentLoaded', async () => {
+            // Force-update stale service workers: fetch server version (bypasses SW via /api/)
+            // and nuke old SW + caches if out of date, then reload once to get fresh code.
+            try {
+                const resp = await fetch('/api/version', { cache: 'no-store' });
+                if (resp.ok) {
+                    const { version } = await resp.json();
+                    const lastKnown = localStorage.getItem('pc_app_version');
+                    if (lastKnown && lastKnown !== version) {
+                        // Version mismatch — nuke old SW and caches, then reload
+                        const regs = await navigator.serviceWorker?.getRegistrations() || [];
+                        for (const r of regs) await r.unregister();
+                        const keys = await caches.keys();
+                        for (const k of keys) { if (k !== 'pc-deeplink') await caches.delete(k); }
+                        localStorage.setItem('pc_app_version', version);
+                        location.reload();
+                        return; // Stop — page will reload
+                    }
+                    localStorage.setItem('pc_app_version', version);
+                }
+            } catch (e) { /* offline or server down — proceed with cached code */ }
+
             // Safety: dismiss splash after 5s no matter what
             const splashTimeout = setTimeout(window._dismissSplash, 5000);
             try {
