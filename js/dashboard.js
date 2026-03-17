@@ -751,11 +751,10 @@ const Dashboard = {
     } else if (!this._aiFetchInFlight && !this._aiFetchFailed && hasTodayData) {
       aiContainer.innerHTML = this._renderAiCardLoading();
       this._aiCardRenderedInsight = null;
-      const gen = this._renderGeneration;
       this._aiFetchInFlight = true;
       this._fetchAiInsight(recentSleep, leagueData, false, aiChallengeId).then(insight => {
         this._aiFetchInFlight = false;
-        if (gen !== this._renderGeneration) return;
+        if (App.currentPage !== 'dashboard') return;
         const ac = document.getElementById('ai-insight-container');
         if (ac && insight) {
           this._aiFetchFailed = false;
@@ -1625,14 +1624,14 @@ const Dashboard = {
           this._aiFetchInFlight = true;
           this._fetchAiInsight(recentSleep, leagueData, false, aiChallengeId).then(insight => {
             this._aiFetchInFlight = false;
-            if (gen !== this._renderGeneration) return;
+            // Use page check instead of generation — generation can be bumped by background sync
+            if (App.currentPage !== 'dashboard') return;
             const ac = document.getElementById('ai-insight-container');
             if (ac && insight) {
               this._aiFetchFailed = false;
               this._aiCardRenderedInsight = insight;
               ac.innerHTML = this._renderAiCard(insight);
             } else if (ac) {
-              // Fetch returned nothing — remove skeleton silently, skip future attempts this render
               this._aiFetchFailed = true;
               ac.innerHTML = '';
             }
