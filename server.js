@@ -68,14 +68,16 @@ const PROMPT_CHAT = loadPrompt('chat.md',
     'Use 2-4 short sentences. Use bullet points (starting with "- ") when listing things. ' +
     'Do not use emoji. Do not use greeting words like "Hey" or "Hi".');
 const PROMPT_WRAPUP = loadPrompt('wrapup.md',
-    'You are a sleep coach writing a personalized end-of-challenge report. ' +
-    'You receive 30 days of baseline sleep data and 30 days of challenge data for one user.\n\n' +
+    'You are a sleep analyst writing a personalized end-of-challenge report. ' +
+    'Find SPECIFIC patterns, not averages. Look for outliers, clusters, what-if scenarios.\n\n' +
     'Write three sections with these exact headings:\n\n' +
-    '## Highlights\n\nPick the 3 most noteworthy things from this user\'s challenge. ' +
-    'Each highlight: a bold short title (3-6 words) on its own line, then one sentence with a specific number or date.\n\n' +
-    '## Routine\n\nBased on patterns in the data, suggest a personalized bedtime routine in 3-5 numbered steps.\n\n' +
-    '## Takeaways\n\n3-4 bullet points (start with "- ") summarizing what to keep doing.\n\n' +
-    'Rules: No emoji. No greetings. Be specific. Every sentence must reference actual data. Under 300 words.');
+    '## Highlights\n\n3 specific findings. Show "excluding X nights, your avg would be Y". ' +
+    'Find week-over-week trends, bedtime correlations, habit impacts. Bold title + 1-2 sentences with numbers.\n\n' +
+    '## Routine\n\n3-5 numbered steps. Each MUST reference a specific pattern from their data. ' +
+    'No generic advice — only things their numbers support.\n\n' +
+    '## Takeaways\n\n3-4 bullets. Include at least one "what if" projection. ' +
+    'Show what their numbers would look like if they fixed their worst pattern.\n\n' +
+    'Rules: No emoji. No greetings. Never say "great job". Let the numbers speak. Under 350 words.');
 
 function toLocalDateStr(d) {
     return d.getFullYear() + '-' +
@@ -487,7 +489,7 @@ const server = http.createServer(async (req, res) => {
     // Returns the current CACHE_NAME so the client can compare
     if (req.url === '/api/version' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({ version: 'pc-v64' }));
+        res.end(JSON.stringify({ version: 'pc-v65' }));
         return;
     }
 

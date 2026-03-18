@@ -409,6 +409,15 @@ const Wrapup = {
     this._aiFetchInFlight = true;
 
     try {
+      // Fetch user's chat notes (travel, jet lag, alcohol, etc.) for richer context
+      const challengeId = this._data.challenge?.id;
+      if (challengeId) {
+        try {
+          const chatCtx = await Dashboard._fetchChatContext(challengeId);
+          if (chatCtx) this._data.chatContext = chatCtx;
+        } catch { /* non-blocking */ }
+      }
+
       const context = this._buildWrapupContext();
       const resp = await fetch('/api/ai/wrapup', {
         method: 'POST',
@@ -448,64 +457,99 @@ const Wrapup = {
       return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
     };
 
-    // Build compact context
     let ctx = `CHALLENGE: "${c.name}" (${c.start_date} to ${c.end_date}, 30 days)\n\n`;
 
+    // Baseline summary (just averages — the detail matters for the challenge period)
     ctx += `BASELINE (${baseline.length} nights before challenge):\n`;
-    ctx += `Avg sleep score: ${avg(baseline, 'sleep_score') ?? 'N/A'}, `;
-    ctx += `Avg deep: ${avg(baseline, 'deep_sleep_minutes') ?? 'N/A'} min, `;
-    ctx += `Avg HR: ${avg(baseline, 'avg_hr') ?? 'N/A'}, `;
-    ctx += `Avg bedtime: ${this._avgBedtime(baseline) || 'N/A'}\n\n`;
+    ctx += `Avg score: ${avg(baseline, 'sleep_score') ?? 'N/A'}, Avg deep: ${avg(baseline, 'deep_sleep_minutes') ?? 'N/A'} min, Avg HR: ${avg(baseline, 'avg_hr') ?? 'N/A'}, Avg bedtime: ${this._avgBedtime(baseline) || 'N/A'}\n\n`;
 
-    ctx += `CHALLENGE PERIOD (${challenge.length} nights with data out of 30):\n`;
-    ctx += `Avg sleep score: ${avg(challenge, 'sleep_score') ?? 'N/A'}, `;
-    ctx += `Avg deep: ${avg(challenge, 'deep_sleep_minutes') ?? 'N/A'} min, `;
-    ctx += `Avg HR: ${avg(challenge, 'avg_hr') ?? 'N/A'}, `;
-    ctx += `Avg bedtime: ${this._avgBedtime(challenge) || 'N/A'}\n\n`;
+    // Night-by-night challenge data — the AI needs this to find patterns
+    ctx += `CHALLENGE NIGHTS (${challenge.length} nights, chronological):\n`;
+    const sorted = [...challenge].sort((a, b) => a.date.localeCompare(b.date));
+    sorted.forEach(n => {
+      const bt = this._formatBedtime(n.bedtime_start) || '?';
+      const dow = new Date(n.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+      ctx += `${n.date} (${dow}): score=${n.sleep_score ?? '?'}, deep=${n.deep_sleep_minutes ?? '?'}min, HR=${n.avg_hr ?? '?'}, bedtime=${bt}\n`;
+    });
 
-    // Best and worst nights
-    const scored = challenge.filter(n => n.sleep_score != null).sort((a, b) => b.sleep_score - a.sleep_score);
-    if (scored.length >= 2) {
-      const best = scored.slice(0, 3);
-      const worst = scored.slice(-3).reverse();
-      ctx += 'BEST NIGHTS:\n';
-      best.forEach(n => {
-        ctx += `- ${n.date}: score ${n.sleep_score}, deep ${n.deep_sleep_minutes ?? '?'} min, bedtime ${this._formatBedtime(n.bedtime_start) || '?'}\n`;
-      });
-      ctx += '\nWORST NIGHTS:\n';
-      worst.forEach(n => {
-        ctx += `- ${n.date}: score ${n.sleep_score}, deep ${n.deep_sleep_minutes ?? '?'} min, bedtime ${this._formatBedtime(n.bedtime_start) || '?'}\n`;
-      });
-    }
+    // Pre-computed patterns to help the AI
+    ctx += '\nPATTERN ANALYSIS:\n';
 
-    // Bedtime pattern analysis
-    const withBedtime = challenge.filter(n => n.bedtime_start);
-    if (withBedtime.length >= 5) {
-      const early = withBedtime.filter(n => {
-        const h = this._bedtimeHour(n.bedtime_start);
-        return h !== null && h < 23;
-      });
-      const late = withBedtime.filter(n => {
-        const h = this._bedtimeHour(n.bedtime_start);
-        return h !== null && h >= 23;
-      });
-      if (early.length > 0 && late.length > 0) {
-        const earlyAvg = avg(early, 'sleep_score');
-        const lateAvg = avg(late, 'sleep_score');
-        const earlyDeep = avg(early, 'deep_sleep_minutes');
-        const lateDeep = avg(late, 'deep_sleep_minutes');
-        ctx += `\nBEDTIME PATTERN:\n`;
-        ctx += `Before 23:00: ${early.length} nights (avg score ${earlyAvg}, avg deep ${earlyDeep} min)\n`;
-        ctx += `After 23:00: ${late.length} nights (avg score ${lateAvg}, avg deep ${lateDeep} min)\n`;
+    // Week-by-week breakdown
+    if (sorted.length >= 14) {
+      const weeks = [];
+      for (let i = 0; i < sorted.length; i += 7) {
+        const week = sorted.slice(i, i + 7);
+        const wAvg = avg(week, 'sleep_score');
+        const wDeep = avg(week, 'deep_sleep_minutes');
+        if (wAvg != null) weeks.push({ num: weeks.length + 1, avg: wAvg, deep: wDeep, count: week.length });
+      }
+      if (weeks.length >= 2) {
+        ctx += 'Week-by-week scores: ' + weeks.map(w => `Week ${w.num}: ${w.avg} avg (${w.count} nights)`).join(', ') + '\n';
       }
     }
 
-    // Habit completions if available
+    // Outlier detection — nights 15+ points below the user's median
+    const scores = sorted.filter(n => n.sleep_score != null).map(n => n.sleep_score);
+    if (scores.length >= 5) {
+      const sortedScores = [...scores].sort((a, b) => a - b);
+      const median = sortedScores[Math.floor(sortedScores.length / 2)];
+      const outliers = sorted.filter(n => n.sleep_score != null && n.sleep_score < median - 15);
+      if (outliers.length > 0 && outliers.length <= sorted.length / 3) {
+        const withoutOutliers = sorted.filter(n => n.sleep_score != null && n.sleep_score >= median - 15);
+        const cleanAvg = avg(withoutOutliers, 'sleep_score');
+        const fullAvg = avg(sorted, 'sleep_score');
+        ctx += `Outlier nights (15+ pts below median ${median}): ${outliers.map(n => n.date + '=' + n.sleep_score).join(', ')}\n`;
+        ctx += `Overall avg: ${fullAvg}. Excluding outliers: ${cleanAvg} (${outliers.length} nights removed)\n`;
+      }
+    }
+
+    // Bedtime buckets
+    const withBedtime = sorted.filter(n => n.bedtime_start && n.sleep_score != null);
+    if (withBedtime.length >= 5) {
+      const buckets = { 'before 22:30': [], '22:30-23:00': [], '23:00-23:30': [], '23:30-00:00': [], 'after midnight': [] };
+      withBedtime.forEach(n => {
+        const h = this._bedtimeHour(n.bedtime_start);
+        const m = parseInt((this._formatBedtime(n.bedtime_start) || '00:00').split(':')[1], 10);
+        const totalMin = (h < 12 ? h + 24 : h) * 60 + m;
+        if (totalMin < 22 * 60 + 30) buckets['before 22:30'].push(n);
+        else if (totalMin < 23 * 60) buckets['22:30-23:00'].push(n);
+        else if (totalMin < 23 * 60 + 30) buckets['23:00-23:30'].push(n);
+        else if (totalMin < 24 * 60) buckets['23:30-00:00'].push(n);
+        else buckets['after midnight'].push(n);
+      });
+      ctx += 'Bedtime buckets:\n';
+      Object.entries(buckets).forEach(([label, nights]) => {
+        if (nights.length > 0) {
+          ctx += `  ${label}: ${nights.length} nights, avg score ${avg(nights, 'sleep_score')}, avg deep ${avg(nights, 'deep_sleep_minutes')} min\n`;
+        }
+      });
+    }
+
+    // Weekend vs weekday
+    const weekdays = sorted.filter(n => {
+      const dow = new Date(n.date + 'T12:00:00').getDay();
+      return dow >= 1 && dow <= 5 && n.sleep_score != null;
+    });
+    const weekends = sorted.filter(n => {
+      const dow = new Date(n.date + 'T12:00:00').getDay();
+      return (dow === 0 || dow === 6) && n.sleep_score != null;
+    });
+    if (weekdays.length >= 3 && weekends.length >= 2) {
+      ctx += `Weekday avg: ${avg(weekdays, 'sleep_score')} (${weekdays.length} nights), Weekend avg: ${avg(weekends, 'sleep_score')} (${weekends.length} nights)\n`;
+    }
+
+    // Habit completions
     if (d.habitProgress?.length > 0) {
       ctx += '\nHABIT COMPLETIONS:\n';
       d.habitProgress.forEach(h => {
         ctx += `- "${h.title}": completed ${h.completedDays ?? '?'}/${h.totalDays ?? 30} days\n`;
       });
+    }
+
+    // Chat context (travel, jet lag, alcohol, stress notes)
+    if (d.chatContext) {
+      ctx += '\nUSER CONTEXT (notes from during the challenge):\n' + d.chatContext + '\n';
     }
 
     return ctx;
