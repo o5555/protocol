@@ -96,26 +96,25 @@ const Wrapup = {
 
     return this._cardShell(`
       <div class="flex-1 flex flex-col justify-center items-center text-center">
-        <p class="text-oura-accent text-sm font-semibold uppercase tracking-wider mb-4">Challenge Complete</p>
-        <h1 class="text-3xl font-bold text-white mb-2">${name}</h1>
-        ${protocolName ? `<p class="text-oura-muted text-base mb-8">${protocolName}</p>` : '<div class="mb-8"></div>'}
-        <div class="grid grid-cols-3 gap-6 w-full max-w-xs">
-          <div>
-            <p class="text-2xl font-bold text-white">30</p>
-            <p class="text-xs text-oura-muted mt-1">days</p>
-          </div>
-          <div>
-            <p class="text-2xl font-bold text-white">${nightsTracked}</p>
-            <p class="text-xs text-oura-muted mt-1">nights tracked</p>
-          </div>
-          <div>
-            <p class="text-2xl font-bold text-white">${participants}</p>
-            <p class="text-xs text-oura-muted mt-1">${participants === 1 ? 'participant' : 'participants'}</p>
-          </div>
+        <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border border-purple-500/30 text-purple-400 mb-6">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Challenge Complete
         </div>
-        <p class="text-oura-muted text-sm mt-8">${start} - ${end}</p>
+        <h1 class="text-3xl font-bold text-white mb-2">${name}</h1>
+        ${protocolName ? `<p class="text-oura-muted text-base mb-6">${protocolName}</p>` : '<div class="mb-6"></div>'}
+        <p class="text-oura-muted text-sm mb-2">${start} - ${end}</p>
+        <div class="flex items-center gap-4 mt-2">
+          <span class="text-sm text-oura-muted">${nightsTracked} nights tracked</span>
+          <span class="w-1 h-1 rounded-full bg-oura-border"></span>
+          <span class="text-sm text-oura-muted">${participants} ${participants === 1 ? 'participant' : 'participants'}</span>
+        </div>
       </div>
-      <p class="text-center text-oura-muted/50 text-xs">Swipe to continue</p>
+      <div class="text-center pb-2">
+        <p class="text-oura-accent text-base font-medium">Swipe to view your results</p>
+        <p class="text-oura-muted text-xs mt-1">Personalized data and AI-powered insights</p>
+      </div>
     `);
   },
 
@@ -355,6 +354,14 @@ const Wrapup = {
     clip.addEventListener('touchend', (e) => {
       if (!isDragging) return;
       isDragging = false;
+
+      // If direction was never locked (< 8px movement), it's a tap.
+      // Don't call _goToCard — the DOM changes prevent iOS from
+      // synthesizing the click event on buttons underneath.
+      if (!directionLocked) {
+        track.style.transition = '';
+        return;
+      }
 
       if (!isHorizontal) {
         this._goToCard(this._currentIndex);
