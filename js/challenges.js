@@ -1388,13 +1388,19 @@ const Challenges = {
         </div>
 
         ${isCompleted ? `
-        <div class="flex justify-center mb-4">
-          <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border border-purple-500/30 text-purple-400">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Challenge Complete
+        <div class="mb-4">
+          <div class="flex justify-center mb-3">
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium border border-purple-500/30 text-purple-400">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Challenge Complete
+            </div>
           </div>
+          <button onclick="Wrapup.show(Challenges._currentChallengeData)"
+            class="w-full py-3 min-h-[44px] bg-gradient-to-br from-purple-600 to-purple-800 text-white font-semibold rounded-xl border border-purple-500/30">
+            View Wrap-Up
+          </button>
         </div>
         ` : ''}
 
@@ -1487,12 +1493,7 @@ const Challenges = {
           class="w-full py-3 min-h-[44px] bg-oura-subtle text-oura-muted rounded-xl text-sm font-medium hover:bg-oura-border transition-colors">
           + Invite Friends
         </button>
-        ` : `
-        <button onclick="Wrapup.show(Challenges._currentChallengeData)"
-          class="w-full py-3 min-h-[44px] bg-gradient-to-br from-oura-accent to-oura-accent-dark text-black font-semibold rounded-xl">
-          View Wrap-Up
-        </button>
-        `}
+        ` : ''}
       `;
       }
 

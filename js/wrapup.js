@@ -141,50 +141,68 @@ const Wrapup = {
     const baseBedtime = this._avgBedtime(baseline);
     const currBedtime = this._avgBedtime(challenge);
 
+    // Bedtime difference in minutes
+    let bedtimeDiff = null;
+    if (baseBedtime && currBedtime) {
+      const toMin = (t) => { const [h, m] = t.split(':').map(Number); return (h < 12 ? h + 24 : h) * 60 + m; };
+      bedtimeDiff = toMin(currBedtime) - toMin(baseBedtime);
+    }
+
     const metrics = [
-      { label: 'Sleep Score', before: baseScore, after: currScore, unit: '', lowerBetter: false },
+      { label: 'Sleep Score', before: baseScore, after: currScore, unit: ' pts', lowerBetter: false },
       { label: 'Deep Sleep', before: baseDeep, after: currDeep, unit: ' min', lowerBetter: false },
       { label: 'Resting HR', before: baseHR, after: currHR, unit: ' bpm', lowerBetter: true },
-      { label: 'Avg Bedtime', before: baseBedtime, after: currBedtime, unit: '', lowerBetter: false, isBedtime: true }
+      { label: 'Avg Bedtime', before: baseBedtime, after: currBedtime, unit: '', lowerBetter: false, isBedtime: true, bedtimeDiff }
     ];
 
     return this._cardShell(`
       <div class="flex-1 flex flex-col justify-center">
         <h2 class="text-2xl font-bold text-white text-center mb-2">Your Numbers</h2>
         <p class="text-oura-muted text-sm text-center mb-8">Baseline vs. challenge averages</p>
-        <div class="space-y-4">
+        <div class="space-y-3">
           ${metrics.map(m => this._renderMetricRow(m)).join('')}
         </div>
       </div>
     `);
   },
 
-  _renderMetricRow({ label, before, after, unit, lowerBetter, isBedtime }) {
+  _renderMetricRow({ label, before, after, unit, lowerBetter, isBedtime, bedtimeDiff }) {
     const bStr = isBedtime ? (before || '--') : (before != null ? before + unit : '--');
     const aStr = isBedtime ? (after || '--') : (after != null ? after + unit : '--');
 
-    let pctStr = '--';
-    let pctColor = 'text-oura-muted';
-    if (before != null && after != null && !isBedtime && before !== 0) {
+    let changeStr = '';
+    let changeColor = 'text-oura-muted';
+
+    if (isBedtime && bedtimeDiff != null) {
+      const absDiff = Math.abs(bedtimeDiff);
+      changeStr = bedtimeDiff === 0 ? 'No change' : (bedtimeDiff > 0 ? '+' : '-') + absDiff + ' min';
+      // Earlier bedtime (negative diff) is generally better but just show neutral
+      changeColor = bedtimeDiff < 0 ? 'text-emerald-400' : bedtimeDiff > 0 ? 'text-red-400' : 'text-oura-muted';
+    } else if (before != null && after != null && !isBedtime && before !== 0) {
       const pct = Math.round(((after - before) / before) * 100);
       const improved = lowerBetter ? pct < 0 : pct > 0;
       const declined = lowerBetter ? pct > 0 : pct < 0;
-      // For display: flip sign for lowerBetter so positive = good
       const displayPct = lowerBetter ? -pct : pct;
-      pctStr = (displayPct > 0 ? '+' : '') + displayPct + '%';
-      pctColor = improved ? 'text-emerald-400' : declined ? 'text-red-400' : 'text-oura-muted';
+      changeStr = (displayPct > 0 ? '+' : '') + displayPct + '%';
+      changeColor = improved ? 'text-emerald-400' : declined ? 'text-red-400' : 'text-oura-muted';
     }
 
     return `
-      <div class="bg-oura-card rounded-xl p-4 border border-oura-border/30">
-        <div class="flex items-center justify-between mb-2">
-          <p class="text-xs text-oura-muted uppercase tracking-wide">${label}</p>
-          <span class="text-lg font-bold ${pctColor}">${pctStr}</span>
+      <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs text-oura-muted uppercase tracking-wider font-medium">${label}</p>
+          <span class="text-xl font-bold ${changeColor}">${changeStr || '--'}</span>
         </div>
-        <div class="flex items-center justify-between">
-          <span class="text-base text-oura-muted">${bStr}</span>
-          <div class="flex-1 mx-3 h-px bg-oura-border/50"></div>
-          <span class="text-base font-semibold text-white">${aStr}</span>
+        <div class="flex items-center gap-3">
+          <div class="flex-1">
+            <p class="text-xs text-oura-muted mb-1">Before</p>
+            <p class="text-lg text-oura-muted font-medium">${bStr}</p>
+          </div>
+          <svg class="w-5 h-5 text-oura-border flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>
+          <div class="flex-1 text-right">
+            <p class="text-xs text-oura-muted mb-1">After</p>
+            <p class="text-lg text-white font-bold">${aStr}</p>
+          </div>
         </div>
       </div>
     `;
@@ -195,15 +213,15 @@ const Wrapup = {
       return this._cardShell(`
         <div class="flex-1 flex flex-col justify-center">
           <h2 class="text-2xl font-bold text-white text-center mb-2">Your Highlights</h2>
-          <p class="text-oura-muted text-sm text-center mb-8">Top moments from your challenge</p>
-          <div class="space-y-4">
+          <p class="text-oura-muted text-sm text-center mb-8">Key findings from your challenge</p>
+          <div class="space-y-3">
             ${this._aiContent.highlights.map((h, i) => `
-              <div class="bg-oura-card rounded-xl p-4 border border-oura-border/30">
+              <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
                 <div class="flex items-start gap-3">
-                  <span class="text-oura-accent font-bold text-lg mt-0.5">${i + 1}</span>
+                  <span class="text-oura-accent font-bold text-xl mt-0.5">${i + 1}</span>
                   <div>
-                    <p class="font-semibold text-white text-sm">${escapeHtml(h.title)}</p>
-                    <p class="text-oura-muted text-sm mt-1">${escapeHtml(h.body)}</p>
+                    <p class="font-semibold text-white text-base mb-1">${escapeHtml(h.title)}</p>
+                    <p class="text-white/80 text-sm leading-relaxed">${escapeHtml(h.body)}</p>
                   </div>
                 </div>
               </div>
@@ -213,12 +231,11 @@ const Wrapup = {
       `);
     }
 
-    // Loading skeleton
     return this._cardShell(`
       <div class="flex-1 flex flex-col justify-center">
         <h2 class="text-2xl font-bold text-white text-center mb-2">Your Highlights</h2>
-        <p class="text-oura-muted text-sm text-center mb-8">Top moments from your challenge</p>
-        <div id="wrapup-card3-content" class="space-y-4">
+        <p class="text-oura-muted text-sm text-center mb-8">Key findings from your challenge</p>
+        <div id="wrapup-card3-content" class="space-y-3">
           ${this._renderSkeletonCards(3)}
         </div>
       </div>
@@ -231,11 +248,13 @@ const Wrapup = {
         <div class="flex-1 flex flex-col justify-center">
           <h2 class="text-2xl font-bold text-white text-center mb-2">Your Routine</h2>
           <p class="text-oura-muted text-sm text-center mb-8">Personalized for your sleep patterns</p>
-          <div class="bg-oura-card rounded-xl p-5 border border-oura-border/30 space-y-4">
+          <div class="space-y-3">
             ${this._aiContent.routine.map((step, i) => `
-              <div class="flex items-start gap-3">
-                <span class="w-6 h-6 rounded-full bg-oura-accent/15 text-oura-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">${i + 1}</span>
-                <p class="text-sm text-white">${escapeHtml(step)}</p>
+              <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+                <div class="flex items-start gap-3">
+                  <span class="text-oura-accent font-bold text-xl mt-0.5">${i + 1}</span>
+                  <p class="text-white text-sm leading-relaxed">${escapeHtml(step)}</p>
+                </div>
               </div>
             `).join('')}
           </div>
@@ -248,7 +267,7 @@ const Wrapup = {
         <h2 class="text-2xl font-bold text-white text-center mb-2">Your Routine</h2>
         <p class="text-oura-muted text-sm text-center mb-8">Personalized for your sleep patterns</p>
         <div id="wrapup-card4-content" class="space-y-3">
-          ${this._renderSkeletonLines(4)}
+          ${this._renderSkeletonCards(4)}
         </div>
       </div>
     `);
@@ -262,19 +281,19 @@ const Wrapup = {
         <h2 class="text-2xl font-bold text-white text-center mb-2">What's Next</h2>
         <p class="text-oura-muted text-sm text-center mb-8">Keep the momentum going</p>
         ${hasTakeaways ? `
-          <div class="bg-oura-card rounded-xl p-5 border border-oura-border/30 mb-8">
-            <div class="space-y-3">
-              ${this._aiContent.takeaways.map(t => `
-                <div class="flex items-start gap-2">
-                  <svg class="w-4 h-4 text-oura-accent flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
-                  <p class="text-sm text-white">${escapeHtml(t)}</p>
+          <div class="space-y-3 mb-8">
+            ${this._aiContent.takeaways.map((t, i) => `
+              <div class="bg-oura-card rounded-2xl p-5 border border-oura-border/30">
+                <div class="flex items-start gap-3">
+                  <span class="text-oura-accent font-bold text-xl mt-0.5">${i + 1}</span>
+                  <p class="text-white text-sm leading-relaxed">${escapeHtml(t)}</p>
                 </div>
-              `).join('')}
-            </div>
+              </div>
+            `).join('')}
           </div>
         ` : `
           <div id="wrapup-card5-content" class="mb-8">
-            ${this._renderSkeletonLines(3)}
+            ${this._renderSkeletonCards(3)}
           </div>
         `}
         <button onclick="Wrapup.dismiss(); App.navigateTo('challenges')"
