@@ -113,21 +113,23 @@ const Dashboard = {
       this._injectCompleteBanner();
 
       // Show wrap-up for newly completed challenges (on first app open)
-      if (!this._overlayPending) {
+      if (!this._overlayPending && generation === this._renderGeneration) {
         try {
           const completed = await Challenges.getCompletedChallenges();
           for (const ch of completed) {
+            if (generation !== this._renderGeneration) break;
             if (!localStorage.getItem('wrapup_seen_' + ch.id)) {
-              // Need challenge data for the wrap-up — fetch it
               const challengeData = await Challenges.getChallenge(ch.id);
-              const sleepData = await Comparison.getChallengeSleepData(ch.id);
+              const result = await Comparison.getChallengeSleepData(ch.id);
+              const participants = result?.sleepData || result || [];
               const currentUser = await SupabaseClient.getCurrentUser();
-              const myData = sleepData.find(p => p.user.id === currentUser.id) || { baselineData: [], challengeData: [] };
+              if (generation !== this._renderGeneration) break;
+              const myData = (Array.isArray(participants) ? participants : []).find(p => p.user?.id === currentUser?.id) || { baselineData: [], challengeData: [] };
               const myBaseline = Comparison.calcAverages(myData.baselineData, 30);
               const myCurrent = Comparison.calcAverages(myData.challengeData, myData.challengeDays || 1);
+              Wrapup.show({ challenge: challengeData, myData, myBaseline, myCurrent, improvements: {}, sleepData: participants });
               localStorage.setItem('wrapup_seen_' + ch.id, '1');
-              Wrapup.show({ challenge: challengeData, myData, myBaseline, myCurrent, improvements: {}, sleepData });
-              break; // Only show one at a time
+              break;
             }
           }
         } catch (e) { console.warn('[Dashboard] Wrapup check failed:', e); }

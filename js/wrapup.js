@@ -14,6 +14,7 @@ const Wrapup = {
     if (document.getElementById('wrapup-overlay')) return;
     this._data = challengeData;
     this._currentIndex = 0;
+    this._dismissed = false;
     this._aiContent = null;
 
     // Check localStorage cache for AI content
@@ -41,6 +42,7 @@ const Wrapup = {
   },
 
   dismiss() {
+    this._dismissed = true;  // Signal in-flight AI fetch to stop
     const overlay = document.getElementById('wrapup-overlay');
     if (!overlay) return;
     overlay.style.transition = 'opacity 200ms ease-out';
@@ -144,7 +146,8 @@ const Wrapup = {
     // Bedtime difference in minutes
     let bedtimeDiff = null;
     if (baseBedtime && currBedtime) {
-      const toMin = (t) => { const [h, m] = t.split(':').map(Number); return (h < 12 ? h + 24 : h) * 60 + m; };
+      // Normalize bedtime to minutes past noon (handles 18:00-05:00 range correctly)
+      const toMin = (t) => { const [h, m] = t.split(':').map(Number); return (h < 18 ? h + 24 : h) * 60 + m; };
       bedtimeDiff = toMin(currBedtime) - toMin(baseBedtime);
     }
 
@@ -455,15 +458,16 @@ const Wrapup = {
       if (!resp.ok) throw new Error('AI request failed');
       const { wrapup } = await resp.json();
       if (!wrapup) throw new Error('Empty response');
+      if (this._dismissed) return;  // Overlay closed while fetching
 
       this._aiContent = this._parseAiResponse(wrapup);
 
       // Cache permanently per challenge
-      const cacheKey = 'wrapup_ai_' + (this._data.challenge?.id || 'unknown');
+      const cacheKey = 'wrapup_ai_' + (this._data?.challenge?.id || 'unknown');
       try { localStorage.setItem(cacheKey, JSON.stringify(this._aiContent)); } catch { /* full */ }
 
-      // Re-render AI cards
-      this._updateAiCards();
+      // Re-render AI cards (only if overlay still exists)
+      if (!this._dismissed) this._updateAiCards();
     } catch (err) {
       console.warn('[Wrapup] AI fetch failed:', err.message);
       this._renderAiError();
@@ -484,7 +488,7 @@ const Wrapup = {
       return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
     };
 
-    let ctx = `CHALLENGE: "${c.name}" (${c.start_date} to ${c.end_date}, 30 days)\n\n`;
+    let ctx = `CHALLENGE: "${c?.name || 'Challenge'}" (${c?.start_date || '?'} to ${c?.end_date || '?'}, 30 days)\n\n`;
 
     // Baseline summary (just averages — the detail matters for the challenge period)
     ctx += `BASELINE (${baseline.length} nights before challenge):\n`;
@@ -492,7 +496,7 @@ const Wrapup = {
 
     // Night-by-night challenge data — the AI needs this to find patterns
     ctx += `CHALLENGE NIGHTS (${challenge.length} nights, chronological):\n`;
-    const sorted = [...challenge].sort((a, b) => a.date.localeCompare(b.date));
+    const sorted = [...challenge].filter(n => n.date).sort((a, b) => a.date.localeCompare(b.date));
     sorted.forEach(n => {
       const bt = this._formatBedtime(n.bedtime_start) || '?';
       const dow = new Date(n.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
@@ -538,7 +542,7 @@ const Wrapup = {
       withBedtime.forEach(n => {
         const h = this._bedtimeHour(n.bedtime_start);
         const m = parseInt((this._formatBedtime(n.bedtime_start) || '00:00').split(':')[1], 10);
-        const totalMin = (h < 12 ? h + 24 : h) * 60 + m;
+        const totalMin = (h < 18 ? h + 24 : h) * 60 + m;
         if (totalMin < 22 * 60 + 30) buckets['before 22:30'].push(n);
         else if (totalMin < 23 * 60) buckets['22:30-23:00'].push(n);
         else if (totalMin < 23 * 60 + 30) buckets['23:00-23:30'].push(n);
