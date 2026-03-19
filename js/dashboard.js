@@ -109,6 +109,30 @@ const Dashboard = {
       // Re-render with fresh data (behind the overlay if it's showing)
       this._renderContent(container, { profile, activeChallenges, recentSleep, leagueData });
 
+      // Inject challenge complete banner if applicable
+      this._injectCompleteBanner();
+
+      // Show wrap-up for newly completed challenges (on first app open)
+      if (!this._overlayPending) {
+        try {
+          const completed = await Challenges.getCompletedChallenges();
+          for (const ch of completed) {
+            if (!localStorage.getItem('wrapup_seen_' + ch.id)) {
+              // Need challenge data for the wrap-up — fetch it
+              const challengeData = await Challenges.getChallenge(ch.id);
+              const sleepData = await Comparison.getChallengeSleepData(ch.id);
+              const currentUser = await SupabaseClient.getCurrentUser();
+              const myData = sleepData.find(p => p.user.id === currentUser.id) || { baselineData: [], challengeData: [] };
+              const myBaseline = Comparison.calcAverages(myData.baselineData, 30);
+              const myCurrent = Comparison.calcAverages(myData.challengeData, myData.challengeDays || 1);
+              localStorage.setItem('wrapup_seen_' + ch.id, '1');
+              Wrapup.show({ challenge: challengeData, myData, myBaseline, myCurrent, improvements: {}, sleepData });
+              break; // Only show one at a time
+            }
+          }
+        } catch (e) { console.warn('[Dashboard] Wrapup check failed:', e); }
+      }
+
       // Background sync: pull latest Oura data, then re-render if new data arrived
       if (profile?.oura_token && typeof SleepSync !== 'undefined') {
         this._backgroundSync(generation);
@@ -1379,6 +1403,44 @@ const Dashboard = {
     return this._renderAiCardLoading();
   },
 
+  // Inject "Challenge Complete" banner above dashboard content
+  async _injectCompleteBanner() {
+    try {
+      const completed = await Challenges.getCompletedChallenges();
+      if (completed.length === 0) return;
+      // Don't duplicate
+      if (document.getElementById('challenge-complete-banner')) return;
+      const ch = completed[0];
+      const banner = document.createElement('div');
+      banner.id = 'challenge-complete-banner';
+      banner.className = 'mb-4 cursor-pointer';
+      banner.onclick = () => {
+        App.navigateTo('challenge-detail', ch.id);
+      };
+      banner.innerHTML = `
+        <div class="bg-gradient-to-br from-purple-900/40 to-oura-card rounded-2xl p-4 border border-purple-500/30">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M18.75 4.236c.982.143 1.954.317 2.916.52A6.003 6.003 0 0 0 16.27 9.728M18.75 4.236V4.5c0 2.108-.966 3.99-2.48 5.228m0 0a6.02 6.02 0 0 1-7.54 0" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <p class="text-sm font-semibold text-white">${escapeHtml(ch.name)}</p>
+              <p class="text-xs text-purple-400">Challenge Complete -- Tap to view results</p>
+            </div>
+            <svg class="w-5 h-5 text-oura-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
+          </div>
+        </div>
+      `;
+      // Insert before dashboard-container (between header and content)
+      const dashContainer = document.getElementById('dashboard-container');
+      if (dashContainer && dashContainer.parentNode) {
+        dashContainer.parentNode.insertBefore(banner, dashContainer);
+      }
+    } catch (e) { /* ignore */ }
+  },
+
   // Render dashboard content (separated for caching)
   _renderContent(container, { profile, activeChallenges, recentSleep, leagueData }) {
     try {
@@ -1602,7 +1664,7 @@ const Dashboard = {
       // sibling container, the AI card persists across all re-renders.
       const aiChallengeId = activeChallenges?.[0]?.id || 'personal';
       const aiContainer = document.getElementById('ai-insight-container');
-      if (aiContainer && recentSleep.length > 0 && !this._overlayPending) {
+      if (aiContainer && recentSleep.length > 0 && !this._overlayPending && !document.getElementById('wrapup-overlay')) {
         const today = DateUtils.toLocalDateStr(new Date());
         const cacheKey = `ai_insight_${aiChallengeId}_${today}`;
         const cachedInsight = Cache.get(cacheKey);

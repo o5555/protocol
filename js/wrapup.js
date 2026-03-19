@@ -164,29 +164,28 @@ const Wrapup = {
     const bStr = isBedtime ? (before || '--') : (before != null ? before + unit : '--');
     const aStr = isBedtime ? (after || '--') : (after != null ? after + unit : '--');
 
-    let arrowColor = 'text-oura-muted';
-    let arrowSvg = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>';
-
-    if (before != null && after != null && !isBedtime) {
-      const diff = after - before;
-      const improved = lowerBetter ? diff < 0 : diff > 0;
-      const declined = lowerBetter ? diff > 0 : diff < 0;
-      if (improved) {
-        arrowColor = 'text-emerald-400';
-        arrowSvg = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5"/></svg>';
-      } else if (declined) {
-        arrowColor = 'text-red-400';
-        arrowSvg = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>';
-      }
+    let pctStr = '--';
+    let pctColor = 'text-oura-muted';
+    if (before != null && after != null && !isBedtime && before !== 0) {
+      const pct = Math.round(((after - before) / before) * 100);
+      const improved = lowerBetter ? pct < 0 : pct > 0;
+      const declined = lowerBetter ? pct > 0 : pct < 0;
+      // For display: flip sign for lowerBetter so positive = good
+      const displayPct = lowerBetter ? -pct : pct;
+      pctStr = (displayPct > 0 ? '+' : '') + displayPct + '%';
+      pctColor = improved ? 'text-emerald-400' : declined ? 'text-red-400' : 'text-oura-muted';
     }
 
     return `
       <div class="bg-oura-card rounded-xl p-4 border border-oura-border/30">
-        <p class="text-xs text-oura-muted uppercase tracking-wide mb-2">${label}</p>
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs text-oura-muted uppercase tracking-wide">${label}</p>
+          <span class="text-lg font-bold ${pctColor}">${pctStr}</span>
+        </div>
         <div class="flex items-center justify-between">
-          <span class="text-lg text-oura-muted">${bStr}</span>
-          <span class="${arrowColor}">${arrowSvg}</span>
-          <span class="text-lg font-bold text-white">${aStr}</span>
+          <span class="text-base text-oura-muted">${bStr}</span>
+          <div class="flex-1 mx-3 h-px bg-oura-border/50"></div>
+          <span class="text-base font-semibold text-white">${aStr}</span>
         </div>
       </div>
     `;
@@ -413,9 +412,11 @@ const Wrapup = {
       const challengeId = this._data.challenge?.id;
       if (challengeId) {
         try {
-          const chatCtx = await Dashboard._fetchChatContext(challengeId);
-          if (chatCtx) this._data.chatContext = chatCtx;
-        } catch { /* non-blocking */ }
+          if (typeof Dashboard !== 'undefined' && Dashboard._fetchChatContext) {
+            const chatCtx = await Dashboard._fetchChatContext(challengeId);
+            if (chatCtx) this._data.chatContext = chatCtx;
+          }
+        } catch (chatErr) { console.warn('[Wrapup] Chat context fetch failed:', chatErr.message); }
       }
 
       const context = this._buildWrapupContext();
