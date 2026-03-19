@@ -487,7 +487,7 @@ const server = http.createServer(async (req, res) => {
 
     // Version endpoint — client checks this on every load to detect stale SW
     // Returns the current CACHE_NAME so the client can compare
-    if (req.url === '/api/version' && req.method === 'GET') {
+    if (req.url.split('?')[0] === '/api/version' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify({ version: 'pc-v68' }));
         return;
@@ -1452,9 +1452,9 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // Block dotfiles (e.g. .env, .git, .gitignore)
+    // Block dotfiles and node_modules
     const relativePath = path.relative(__dirname, filePath);
-    if (relativePath.split(path.sep).some(segment => segment.startsWith('.'))) {
+    if (relativePath.startsWith('node_modules') || relativePath.split(path.sep).some(segment => segment.startsWith('.'))) {
         res.writeHead(403);
         res.end('Forbidden');
         return;
