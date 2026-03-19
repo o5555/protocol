@@ -699,7 +699,9 @@ const Challenges = {
     today.setHours(0, 0, 0, 0);
     const start = this.parseLocalDate(startDate);
     const end = this.parseLocalDate(endDate);
-    return today >= start && today <= end;
+    // End date is the last day of data collection — the challenge is complete
+    // once that day arrives (tonight's sleep won't count, it'll be filed as tomorrow)
+    return today >= start && today < end;
   },
 
   // Helper: Render protocol habits section for challenge detail
@@ -1176,6 +1178,11 @@ const Challenges = {
       const heroIcon = improvementDirection === 'up' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" /></svg>' : improvementDirection === 'down' ? '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" /></svg>' : '<svg class="w-5 h-5 inline-block" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>';
 
       // Build leaderboard with improvement %
+      const todayStr = DateUtils.toLocalDateStr(new Date());
+      const twoDaysAgo = new Date();
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      const staleThreshold = DateUtils.toLocalDateStr(twoDaysAgo);
+
       const leaderboard = sleepData
         .map(p => {
           const baseline = Comparison.calcAverages(p.baselineData, p.baselineDays || p.baselineData.length);
@@ -1184,16 +1191,27 @@ const Challenges = {
           if (baseline.score && current.score) {
             pct = Math.round(((current.score - baseline.score) / baseline.score) * 100);
           }
+          // Detect stale data: most recent challenge night is >2 days old
+          const latestDate = p.challengeData.length > 0
+            ? p.challengeData.reduce((max, d) => d.date > max ? d.date : max, '')
+            : '';
+          const isStale = latestDate && latestDate < staleThreshold;
           return {
             user: p.user,
             baselineScore: baseline.score,
             currentScore: current.score,
             improvementPct: pct,
-            isMe: p.user.id === currentUser.id
+            isMe: p.user.id === currentUser.id,
+            isStale,
+            lastSyncDate: latestDate
           };
         })
         .filter(p => p.improvementPct !== null)
-        .sort((a, b) => b.improvementPct - a.improvementPct);
+        // Sort: stale participants go last, then by improvement %
+        .sort((a, b) => {
+          if (a.isStale !== b.isStale) return a.isStale ? 1 : -1;
+          return b.improvementPct - a.improvementPct;
+        });
 
       // Assign ranks
       const rankBadges = [
@@ -1438,15 +1456,15 @@ const Challenges = {
               const name = p.user.display_name || p.user.email.split('@')[0];
               const initial = escapeHtml(name.charAt(0).toUpperCase());
               return `
-                <div class="flex items-center p-3 rounded-xl ${p.isMe ? 'bg-oura-accent/5 border border-oura-accent/20' : 'bg-oura-subtle'}">
+                <div class="flex items-center p-3 rounded-xl ${p.isStale ? 'bg-oura-subtle/50 opacity-60' : p.isMe ? 'bg-oura-accent/5 border border-oura-accent/20' : 'bg-oura-subtle'}">
                   <span class="text-sm font-bold text-oura-muted w-6 mr-2">${p.rank}</span>
                   <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold mr-3 ${p.isMe ? 'bg-oura-accent/15 text-oura-accent' : 'bg-oura-card text-white'}">${p.isMe ? '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>' : initial}</div>
                   <div class="flex-1">
-                    <div class="text-sm font-medium ${p.isMe ? 'text-oura-accent' : 'text-white'}">${p.isMe ? 'You' : escapeHtml(name)}</div>
-                    <div class="text-xs text-oura-muted">${Math.round(p.baselineScore)} → ${Math.round(p.currentScore)}</div>
+                    <div class="text-sm font-medium ${p.isStale ? 'text-oura-muted' : p.isMe ? 'text-oura-accent' : 'text-white'}">${p.isMe ? 'You' : escapeHtml(name)}</div>
+                    <div class="text-xs text-oura-muted">${p.isStale ? 'Sync paused since ' + p.lastSyncDate.slice(5).replace('-', '/') : Math.round(p.baselineScore) + ' → ' + Math.round(p.currentScore)}</div>
                   </div>
-                  <span class="text-base font-bold ${p.improvementPct >= 0 ? 'text-green-400' : 'text-red-400'}">
-                    ${p.improvementPct > 0 ? '+' : ''}${p.improvementPct}%
+                  <span class="text-base font-bold ${p.isStale ? 'text-oura-muted' : p.improvementPct >= 0 ? 'text-green-400' : 'text-red-400'}">
+                    ${p.isStale ? '--' : (p.improvementPct > 0 ? '+' : '') + p.improvementPct + '%'}
                   </span>
                 </div>
               `;

@@ -489,7 +489,7 @@ const server = http.createServer(async (req, res) => {
     // Returns the current CACHE_NAME so the client can compare
     if (req.url === '/api/version' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({ version: 'pc-v65' }));
+        res.end(JSON.stringify({ version: 'pc-v66' }));
         return;
     }
 
